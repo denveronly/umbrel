@@ -1,5 +1,5 @@
 manifestVersion: 1
-id: zigbee2mqtt
+id: denveronly-zigbee2mqtt
 name: zigbee2mqtt
 tagline: Replace this tagline with your app's tagline
 icon: https://svgur.com/i/mvA.svg
