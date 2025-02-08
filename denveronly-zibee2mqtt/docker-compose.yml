@@ -1,14 +1,17 @@
-version: "3.7"
-
+version: '3.8'
 services:
-
-  app_proxy:
-    environment:
-      # The format here is: <app-id>_<docker-service-name>_1
-      APP_HOST: denveronly-zigbee2mqtt_server_1
-      APP_PORT: 3000
-    
-  server:
-    image: getumbrel/community-app-store-hello-world:latest
-    user: "1000:1000"
-    init: true
+    zigbee2mqtt:
+        container_name: zigbee2mqtt
+        image: koenkk/zigbee2mqtt
+        restart: unless-stopped
+        volumes:
+            - ./data:/app/data
+            - /run/udev:/run/udev:ro
+        ports:
+            # Frontend port
+            - 8080:8080
+        environment:
+            - TZ=Europe/Berlin
+        devices:
+            # Make sure this matched your adapter location
+            - /dev/serial/by-id/usb-Texas_Instruments_TI_CC2531_USB_CDC___0X00124B0018ED3DDF-if00:/dev/ttyACM0
