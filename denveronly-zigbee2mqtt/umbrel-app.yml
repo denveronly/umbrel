@@ -1,29 +1,25 @@
 manifestVersion: 1
 id: denveronly-zigbee2mqtt
-name: zigbee2mqtt
-tagline: Replace this tagline with your app's tagline
-icon: https://svgur.com/i/mvA.svg
-category: Development
-version: "1.0.0"
-port: 4000
+name: Zigbee2MQTT 2
+tagline: Second Zigbee2MQTT instance for a second Zigbee adapter
+icon: https://raw.githubusercontent.com/Koenkk/zigbee2mqtt/master/images/logo.png
+category: automation
+version: "2.14.1"
+port: 60083
 description: >-
-  Add your app's description here.
+  A second Zigbee2MQTT instance, independent of the one from the official Umbrel App Store.
 
 
-  You can also add newlines!
-
-developer: Umbrel
-website: https://umbrel.com
-submitter: Umbrel
-submission: https://github.com/getumbrel/umbrel-hello-world-app
-repo: https://github.com/getumbrel/umbrel-hello-world-app
-support: https://github.com/getumbrel/umbrel-hello-world-app/issues
-gallery:
-  - https://i.imgur.com/yyVG0Jb.jpeg
-  - https://i.imgur.com/yyVG0Jb.jpeg
-  - https://i.imgur.com/yyVG0Jb.jpeg
-releaseNotes: >-
-  Add what's new in the latest version of your app here.
+  Uses its own data folder, web port and MQTT base topic (zigbee2mqtt2), so both instances
+  can run side by side, each with its own Zigbee USB adapter.
+developer: "@Koenkk"
+website: https://www.zigbee2mqtt.io/
+submitter: denveronly
+submission: https://github.com/denveronly/umbrel
+repo: https://github.com/Koenkk/zigbee2mqtt
+support: https://github.com/Koenkk/zigbee2mqtt/issues
+gallery: []
+releaseNotes: ""
 dependencies: []
 path: ""
 defaultUsername: ""

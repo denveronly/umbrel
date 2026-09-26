@@ -1,16 +1,28 @@
-version: '3.8'
 services:
-    zigbee2mqtt:
-        container_name: zigbee2mqtt
-        image: koenkk/zigbee2mqtt
-        restart: unless-stopped
-        volumes:
-            - ./data:/app/data
-            - /run/udev:/run/udev:ro
-        ports:
-            # Frontend port
-            - 8080:8080
-        environment:
-            - TZ=Europe/Berlin
-        devices:
-            - /dev/serial/by-id/usb-Texas_Instruments_TI_CC2531_USB_CDC___0X00124B0018ED3DDF-if00:/dev/ttyACM0
+
+  app_proxy:
+    environment:
+      # Format: <app-id>_<service-name>_1
+      APP_HOST: denveronly-zigbee2mqtt_app_1
+      APP_PORT: 8080
+
+  app:
+    image: koenkk/zigbee2mqtt:2.14.1
+    restart: on-failure
+    volumes:
+      - ${APP_DATA_DIR}/data:/app/data:rw
+      - /run/udev:/run/udev:ro
+    # Gives access to all USB adapters; pick the right one in the setup wizard
+    privileged: true
+    environment:
+      TZ: Europe/Kyiv
+      ZIGBEE2MQTT_CONFIG_FRONTEND_ENABLED: "true"
+      ZIGBEE2MQTT_CONFIG_FRONTEND_PORT: 8080
+      # Home Assistant's Mosquitto broker
+      ZIGBEE2MQTT_CONFIG_MQTT_SERVER: "mqtt://192.168.1.101:1883"
+      # Must differ from the first Zigbee2MQTT instance ("zigbee2mqtt")
+      ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC: "zigbee2mqtt2"
+      ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED: "true"
+      Z2M_ONBOARD_NO_REDIRECT: 1
+      # MQTT user/password: set in Umbrel -> app settings -> Environment variables
+      # (ZIGBEE2MQTT_CONFIG_MQTT_USER / ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD), not here - this repo is public
