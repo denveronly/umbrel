@@ -5,6 +5,8 @@ services:
       # Format: <app-id>_<service-name>_1
       APP_HOST: denveronly-zigbee2mqtt_app_1
       APP_PORT: 8080
+      # Skip the Umbrel login so the HA "Zigbee2MQTT Proxy" add-on can reach it (LAN only!)
+      PROXY_AUTH_ADD: "false"
 
   app:
     image: koenkk/zigbee2mqtt:2.14.1
