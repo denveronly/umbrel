@@ -23,7 +23,7 @@ services:
       # Home Assistant's Mosquitto broker
       ZIGBEE2MQTT_CONFIG_MQTT_SERVER: "mqtt://192.168.1.101:1883"
       # Must differ from the first Zigbee2MQTT instance ("zigbee2mqtt")
-      ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC: "zigbee2mqtt2"
+      ZIGBEE2MQTT_CONFIG_MQTT_BASE_TOPIC: "zigbee2mqtt_2"
       ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED: "true"
       Z2M_ONBOARD_NO_REDIRECT: 1
       # MQTT user/password: set in Umbrel -> app settings -> Environment variables

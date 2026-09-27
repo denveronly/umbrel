@@ -4,13 +4,13 @@ name: Zigbee2MQTT 2
 tagline: Second Zigbee2MQTT instance for a second Zigbee adapter
 icon: https://raw.githubusercontent.com/Koenkk/zigbee2mqtt/master/images/logo.png
 category: automation
-version: "2.14.1-1"
+version: "2.14.1-2"
 port: 60083
 description: >-
   A second Zigbee2MQTT instance, independent of the one from the official Umbrel App Store.
 
 
-  Uses its own data folder, web port and MQTT base topic (zigbee2mqtt2), so both instances
+  Uses its own data folder, web port and MQTT base topic (zigbee2mqtt_2), so both instances
   can run side by side, each with its own Zigbee USB adapter.
 developer: "@Koenkk"
 website: https://www.zigbee2mqtt.io/
