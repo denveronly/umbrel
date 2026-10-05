@@ -176,6 +176,39 @@ CREATE TABLE IF NOT EXISTS warehouse_photos (
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- лінії електроживлення бази (напр. «Лінія 1 (стара)», «Лінія 2 (нова)»)
+CREATE TABLE IF NOT EXISTS power_lines (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    note TEXT,
+    sort INTEGER NOT NULL DEFAULT 100,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+-- лічильники лінії, що не належать складам: ввідний, сонячна генерація, власні споживачі (охорона, котельня)
+CREATE TABLE IF NOT EXISTS line_meters (
+    id INTEGER PRIMARY KEY,
+    line_id INTEGER NOT NULL REFERENCES power_lines(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'own',            -- input | solar | own
+    serial TEXT,
+    coef REAL NOT NULL DEFAULT 1,
+    initial_value REAL NOT NULL DEFAULT 0,
+    initial_reactive REAL NOT NULL DEFAULT 0,
+    has_reactive INTEGER NOT NULL DEFAULT 0,
+    sort INTEGER NOT NULL DEFAULT 100,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS line_readings (
+    id INTEGER PRIMARY KEY,
+    line_meter_id INTEGER NOT NULL REFERENCES line_meters(id) ON DELETE CASCADE,
+    period TEXT NOT NULL,
+    value REAL,
+    reactive REAL,
+    UNIQUE(line_meter_id, period)
+);
+
 -- історія зміни ціни складу
 CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY,
@@ -261,9 +294,11 @@ MIGRATIONS = {
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
                 "passport_issued": "TEXT", "moved_out": "TEXT"},
     "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
+    "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT"},
     "acts": {"company_id": "INTEGER"},
-    "meters": {"service_id": "INTEGER"},
+    "meters": {"service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",
+               "initial_reactive": "REAL NOT NULL DEFAULT 0"},
 }
 OLD_RESOURCES = {"electricity": "Електроенергія", "water": "Водопостачання та водовідведення",
                  "heating": "Теплопостачання"}

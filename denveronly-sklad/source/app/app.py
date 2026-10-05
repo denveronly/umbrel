@@ -18,6 +18,7 @@ import backup
 import ai
 import economics
 import photos
+import lines
 from audit import log
 from i18n import _
 
@@ -32,6 +33,7 @@ audit.init_app(app)
 photos.init_app(app)
 economics.init_app(app)
 ai.init_app(app)
+lines.init_app(app)
 
 
 @app.template_filter("plain")
@@ -193,8 +195,9 @@ def warehouse_edit(wid=None):
     price = calc.rent_price(wh, pt) if wh else None
     history = db.execute("SELECT * FROM price_history WHERE warehouse_id=? ORDER BY id DESC LIMIT 30",
                          (wid,)).fetchall() if wid else []
+    power_lines = db.execute("SELECT id, name FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
     return render_template("warehouse_edit.html", wh=wh, tenants=tenants, meters=meters, price=price, pt=pt,
-                           history=history, meter_services=services(mode="meter"))
+                           history=history, meter_services=services(mode="meter"), power_lines=power_lines)
 
 
 @app.route("/warehouses/<int:wid>/raise", methods=["POST"])
@@ -221,6 +224,34 @@ def warehouse_raise(wid):
     return redirect(url_for("warehouse_edit", wid=wid) + "#price")
 
 
+@app.route("/warehouses/<int:wid>/price/<int:hid>/delete", methods=["POST"])
+def price_delete(wid, hid):
+    """Видалити запис з історії цін. Якщо це остання (діюча) ціна — склад повертається до попередньої."""
+    db = get_db()
+    h = db.execute("SELECT * FROM price_history WHERE id=? AND warehouse_id=?", (hid, wid)).fetchone()
+    wh = db.execute("SELECT * FROM warehouses WHERE id=?", (wid,)).fetchone()
+    if not h or not wh:
+        abort(404)
+    last = db.execute("SELECT id FROM price_history WHERE warehouse_id=? ORDER BY id DESC LIMIT 1", (wid,)).fetchone()
+    db.execute("DELETE FROM price_history WHERE id=?", (hid,))
+    msg = f"{wh['name']}: {calc.fmt_money(h['new_price'])} грн/м² ({(h['changed_at'] or '')[:16]})"
+    if last and last["id"] == hid:
+        db.execute("UPDATE warehouses SET price_m2=? WHERE id=?", (h["old_price"], wid))
+        msg += " → " + (calc.fmt_money(h["old_price"]) if h["old_price"] is not None else "—")
+        flash(_("Цена удалена, вернулась предыдущая") + (f": {calc.fmt_money(h['old_price'])} грн/м²"
+                                                          if h["old_price"] is not None else ""))
+    else:
+        nxt = db.execute("SELECT id, new_price FROM price_history WHERE warehouse_id=? AND id>? ORDER BY id LIMIT 1",
+                         (wid, hid)).fetchone()
+        if nxt:   # склеїти ланцюжок: наступна зміна тепер рахується від попередньої ціни
+            pct = round((nxt["new_price"] / h["old_price"] - 1) * 100, 2) if h["old_price"] else None
+            db.execute("UPDATE price_history SET old_price=?, pct=? WHERE id=?", (h["old_price"], pct, nxt["id"]))
+        flash(_("Запись удалена из истории цены"))
+    log("Цена склада удалена", msg, commit=False)
+    db.commit()
+    return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+
+
 @app.route("/warehouses/<int:wid>/meters", methods=["POST"])
 def meter_save(wid):
     db = get_db()
@@ -228,15 +259,17 @@ def meter_save(wid):
     if request.form.get("delete") and mid:
         db.execute("DELETE FROM meters WHERE id=? AND warehouse_id=?", (mid, wid))
     elif mid:
-        db.execute("UPDATE meters SET service_id=?, serial=?, coef=?, initial_value=?, active=? "
-                   "WHERE id=? AND warehouse_id=?",
+        db.execute("UPDATE meters SET service_id=?, serial=?, coef=?, initial_value=?, active=?, line_id=?, "
+                   "has_reactive=? WHERE id=? AND warehouse_id=?",
                    (request.form.get("service_id", type=int), request.form.get("serial", "").strip(), fnum("coef", 1),
-                    fnum("initial_value", 0), 1 if request.form.get("active") else 0, mid, wid))
+                    fnum("initial_value", 0), 1 if request.form.get("active") else 0,
+                    request.form.get("line_id", type=int), 1 if request.form.get("has_reactive") else 0, mid, wid))
     else:
-        db.execute("INSERT INTO meters(warehouse_id, service_id, resource, serial, coef, initial_value) "
-                   "VALUES (?,?,'svc',?,?,?)",
+        db.execute("INSERT INTO meters(warehouse_id, service_id, resource, serial, coef, initial_value, line_id, "
+                   "has_reactive) VALUES (?,?,'svc',?,?,?,?,?)",
                    (wid, request.form.get("service_id", type=int), request.form.get("serial", "").strip(),
-                    fnum("coef", 1), fnum("initial_value", 0)))
+                    fnum("coef", 1), fnum("initial_value", 0), request.form.get("line_id", type=int),
+                    1 if request.form.get("has_reactive") else 0))
     db.commit()
     flash(_("Счётчики обновлены"))
     return redirect(url_for("warehouse_edit", wid=wid) + "#meters")

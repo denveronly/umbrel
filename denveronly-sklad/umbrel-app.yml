@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.3.0"
+version: "1.4.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,9 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Вкладка «Орендарі»: ті, що виїхали, — окремим сірим списком (склади звільняються, фіксується дата виїзду).
-  При створенні орендаря — склад і ціна оренди за місяць; «Гарантований внесок (останній місяць)».
-  Підвищення ціни складу у відсотках або до нової суми з історією (було/стало, %).
+  Лінії електроенергії: таблиця показників по кожній лінії (як у Google Таблиці) — лічильники складів,
+  ввідний лічильник, сонячна генерація, власні споживачі, реактивна енергія; баланс і втрати по місяцях.
+  Кнопка видалення ціни в історії ціни складу. ШІ вміє переносити показники ліній з окремого аркуша Google Таблиці.
 dependencies: []
 path: ""
 defaultUsername: ""

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Настройка линий") }}{% endblock %}
+{% block content %}
+<h1>{{ _("Показания и цены") }}</h1>
+{% include "_readings_tabs.html" %}
+{% if all_lines %}<p><a href="{{ url_for('lines.lines') }}">← {{ _("К таблице показаний линий") }}</a></p>{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0">1. {{ _("Линии электроэнергии") }}</h2>
+  <p class="muted">{{ _("Каждая линия — отдельный ввод на базу со своим счётчиком. Например: «Линия 1 (старая)», «Линия 2 (новая)».") }}</p>
+  {% for l in all_lines %}
+  <form method="post" class="row" style="padding:6px 0;border-bottom:1px solid var(--line);gap:8px;flex-wrap:wrap">
+    <input type="hidden" name="action" value="line"><input type="hidden" name="lid" value="{{ l.id }}">
+    <input name="name" value="{{ l.name }}" required style="width:220px">
+    <input name="note" value="{{ l.note or '' }}" placeholder="{{ _("Заметка") }}" style="flex:1;min-width:180px">
+    <input name="sort" value="{{ l.sort }}" inputmode="numeric" style="width:60px" title="{{ _("Порядок") }}">
+    <button class="sm ghost">{{ _("Сохранить") }}</button>
+    <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить линию вместе с её вводными счётчиками и их показаниями? Счётчики складов останутся, только отвяжутся от линии.")|tojson|forceescape }})">{{ _("Удалить") }}</button>
+  </form>
+  {% endfor %}
+  <form method="post" class="row" style="padding-top:10px;gap:8px;flex-wrap:wrap">
+    <input type="hidden" name="action" value="line">
+    <input name="name" required placeholder="{{ _("Линия 1") }}" style="width:220px">
+    <input name="note" placeholder="{{ _("Заметка") }}" style="flex:1;min-width:180px">
+    <button class="sm">+ {{ _("Добавить линию") }}</button>
+  </form>
+</div>
+
+{% if all_lines %}
+<div class="card">
+  <h2 style="margin-top:0">2. {{ _("Счётчики линии") }}</h2>
+  <p class="muted">{{ _("Вводный счётчик линии, солнечная генерация и собственные потребители базы (охрана, котельня, освещение территории) — то, что не выставляется арендаторам.") }}</p>
+  {% for m in lmeters %}
+  <form method="post" class="grid" style="padding:10px 0;border-bottom:1px solid var(--line)">
+    <input type="hidden" name="action" value="lmeter"><input type="hidden" name="mid" value="{{ m.id }}">
+    <label>{{ _("Название") }}<input name="name" value="{{ m.name }}" required></label>
+    <label>{{ _("Линия") }}<select name="line_id">{% for l in all_lines %}<option value="{{ l.id }}" {{ 'selected' if m.line_id == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
+    <label>{{ _("Роль") }}<select name="role">{% for k, v in LROLES.items() %}<option value="{{ k }}" {{ 'selected' if m.role == k }}>{{ _(v) }}</option>{% endfor %}</select></label>
+    <label>{{ _("Номер счётчика") }}<input name="serial" value="{{ m.serial or '' }}"></label>
+    <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="{{ m.coef|plain }}"></label>
+    <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="{{ m.initial_value|plain }}"></label>
+    <label>{{ _("Начальное реакт.") }}<input name="initial_reactive" inputmode="decimal" value="{{ m.initial_reactive|plain }}"></label>
+    <div class="full row">
+      <label class="check"><input type="checkbox" name="has_reactive" value="1" {{ 'checked' if m.has_reactive }}> {{ _("реактивная энергия") }}</label>
+      <span class="spacer"></span>
+      <button class="sm ghost">{{ _("Сохранить") }}</button>
+      <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить счётчик и все его показания?")|tojson|forceescape }})">{{ _("Удалить") }}</button>
+    </div>
+  </form>
+  {% endfor %}
+  <form method="post" class="grid" style="padding-top:12px">
+    <input type="hidden" name="action" value="lmeter">
+    <label>{{ _("Название") }}<input name="name" required placeholder="{{ _("Ввод") }}"></label>
+    <label>{{ _("Линия") }}<select name="line_id">{% for l in all_lines %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label>
+    <label>{{ _("Роль") }}<select name="role">{% for k, v in LROLES.items() %}<option value="{{ k }}">{{ _(v) }}</option>{% endfor %}</select></label>
+    <label>{{ _("Номер счётчика") }}<input name="serial"></label>
+    <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="1"></label>
+    <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="0"></label>
+    <div class="full row">
+      <label class="check"><input type="checkbox" name="has_reactive" value="1"> {{ _("реактивная энергия") }}</label>
+      <span class="spacer"></span><button class="sm">+ {{ _("Добавить счётчик") }}</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">3. {{ _("Счётчики складов по линиям") }}</h2>
+  <p class="muted">{{ _("К какой линии подключён каждый счётчик склада. Показания, внесённые в таблице линии, — те же, что во вкладке «Показания и цены», и сразу идут в акты.") }}</p>
+  {% if tmeters %}
+  <form method="post">
+    <input type="hidden" name="action" value="assign">
+    <div class="tablewrap"><table>
+      <thead><tr><th>{{ _("Склад") }}</th><th>{{ _("Арендатор") }}</th><th>{{ _("Услуга") }}</th><th>{{ _("Номер счётчика") }}</th><th>{{ _("Линия") }}</th><th>{{ _("реакт.") }}</th></tr></thead>
+      <tbody>{% for m in tmeters %}
+        <tr><td><a href="{{ url_for('warehouse_edit', wid=m.warehouse_id) }}#meters">{{ m.wh }}</a></td>
+          <td class="muted">{{ m.tenant or _("свободен") }}</td><td>{{ m.svc }}</td><td>{{ m.serial or '—' }}</td>
+          <td><select name="ml_{{ m.id }}" style="width:auto"><option value="">— {{ _("не на линии") }} —</option>
+            {% for l in all_lines %}<option value="{{ l.id }}" {{ 'selected' if m.line_id == l.id }}>{{ l.name }}</option>{% endfor %}</select></td>
+          <td><input type="checkbox" name="mr_{{ m.id }}" value="1" {{ 'checked' if m.has_reactive }}></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <p><button>{{ _("Сохранить") }}</button></p>
+  </form>
+  {% else %}<p class="muted">{{ _("Счётчиков складов пока нет — добавьте их в карточке склада.") }}</p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

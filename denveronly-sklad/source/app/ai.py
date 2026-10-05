@@ -12,6 +12,7 @@ import threading
 import time
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from flask import (Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, url_for)
@@ -75,6 +76,12 @@ SYSTEM_PROMPT = """Ти — помічник у веб-застосунку об
 - Послуги: meter (за лічильником), qty (кількість за місяць), area (за м²), fixed (фіксовано). Лічильник прив'язаний до складу й послуги типу meter.
 - Видаляти дані ти не можеш і не намагайся. Не вигадуй даних, яких немає у джерелі.
 - Числа з комою (1 234,56) перетворюй на 1234.56.
+- Лінії електроенергії: на базі кілька вводів (ліній). У лінії є власні лічильники (role: input — ввідний лічильник лінії,
+  solar — сонячна генерація, own — власні споживачі бази: охорона, котельня, освітлення) і лічильники складів орендарів,
+  прив'язані до лінії (assign_meters_to_line). Показники складів — set_readings (можна з reactive — реактивна енергія),
+  показники власних лічильників лінії — set_line_readings. Таблиця «по лінії» (як аркуш «База 76»): колонки — лічильники,
+  рядки — місяці; кожен лічильник має показник і витрату, реактивну — якщо є. Переносиш показники, а не витрату.
+- Окремий аркуш Google Таблиці читай через get_google_sheet (url + назва аркуша).
 """
 
 # ---------------- інструменти ----------------
@@ -137,6 +144,7 @@ TOOLS = [
     {"name": "set_readings", "description": "Внести показники лічильників за місяці. Лічильник: meter_id або склад+послуга(+номер).",
      "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
          "period": {"type": "string", "description": "YYYY-MM"}, "value": {"type": "number"},
+         "reactive": {"type": "number", "description": "реактивна енергія, якщо є"},
          "meter_id": {"type": "integer"}, "warehouse": {"type": "string"}, "service": {"type": "string"}, "serial": {"type": "string"}},
          "required": ["period", "value"]}}}, "required": ["items"]}},
     {"name": "set_service_prices", "description": "Ціни послуг за місяці (грн за одиницю, без ПДВ).",
@@ -147,8 +155,31 @@ TOOLS = [
      "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
          "tenant": {"type": "string"}, "service": {"type": "string"}, "period": {"type": "string"}, "qty": {"type": "number"}},
          "required": ["tenant", "service", "period", "qty"]}}}, "required": ["items"]}},
+    {"name": "get_google_sheet", "description": "Прочитати аркуш Google Таблиці як CSV (таблиця має бути доступна за посиланням). sheet — назва аркуша, напр. «База 76».",
+     "input_schema": {"type": "object", "properties": {"url": {"type": "string"}, "sheet": {"type": "string"}}, "required": ["url"]}},
+    {"name": "list_lines", "description": "Лінії електроенергії з їх власними лічильниками (ввід/сонце/власні) і прив'язаними лічильниками складів.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "upsert_lines", "description": "Створити або оновити лінії електроенергії (за назвою).",
+     "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
+         "name": {"type": "string"}, "note": {"type": "string"}}, "required": ["name"]}}}, "required": ["items"]}},
+    {"name": "upsert_line_meters", "description": "Створити або оновити власні лічильники лінії (за лінією + назвою).",
+     "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
+         "line": {"type": "string"}, "name": {"type": "string"}, "role": {"type": "string", "enum": ["input", "solar", "own"]},
+         "serial": {"type": "string"}, "coef": {"type": "number"}, "initial_value": {"type": "number"},
+         "has_reactive": {"type": "boolean"}}, "required": ["line", "name"]}}}, "required": ["items"]}},
+    {"name": "assign_meters_to_line", "description": "Прив'язати лічильники складів до лінії. Лічильник: meter_id або склад+послуга(+номер).",
+     "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
+         "line": {"type": "string"}, "meter_id": {"type": "integer"}, "warehouse": {"type": "string"},
+         "service": {"type": "string"}, "serial": {"type": "string"}, "has_reactive": {"type": "boolean"}},
+         "required": ["line"]}}}, "required": ["items"]}},
+    {"name": "set_line_readings", "description": "Показники власних лічильників лінії за місяці (активна і, якщо є, реактивна).",
+     "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
+         "line": {"type": "string"}, "meter": {"type": "string", "description": "назва лічильника лінії"},
+         "period": {"type": "string"}, "value": {"type": "number"}, "reactive": {"type": "number"}},
+         "required": ["line", "meter", "period"]}}}, "required": ["items"]}},
 ]
 WRITE_TOOLS = {t["name"] for t in TOOLS if not t["name"].startswith(("list_", "get_"))}
+LINE_ROLES = ("input", "solar", "own")
 
 
 class ToolError(Exception):
@@ -256,6 +287,24 @@ def run_tool(name, args):
                           "JOIN meters m ON m.id=r.meter_id JOIN warehouses w ON w.id=m.warehouse_id "
                           "JOIN services s ON s.id=m.service_id WHERE r.period=?", (p,)).fetchall()
         return [dict(r) for r in rows], ev
+
+    if name == "get_google_sheet":
+        try:
+            return fetch_sheet(args.get("url", ""), args.get("sheet"))[:60000], ev
+        except ValueError as e:
+            raise ToolError(str(e))
+    if name == "list_lines":
+        out = []
+        for l in db.execute("SELECT * FROM power_lines ORDER BY sort, id").fetchall():
+            out.append({"id": l["id"], "name": l["name"], "note": l["note"],
+                        "line_meters": [dict(r) for r in db.execute(
+                            "SELECT id, name, role, serial, coef, initial_value, has_reactive FROM line_meters WHERE line_id=?",
+                            (l["id"],))],
+                        "warehouse_meters": [dict(r) for r in db.execute(
+                            "SELECT m.id AS meter_id, w.name AS warehouse, s.name AS service, m.serial, m.has_reactive "
+                            "FROM meters m JOIN warehouses w ON w.id=m.warehouse_id JOIN services s ON s.id=m.service_id "
+                            "WHERE m.line_id=?", (l["id"],))]})
+        return out, ev
 
     # ---------- зміни ----------
     from app import set_price          # спільна логіка ціни з історією
@@ -422,6 +471,9 @@ def run_tool(name, args):
             p = _period(it["period"])
             db.execute("INSERT INTO readings(meter_id, period, value) VALUES (?,?,?) "
                        "ON CONFLICT(meter_id, period) DO UPDATE SET value=excluded.value", (m["id"], p, float(it["value"])))
+            if it.get("reactive") is not None:
+                db.execute("UPDATE readings SET reactive=? WHERE meter_id=? AND period=?", (float(it["reactive"]), m["id"], p))
+                db.execute("UPDATE meters SET has_reactive=1 WHERE id=?", (m["id"],))
             per[p] = per.get(p, 0) + 1
         each(f)
         ev += [f"✓ Показники {calc.period_label(p)}: {n}" for p, n in sorted(per.items())]
@@ -446,6 +498,69 @@ def run_tool(name, args):
                        (t["id"], sv["id"], p, float(it["qty"])))
             return f"✓ {t['name']} · {sv['name']} {calc.period_label(p)}: {calc.fmt_num(it['qty'])}"
         each(f)
+    elif name == "upsert_lines":
+        def f(it):
+            l = _find("power_lines", it["name"])
+            if l:
+                if it.get("note") is not None:
+                    db.execute("UPDATE power_lines SET note=? WHERE id=?", (it["note"], l["id"]))
+                return f"✎ Лінія «{l['name']}»"
+            db.execute("INSERT INTO power_lines(name, note) VALUES (?,?)", (it["name"].strip(), it.get("note") or ""))
+            return f"＋ Лінія «{it['name']}»"
+        each(f)
+
+    elif name == "upsert_line_meters":
+        def f(it):
+            l = _need("power_lines", it["line"], "Лінію")
+            role = it.get("role") or "own"
+            if role not in LINE_ROLES:
+                raise ToolError(f"невідома роль {role}")
+            ex = next((m for m in db.execute("SELECT * FROM line_meters WHERE line_id=?", (l["id"],)).fetchall()
+                       if _norm(m["name"]) == _norm(it["name"])), None)
+            hr = None if "has_reactive" not in it else (1 if it["has_reactive"] else 0)
+            if ex:
+                db.execute("UPDATE line_meters SET role=?, serial=COALESCE(?, serial), coef=COALESCE(?, coef), "
+                           "initial_value=COALESCE(?, initial_value), has_reactive=COALESCE(?, has_reactive) WHERE id=?",
+                           (role, it.get("serial"), it.get("coef"), it.get("initial_value"), hr, ex["id"]))
+                return f"✎ Лічильник лінії «{ex['name']}»"
+            db.execute("INSERT INTO line_meters(line_id, name, role, serial, coef, initial_value, has_reactive) "
+                       "VALUES (?,?,?,?,?,?,?)", (l["id"], it["name"].strip(), role, it.get("serial") or "",
+                                                  it.get("coef") or 1, it.get("initial_value") or 0, hr or 0))
+            return f"＋ Лічильник лінії «{it['name']}» ({l['name']})"
+        each(f)
+
+    elif name == "assign_meters_to_line":
+        def f(it):
+            l = _need("power_lines", it["line"], "Лінію")
+            m = _meter(it)
+            db.execute("UPDATE meters SET line_id=? WHERE id=?", (l["id"], m["id"]))
+            if "has_reactive" in it:
+                db.execute("UPDATE meters SET has_reactive=? WHERE id=?", (1 if it["has_reactive"] else 0, m["id"]))
+            return f"⚡ Лічильник id={m['id']} → {l['name']}"
+        each(f)
+
+    elif name == "set_line_readings":
+        per = {}
+
+        def f(it):
+            l = _need("power_lines", it["line"], "Лінію")
+            lm = next((m for m in db.execute("SELECT * FROM line_meters WHERE line_id=?", (l["id"],)).fetchall()
+                       if _norm(m["name"]) == _norm(it["meter"])), None)
+            if not lm:
+                raise ToolError(f"лічильник «{it['meter']}» на лінії «{l['name']}» не знайдено")
+            p = _period(it["period"])
+            v = None if it.get("value") is None else float(it["value"])
+            rv = None if it.get("reactive") is None else float(it["reactive"])
+            if v is None and rv is None:
+                raise ToolError("немає значення")
+            db.execute("INSERT INTO line_readings(line_meter_id, period, value, reactive) VALUES (?,?,?,?) "
+                       "ON CONFLICT(line_meter_id, period) DO UPDATE SET value=COALESCE(excluded.value, value), "
+                       "reactive=COALESCE(excluded.reactive, reactive)", (lm["id"], p, v, rv))
+            if rv is not None:
+                db.execute("UPDATE line_meters SET has_reactive=1 WHERE id=?", (lm["id"],))
+            per[p] = per.get(p, 0) + 1
+        each(f)
+        ev += [f"✓ Показники лінії {calc.period_label(p)}: {n}" for p, n in sorted(per.items())]
     else:
         raise ToolError(f"невідомий інструмент {name}")
 
@@ -455,17 +570,20 @@ def run_tool(name, args):
 
 # ---------------- вхідні дані ----------------
 
-def sheet_csv_url(url):
+def sheet_csv_url(url, sheet=None):
     """Посилання на Google Таблицю -> URL експорту CSV (таблиця має бути доступна за посиланням)."""
     m = re.search(r"docs\.google\.com/spreadsheets/d/([\w-]+)", url)
     if not m:
         return None
+    if sheet:
+        return (f"https://docs.google.com/spreadsheets/d/{m.group(1)}/gviz/tq?tqx=out:csv&sheet="
+                + urllib.parse.quote(sheet))
     gid = re.search(r"[#&?]gid=(\d+)", url)
     return f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv" + (f"&gid={gid.group(1)}" if gid else "")
 
 
-def fetch_sheet(url):
-    u = sheet_csv_url(url)
+def fetch_sheet(url, sheet=None):
+    u = sheet_csv_url(url, sheet)
     if not u:
         raise ValueError(_("Это не ссылка на Google Таблицу"))
     req = urllib.request.Request(u, headers={"User-Agent": "sklad-app/1.0"})

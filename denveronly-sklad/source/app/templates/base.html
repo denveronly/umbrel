@@ -18,7 +18,7 @@
     {% set ep = request.endpoint or '' %}
     <a href="{{ url_for('index') }}" class="{{ 'on' if ep=='index' }}">{{ _("Основная") }}</a>
     <a href="{{ url_for('tenants') }}" class="{{ 'on' if ep.startswith('tenant') }}">{{ _("Арендаторы") }}</a>
-    <a href="{{ url_for('readings') }}" class="{{ 'on' if ep in ('readings', 'services_page') }}">{{ _("Показания") }}</a>
+    <a href="{{ url_for('readings') }}" class="{{ 'on' if ep in ('readings', 'services_page', 'lines.lines', 'lines.manage') }}">{{ _("Показания") }}</a>
     <a href="{{ url_for('acts') }}" class="{{ 'on' if ep.startswith('act') }}">{{ _("Акты") }}</a>
     <a href="{{ url_for('economics.economics') }}" class="{{ 'on' if ep.startswith('economics') }}">{{ _("Экономика") }}</a>
     <a href="{{ url_for('warehouses') }}" class="{{ 'on' if ep.startswith('warehouse') }}">{{ _("Склады") }}</a>

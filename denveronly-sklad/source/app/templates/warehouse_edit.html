@@ -51,7 +51,7 @@
   {% if history %}
   <h3 class="phh">{{ _("История цены") }}</h3>
   <div class="tablewrap"><table class="hist">
-    <thead><tr><th>{{ _("Дата") }}</th><th>{{ _("Изменение") }}</th><th class="n">{{ _("Было") }}</th><th class="n">{{ _("Стало") }}</th><th class="n">%</th><th>{{ _("Арендатор") }}</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Дата") }}</th><th>{{ _("Изменение") }}</th><th class="n">{{ _("Было") }}</th><th class="n">{{ _("Стало") }}</th><th class="n">%</th><th>{{ _("Арендатор") }}</th><th></th><th></th></tr></thead>
     <tbody>
     {% for h in history %}{% set ar = h.area or wh.area %}
       <tr>
@@ -62,6 +62,8 @@
         <td class="n">{% if h.pct is not none %}<b class="{{ 'pos' if h.pct > 0 else 'neg' }}">{{ '%+.2f'|format(h.pct) }}%</b>{% elif h.old_price %}<b>{{ '%+.2f'|format((h.new_price / h.old_price - 1) * 100) }}%</b>{% else %}—{% endif %}</td>
         <td class="muted">{{ h.tenant_name or _("свободен") }}{% if h.payment_type %}<br>{{ PAYMENT_TYPES[h.payment_type] }}{% endif %}</td>
         <td class="muted">{{ h.username or '' }}</td>
+        <td><form method="post" action="{{ url_for('price_delete', wid=wh.id, hid=h.id) }}" style="margin:0">
+          <button class="sm danger" title="{{ _("Удалить цену") }}" onclick="return confirm({{ (_("Удалить эту цену из истории?") ~ (' ' ~ _("Склад вернётся к предыдущей цене.") if loop.first else ''))|tojson|forceescape }})">✕</button></form></td>
       </tr>
     {% endfor %}
     </tbody>
@@ -81,9 +83,11 @@
     <input type="hidden" name="meter_id" value="{{ m.id }}">
     <label>{{ _("Услуга") }}<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}" {{ 'selected' if m.service_id == sv.id }}>{{ sv.name }}</option>{% endfor %}</select></label>
     <label>{{ _("Номер счётчика") }}<input name="serial" value="{{ m.serial or '' }}"></label>
-    <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="{{ m.coef }}"></label>
-    <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="{{ m.initial_value }}"></label>
+    <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="{{ m.coef|plain }}"></label>
+    <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="{{ m.initial_value|plain }}"></label>
+    {% if power_lines %}<label>{{ _("Линия электроэнергии") }}<select name="line_id"><option value="">—</option>{% for l in power_lines %}<option value="{{ l.id }}" {{ 'selected' if m.line_id == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>{% endif %}
     <div class="full row">
+      <label class="check"><input type="checkbox" name="has_reactive" value="1" {{ 'checked' if m.has_reactive }}> {{ _("реактивная энергия") }}</label>
       <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if m.active }}> {{ _("активен") }}</label>
       <span class="spacer"></span>
       <button class="sm ghost">{{ _("Сохранить") }}</button>
@@ -96,6 +100,7 @@
     <label>{{ _("Номер счётчика") }}<input name="serial"></label>
     <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="1"></label>
     <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="0"></label>
+    {% if power_lines %}<label>{{ _("Линия электроэнергии") }}<select name="line_id"><option value="">—</option>{% for l in power_lines %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label>{% endif %}
     <div class="full"><button class="sm">+ {{ _("Добавить счётчик") }}</button></div>
   </form>
   <p class="muted">{{ _("Нет нужной услуги (газ, отопление…)? Добавьте её в") }} <a href="{{ url_for('services_page') }}">{{ _("Показания → Услуги") }}</a> {{ _("с типом «по счётчику». Начальное показание используется, пока нет показаний за предыдущий месяц. Коэффициент — для трансформаторов тока (обычно 1") }}).</p>

@@ -1,4 +1,5 @@
 <div class="tabs">
   <a href="{{ url_for('readings', period=period) if period else url_for('readings') }}" class="{{ 'on' if request.endpoint == 'readings' }}">{{ _("Показания и цены") }}</a>
+  <a href="{{ url_for('lines.lines') }}" class="{{ 'on' if request.endpoint in ('lines.lines', 'lines.manage') }}">⚡ {{ _("Линии электроэнергии") }}</a>
   <a href="{{ url_for('services_page') }}" class="{{ 'on' if request.endpoint == 'services_page' }}">{{ _("Услуги") }}</a>
 </div>

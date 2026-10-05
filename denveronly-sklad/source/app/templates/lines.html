@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Линии электроэнергии") }}{% endblock %}
+{% block head %}
+<style>
+main { max-width: none; }
+.linetabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.linetabs a { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: var(--card); }
+.linetabs a.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.gridwrap { overflow: auto; max-height: calc(100vh - 230px); border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+table.lgrid { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: max-content; min-width: 100%; }
+.lgrid th, .lgrid td { padding: 4px 6px; vertical-align: middle; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; }
+.lgrid thead th { position: sticky; background: var(--card); z-index: 2; text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+.lgrid thead tr:first-child th { top: 0; }
+.lgrid thead tr:nth-child(2) th { top: 44px; font-weight: 500; color: var(--muted); }
+.lgrid .pcol { position: sticky; left: 0; background: var(--card); z-index: 1; font-weight: 600; min-width: 92px; }
+.lgrid thead .pcol { z-index: 3; }
+.lgrid th.grp { text-align: center; max-width: 170px; white-space: normal; line-height: 1.25; height: 44px; vertical-align: middle; }
+.lgrid th.grp small { display: block; color: var(--muted); font-weight: 400; }
+.lgrid .r-input { background: color-mix(in srgb, #2a78d6 10%, var(--card)); }
+.lgrid .r-solar { background: color-mix(in srgb, #eda100 14%, var(--card)); }
+.lgrid .r-own { background: color-mix(in srgb, var(--muted) 10%, var(--card)); }
+.lgrid .sum { background: var(--accent-soft); font-weight: 600; }
+.lgrid input { width: 86px; padding: 3px 5px; font-size: 12.5px; text-align: right; border-radius: 5px; background: transparent; border-color: transparent; }
+.lgrid input:hover { border-color: var(--line); }
+.lgrid input:focus { background: var(--bg); border-color: var(--accent); outline: none; }
+.lgrid input.dirty { background: var(--warn-soft); border-color: var(--warn); }
+.lgrid td.c { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.lgrid td.c.neg { color: var(--warn); font-weight: 600; }
+.lgrid tr:hover td { background-image: linear-gradient(rgba(0,0,0,.025), rgba(0,0,0,.025)); }
+.lgrid td.rx { color: var(--muted); }
+.savebar.lines { margin-top: 10px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="row">
+  <h1 style="margin:0">{{ _("Показания и цены") }}</h1><span class="spacer"></span>
+  <a class="btn ghost sm" href="{{ url_for('lines.manage') }}">⚙ {{ _("Настроить линии") }}</a>
+</div>
+{% include "_readings_tabs.html" %}
+
+<div class="row" style="margin-bottom:10px">
+  <div class="linetabs">{% for l in all_lines %}<a href="?line={{ l.id }}&months={{ months }}" class="{{ 'on' if l.id == line.id }}">{{ l.name }}</a>{% endfor %}</div>
+  <span class="spacer"></span>
+  <form method="get" class="row" style="gap:6px">
+    <input type="hidden" name="line" value="{{ line.id }}">
+    <span class="muted">{{ _("Период") }}:</span>
+    <select name="months" onchange="this.form.submit()" style="width:auto">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select>
+  </form>
+</div>
+{% if line.note %}<p class="muted">{{ line.note }}</p>{% endif %}
+
+{% if not cols %}
+  <div class="warn">{{ _("На этой линии ещё нет счётчиков.") }} <a href="{{ url_for('lines.manage') }}">{{ _("Настроить линии") }}</a> — {{ _("добавьте вводный счётчик и привяжите счётчики складов к линии.") }}</div>
+{% else %}
+<div class="gridwrap">
+<table class="lgrid">
+  <thead>
+    <tr>
+      <th class="pcol" rowspan="2">{{ _("Месяц") }}</th>
+      {% for c in cols %}
+        <th class="grp r-{{ c.role }}" colspan="{{ 4 if c.reactive else 2 }}">{{ c.title }}{% if c.serial %} №{{ c.serial }}{% endif %}<small>{{ c.sub }}</small></th>
+      {% endfor %}
+      <th class="grp sum" colspan="2">{{ _("Сумма счётчиков") }}<small>{{ _("потребители линии") }}</small></th>
+      <th class="grp sum" rowspan="2">{{ _("Ввод + солнце") }}</th>
+      <th class="grp sum" colspan="2">{{ _("Разница") }}<small>{{ _("потери / общее") }}</small></th>
+    </tr>
+    <tr>
+      {% for c in cols %}
+        <th class="r-{{ c.role }}">{{ _("показание") }}</th><th class="r-{{ c.role }}">{{ _("расход") }}</th>
+        {% if c.reactive %}<th class="r-{{ c.role }}">{{ _("реакт.") }}</th><th class="r-{{ c.role }}">{{ _("реакт. расход") }}</th>{% endif %}
+      {% endfor %}
+      <th class="sum">{{ _("кВт·год") }}</th><th class="sum">{{ _("реакт.") }}</th>
+      <th class="sum">{{ _("кВт·год") }}</th><th class="sum">%</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for p in periods %}{% set b = bal[p] %}
+    <tr>
+      <td class="pcol">{{ period_label(p) }}</td>
+      {% for c in cols %}{% set d = c.data[p] %}
+        <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
+        <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
+        {% if c.reactive %}
+          <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
+          <td class="c rx r-{{ c.role }}">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
+        {% endif %}
+      {% endfor %}
+      <td class="c sum">{{ num(b.users) if b.users is not none else '' }}</td>
+      <td class="c sum rx">{{ num(b.ureact) if b.ureact is not none else '' }}</td>
+      <td class="c sum">{{ num(b.supply) if b.supply is not none else '' }}</td>
+      <td class="c sum {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ num(b.diff) if b.diff is not none else '' }}</td>
+      <td class="c sum">{{ '%.1f'|format(b.pct) if b.pct is not none else '' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="savebar lines"><span class="muted" id="dirtyinfo">{{ _("Показания на конец месяца. Расход считается от предыдущего показания.") }}</span><span class="spacer"></span>
+  <button id="savebtn" onclick="saveCells()" disabled>{{ _("Сохранить") }}</button></div>
+<p class="muted">{{ _("Разница = ввод + солнечная генерация − сумма всех счётчиков линии (потери в сети и неучтённое потребление). Отрицательная разница подсвечена — проверьте показания.") }}</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const changed = {};
+document.querySelectorAll('.lgrid input').forEach(i => {
+  i.dataset.orig = i.value;
+  i.addEventListener('input', () => {
+    if (i.value !== i.dataset.orig) { changed[i.dataset.key] = i.value; i.classList.add('dirty'); }
+    else { delete changed[i.dataset.key]; i.classList.remove('dirty'); }
+    const n = Object.keys(changed).length;
+    document.getElementById('savebtn').disabled = !n;
+    document.getElementById('dirtyinfo').textContent = n ? t('Изменено ячеек') + ': ' + n : '';
+  });
+  // Enter — вниз по колонці, як у таблиці
+  i.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return; e.preventDefault();
+    const td = i.closest('td'), idx = [...td.parentNode.children].indexOf(td);
+    const next = td.parentNode.nextElementSibling;
+    next?.children[idx]?.querySelector('input')?.focus();
+  });
+});
+async function saveCells() {
+  const r = await fetch({{ url_for('lines.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({cells: changed, line_name: {{ (line.name if line else '')|tojson }}})});
+  if (r.ok) location.reload(); else alert(t('Ошибка сохранения') + ': ' + (await r.text()).slice(0, 200));
+}
+window.addEventListener('beforeunload', e => { if (Object.keys(changed).length) { e.preventDefault(); e.returnValue = ''; } });
+</script>
+{% endblock %}
