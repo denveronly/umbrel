@@ -1,5 +1,5 @@
 """Журнал действий пользователей."""
-from flask import g, request
+from flask import g, has_request_context, request
 
 from db import get_db
 
@@ -19,6 +19,8 @@ LABELS = {
 
 
 def client_ip():
+    if not has_request_context():        # фонові задачі (ІІ, автобекап)
+        return None
     return (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
 
 

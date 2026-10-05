@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ _("ИИ-помощник") }}{% endblock %}
+{% block head %}
+<style>
+.aiwrap { display: grid; grid-template-columns: 230px 1fr; gap: 16px; }
+@media (max-width: 800px) { .aiwrap { grid-template-columns: 1fr; } .aisess { order: 2; } }
+.aisess a { display: block; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--ink); font-size: 13px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aisess a.on, .aisess a:hover { background: var(--accent-soft); color: var(--accent); }
+.msgs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.msg { padding: 10px 14px; border-radius: 12px; max-width: 92%; white-space: pre-wrap; line-height: 1.5; font-size: 14px; }
+.msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.evs { align-self: flex-start; display: flex; flex-direction: column; gap: 3px; font-size: 13px; padding-left: 6px; border-left: 2px solid var(--line); }
+.evs .w { color: var(--warn); }
+.composer { position: sticky; bottom: 0; background: var(--bg); padding-top: 8px; }
+.composer textarea { min-height: 70px; resize: vertical; }
+.thinking { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
+.dots span { display: inline-block; width: 6px; height: 6px; margin: 0 1px; border-radius: 50%; background: var(--accent); animation: blink 1.2s infinite; }
+.dots span:nth-child(2) { animation-delay: .2s } .dots span:nth-child(3) { animation-delay: .4s }
+@keyframes blink { 0%, 80%, 100% { opacity: .2 } 40% { opacity: 1 } }
+.examples button { font-size: 13px; text-align: left; white-space: normal; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="row"><h1>{{ _("ИИ-помощник") }}</h1><span class="spacer"></span>
+  <span class="muted">{{ model }}</span> <a class="btn ghost sm" href="{{ url_for('ai_settings_page') }}">⚙</a></div>
+{% if not has_key %}
+  <div class="warn" style="margin-bottom:12px">{{ _("Сначала укажите API-ключ Anthropic в настройках") }} — <a href="{{ url_for('ai_settings_page') }}">{{ _("Настройки") }} → {{ _("ИИ") }}</a></div>
+{% endif %}
+<div class="aiwrap">
+  <aside class="aisess card">
+    <a href="{{ url_for('ai.chat') }}" class="{{ 'on' if not sid }}">＋ {{ _("Новый разговор") }}</a>
+    {% for s in sessions %}<a href="{{ url_for('ai.chat', sid=s.id) }}" class="{{ 'on' if s.id == sid }}" title="{{ s.title }}">{{ s.title or '—' }}<br><span class="muted">{{ s.created_at[:16] }}{% if s.ev %} · {{ s.ev }} {{ _("действий") }}{% endif %}</span></a>{% endfor %}
+  </aside>
+  <section>
+    <div class="msgs" id="msgs">
+      {% if not msgs %}
+        <div class="card examples">
+          <b>{{ _("Что можно поручить") }}</b>
+          <p class="muted" style="margin:6px 0 10px">{{ _("Приложите таблицу или вставьте ссылку на Google Таблицу и напишите, что сделать. Например:") }}</p>
+          <div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
+            {% for ex in [_("Добавь склады и арендаторов из этой таблицы: колонки — склад, площадь, арендатор, ЄДРПОУ, телефон, цена за м². Все платят безналом.") ,
+                          _("Перенеси показания электросчётчиков из старой таблицы за все месяцы. Если счётчика нет на складе — создай его.") ,
+                          _("Внеси цены на электроэнергию и воду по месяцам из таблицы.") ,
+                          _("Проверь, у каких арендаторов не указан директор или компания, и заполни из таблицы.")] %}
+              <button type="button" class="ghost sm" onclick="document.getElementById('aitext').value=this.textContent.trim()">{{ ex }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+      {% set ns = namespace(open=false) %}
+      {% for m in msgs %}
+        {% if m.kind == 'event' %}
+          {% if not ns.open %}<div class="evs">{% set ns.open = true %}{% endif %}
+          <span class="{{ 'w' if m.text.startswith('⚠') }}">{{ m.text }}</span>
+        {% else %}
+          {% if ns.open %}</div>{% set ns.open = false %}{% endif %}
+          <div class="msg {{ m.kind }}">{{ m.text }}</div>
+          {% if m.kind == 'assistant' and jobs.get(m.job) and jobs[m.job].status == 'done' and jobs[m.job].backup and jobs[m.job].changes and loop.last %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% if ns.open %}</div>{% endif %}
+      {% for jid, j in jobs.items() if j.status in ('done',) and j.backup and j.changes %}
+        {% if loop.last %}
+        <form method="post" action="{{ url_for('ai.undo', job_id=jid) }}" class="row" style="align-self:flex-start">
+          <span class="muted">{{ _("Изменений") }}: {{ j.changes }}</span>
+          <button class="sm ghost" onclick="return confirm({{ _("Откатить все изменения последнего запроса ИИ? База вернётся к состоянию перед запросом (изменения, сделанные людьми после него, тоже откатятся).")|tojson|forceescape }})">↶ {{ _("Откатить") }}</button>
+        </form>
+        {% endif %}
+      {% endfor %}
+      {% for jid, j in jobs.items() if j.status == 'error' %}{% if loop.last %}<div class="warn">{{ _("Ошибка") }}: {{ j.error }}</div>{% endif %}{% endfor %}
+      {% if running %}<div class="thinking" id="thinking"><span class="dots"><span></span><span></span><span></span></span> {{ _("Claude работает…") }} <span id="jobinfo"></span></div>{% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('ai.send') }}" enctype="multipart/form-data" class="composer card">
+      {% if sid %}<input type="hidden" name="sid" value="{{ sid }}">{% endif %}
+      <textarea id="aitext" name="text" placeholder="{{ _("Что сделать? Можно вставить ссылку на Google Таблицу прямо в текст") }}" {{ 'disabled' if running or not has_key }}></textarea>
+      <div class="row" style="margin-top:8px">
+        <input name="sheets" placeholder="{{ _("Ссылка на Google Таблицу (необязательно)") }}" style="flex:1;min-width:200px" {{ 'disabled' if running or not has_key }}>
+        <label class="btn ghost sm" style="cursor:pointer">📎 {{ _("Файлы") }}<input type="file" name="files" multiple accept=".csv,.tsv,.txt,.xlsx,.xlsm,.json" hidden onchange="document.getElementById('fnames').textContent=[...this.files].map(f=>f.name).join(', ')"></label>
+        <span class="muted" id="fnames"></span>
+        <button {{ 'disabled' if running or not has_key }}>{{ _("Отправить") }}</button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+window.scrollTo(0, document.body.scrollHeight);
+{% if running %}
+(() => {
+  let n = -1;
+  const tick = async () => {
+    const r = await fetch({{ url_for('ai.job_status', job_id=running.id)|tojson }});
+    if (!r.ok) return;
+    const j = await r.json();
+    document.getElementById('jobinfo').textContent = j.changes ? '· ' + {{ _("изменений")|tojson }} + ': ' + j.changes : '';
+    if (j.status !== 'running') { location.reload(); return; }
+    if (n >= 0 && j.messages !== n) { location.reload(); return; }   // нові повідомлення — показуємо
+    n = j.messages; setTimeout(tick, 2000);
+  };
+  setTimeout(tick, 1500);
+})();
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ _("ИИ-помощник") }}{% endblock %}
+{% block content %}
+<h1>{{ _("Настройки") }}</h1>
+{% include "_settings_tabs.html" %}
+<form method="post" class="card grid" autocomplete="off">
+  <h2 class="full" style="margin:0">Claude (Anthropic API)</h2>
+  <p class="full muted" style="margin:0">{{ _("ИИ-помощник читает ваши таблицы (Google Таблицы, CSV, Excel) и сам вносит данные в программу: склады, арендаторов, счётчики, показания, цены. Ключ создаётся в консоли Anthropic и оплачивается по использованию.") }}
+    <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a></p>
+  <label class="full">{{ _("API-ключ") }}
+    <input name="ai_api_key" type="password" value="{{ masked }}" placeholder="sk-ant-…" autocomplete="new-password">
+    <span class="muted">{{ _("Хранится в базе на вашем сервере; виден только администраторам. Попадает в бэкапы — храните их бережно.") }}</span></label>
+  <label>{{ _("Модель") }}
+    <select name="ai_model">{% for m in MODELS %}<option value="{{ m }}" {{ 'selected' if m == model }}>{{ m }}{{ _(" — по умолчанию") if loop.first }}</option>{% endfor %}
+      {% if model not in MODELS %}<option value="{{ model }}" selected>{{ model }}</option>{% endif %}</select></label>
+  <label>{{ _("Другая модель (необязательно)") }}<input name="ai_model_custom" placeholder="claude-…"></label>
+  <div class="full row">
+    <button>{{ _("Сохранить") }}</button>
+    <button class="ghost" name="test" value="1">{{ _("Сохранить и проверить связь") }}</button>
+    <span class="spacer"></span>
+    {% if masked %}<button class="danger" name="clear_key" value="1" onclick="return confirm({{ _("Удалить API-ключ?")|tojson|forceescape }})">{{ _("Удалить ключ") }}</button>{% endif %}
+  </div>
+</form>
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Как это работает") }}</h2>
+  <ul class="muted" style="margin:0;padding-left:18px;line-height:1.7">
+    <li>{{ _("Вкладка «ИИ-помощник»: напишите задачу и приложите файл или ссылку на Google Таблицу (доступ «всем, у кого есть ссылка»).") }}</li>
+    <li>{{ _("Claude сначала смотрит, что уже есть, чтобы не создать дубликатов, потом вносит изменения и пишет итог.") }}</li>
+    <li>{{ _("Удалять данные ИИ не может. Перед первым изменением автоматически делается бэкап — кнопка «Откатить» вернёт всё как было.") }}</li>
+    <li>{{ _("Каждое действие записывается в журнал с пометкой «ШІ».") }}</li>
+  </ul>
+</div>
+{% endblock %}

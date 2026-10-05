@@ -23,8 +23,9 @@
     <a href="{{ url_for('economics.economics') }}" class="{{ 'on' if ep.startswith('economics') }}">{{ _("Экономика") }}</a>
     <a href="{{ url_for('warehouses') }}" class="{{ 'on' if ep.startswith('warehouse') }}">{{ _("Склады") }}</a>
     {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('ai.chat') }}" class="{{ 'on' if ep.startswith('ai.') }}">✦ {{ _("ИИ") }}</a>
     <a href="{{ url_for('logs.logs') }}" class="{{ 'on' if ep.startswith('logs.') }}">{{ _("Логи") }}</a>
-    <a href="{{ url_for('settings_page') }}" class="{{ 'on' if ep in ('settings_page', 'auth.users', 'companies_page') }}" title="{{ _("Настройки") }}">⚙</a>
+    <a href="{{ url_for('settings_page') }}" class="{{ 'on' if ep in ('settings_page', 'auth.users', 'companies_page', 'ai_settings_page') }}" title="{{ _("Настройки") }}">⚙</a>
     {% endif %}
   </nav>
   <span class="spacer"></span>

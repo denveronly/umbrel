@@ -17,8 +17,8 @@ from db import BACKUP_DIR, DATA_DIR, DB_PATH, PHOTOS_DIR, get_db, set_setting, s
 
 bp = Blueprint("logs", __name__)
 UPLOADS = os.path.join(DATA_DIR, "uploads")
-NAME_RE = re.compile(r"^sklad_\d{4}-\d{2}-\d{2}_\d{6}_(manual|auto|pre-restore|upload)\.zip$")
-KINDS = {"manual": "вручную", "auto": "авто", "pre-restore": "перед восстановлением", "upload": "загружен"}
+NAME_RE = re.compile(r"^sklad_\d{4}-\d{2}-\d{2}_\d{6}_(manual|auto|pre-restore|pre-ai|upload)\.zip$")
+KINDS = {"manual": "вручную", "auto": "авто", "pre-restore": "перед восстановлением", "pre-ai": "перед ИИ", "upload": "загружен"}
 
 TABLES = [("warehouses", "Склады"), ("tenants", "Контакты"), ("tenant_contacts", "Контактные лица"),
           ("companies", "Компании"), ("services", "Услуги"), ("meters", "Счётчики"),
@@ -68,7 +68,7 @@ def list_backups():
 
 def prune(keep):
     """Оставляем последние N автоматических копий; ручные не трогаем."""
-    autos = [b for b in list_backups() if b["kind_code"] in ("auto", "pre-restore")]
+    autos = [b for b in list_backups() if b["kind_code"] in ("auto", "pre-restore", "pre-ai")]
     for b in autos[keep:]:
         os.remove(os.path.join(BACKUP_DIR, b["name"]))
 

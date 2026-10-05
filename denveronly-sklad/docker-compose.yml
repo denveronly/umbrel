@@ -10,7 +10,7 @@ services:
 
   app:
     # Образ собирается GitHub Actions из ./source (workflow .github/workflows/sklad-image.yml)
-    image: ghcr.io/denveronly/sklad:1.1.0
+    image: ghcr.io/denveronly/sklad:1.2.0
     restart: on-failure
     stop_grace_period: 1m
     volumes:

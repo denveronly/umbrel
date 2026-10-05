@@ -15,6 +15,7 @@ from db import (DATA_DIR, PAYMENT_TYPES, SERVICE_MODES, close_db, companies, get
 import audit
 import i18n
 import backup
+import ai
 import economics
 import photos
 from audit import log
@@ -30,6 +31,7 @@ backup.init_app(app)
 audit.init_app(app)
 photos.init_app(app)
 economics.init_app(app)
+ai.init_app(app)
 
 
 @app.template_filter("plain")
