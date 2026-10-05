@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     deposit_amount REAL,                         -- перший внесок за останній місяць
     deposit_date TEXT,
     deposit_note TEXT,
+    moved_out TEXT,                              -- дата виїзду (коли зроблено неактивним)
     note TEXT,
     active INTEGER NOT NULL DEFAULT 1
 );
@@ -183,6 +184,9 @@ CREATE TABLE IF NOT EXISTS price_history (
     new_price REAL,
     tenant_name TEXT,
     payment_type TEXT,
+    kind TEXT NOT NULL DEFAULT 'set',            -- set (встановлення/виправлення) | increase (підвищення)
+    pct REAL,                                    -- зміна у %
+    area REAL,                                   -- площа на момент зміни (для суми за місяць)
     username TEXT,
     changed_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
@@ -255,7 +259,8 @@ MIGRATIONS = {
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
-                "passport_issued": "TEXT"},
+                "passport_issued": "TEXT", "moved_out": "TEXT"},
+    "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT"},
     "acts": {"company_id": "INTEGER"},
     "meters": {"service_id": "INTEGER"},

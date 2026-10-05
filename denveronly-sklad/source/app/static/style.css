@@ -217,3 +217,14 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 .prices.one { grid-template-columns: 1fr; max-width: 420px; }
 .pricetbl input { width: 120px; text-align: right; padding: 5px 8px; }
 table.hist td { font-size: 13px; }
+
+/* орендарі, що виїхали */
+tr.gone td { color: var(--muted); }
+tr.gone a, tr.gone b { color: var(--muted); }
+tr.gone .badge, tr.gone img { filter: grayscale(1); opacity: .7; }
+.gonehead { margin-top: 28px; color: var(--muted); }
+.gonelist { opacity: .85; }
+.raisebox { margin-top: 10px; padding: 12px; border: 1px dashed var(--accent); border-radius: 10px; background: var(--accent-soft); }
+.badge.up { background: var(--warn-soft); color: var(--warn); }
+b.pos { color: var(--warn); } b.neg { color: var(--accent); }
+table.hist td { font-size: 13px; }

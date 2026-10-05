@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ t.name if t else _("Новый контакт") }}{% endblock %}
+{% block title %}{{ t.name if t else _("Новый арендатор") }}{% endblock %}
 {% block content %}
 {% macro v(field) %}{{ (t[field] if t and t[field] is not none else '') }}{% endmacro %}
-<p><a href="{{ url_for('tenants') }}">← {{ _("Контакты") }}</a></p>
-<h1>{{ t.name if t else _("Новый контакт") }}</h1>
+<p><a href="{{ url_for('tenants') }}">← {{ _("Арендаторы") }}</a></p>
+<h1>{{ t.name if t else _("Новый арендатор") }}{% if t and not t.active %} <span class="badge off">{{ _("выехал") }}{% if t.moved_out %} {{ t.moved_out }}{% endif %}</span>{% endif %}</h1>
 
 <form method="post" class="card grid">
   <h2 class="full" style="margin:0">{{ _("Арендатор и договор") }}</h2>
@@ -37,7 +37,18 @@
   <label>{{ _("Дата договора") }}<input name="contract_date" value="{{ v('contract_date') }}" placeholder="01.01.2026"></label>
   <label>{{ _("Действует до") }}<input name="contract_end" value="{{ v('contract_end') }}" placeholder="31.12.2026"></label>
 
-  <h2 class="full" style="margin:8px 0 0">{{ _("Первый взнос (за последний месяц аренды") }})</h2>
+  {% if not t %}
+  <h2 class="full" style="margin:8px 0 0">{{ _("Склад и аренда") }}</h2>
+  <label>{{ _("Склад") }}
+    <select name="new_wid" id="new_wid" onchange="newWh()">
+      <option value="">— {{ _("выбрать позже") }} —</option>
+      {% for w in free %}<option value="{{ w.id }}" data-area="{{ w.area }}" data-month="{{ free_prices[w.id] }}">{{ w.name }} · {{ num(w.area) }} {{ _("м²") }}</option>{% endfor %}
+    </select>
+    {% if not free %}<span class="muted">{{ _("Свободных складов нет") }}</span>{% endif %}</label>
+  <label>{{ _("Цена аренды за месяц, грн") }}<input name="new_rent_month" id="new_rent_month" inputmode="decimal">
+    <span class="muted" id="new_rent_hint">{{ _("В форме оплаты арендатора (для «з ПДВ» — с ПДВ). Запишется в цену склада.") }}</span></label>
+  {% endif %}
+  <h2 class="full" style="margin:8px 0 0">{{ _("Гарантийный взнос (последний месяц)") }}</h2>
   <label>{{ _("Сумма, грн") }}
     <span class="row"><input name="deposit_amount" id="dep" inputmode="decimal" value="{{ (t.deposit_amount if t else none)|plain }}" style="flex:1">
     {% if t and wh_items %}<button type="button" class="sm ghost" onclick="document.getElementById('dep').value='{{ tot.total }}'">{{ _("= 1 месяц") }}</button>{% endif %}</span></label>
@@ -54,7 +65,9 @@
 
   <label class="full">{{ _("Заметка") }}<textarea name="note" rows="2">{{ v('note') }}</textarea></label>
   <div class="full row">
-    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if not t or t.active }}> {{ _("активен") }}</label>
+    <label class="check"><input type="checkbox" name="active" id="active_cb" value="1" {{ 'checked' if not t or t.active }}
+      {% if t and t.active and wh_items %}onchange="if(!this.checked && !confirm({{ _("Арендатор выехал? Его склады станут свободными.")|tojson|forceescape }})) this.checked = true"{% endif %}> {{ _("активен") }}
+      <span class="muted">({{ _("снимите, если арендатор выехал") }})</span></label>
     <span class="spacer"></span>
     <button>{{ _("Сохранить") }}</button>
     {% if t %}<button class="danger" name="delete" value="1" onclick="return confirm({{ _("Удалить контакт? Склады станут свободными.")|tojson|forceescape }})">{{ _("Удалить") }}</button>{% endif %}
@@ -173,6 +186,18 @@ document.querySelectorAll('.pricetbl tbody tr').forEach(tr => {
   rate.addEventListener('input', () => { const v = pnum(rate.value); if (!isNaN(v)) sum.value = r2(v * area); });
   sum.addEventListener('input', () => { const v = pnum(sum.value); if (!isNaN(v) && area) rate.value = Math.round(v / area * 10000) / 10000; });
 });
+// новий орендар: обраний склад -> підказка ціни
+function newWh() {
+  const sel = document.getElementById('new_wid'); if (!sel) return;
+  const o = sel.selectedOptions[0], inp = document.getElementById('new_rent_month');
+  if (o && o.dataset.area) {
+    const area = parseFloat(o.dataset.area), m = parseFloat(o.dataset.month);
+    if (!inp.value && m) inp.value = m;
+    const v = parseFloat(String(inp.value).replace(',', '.'));
+    document.getElementById('new_rent_hint').textContent = area && v ? (Math.round(v / area * 100) / 100) + ' ' + t('грн/м²') : '';
+  }
+}
+document.getElementById('new_rent_month')?.addEventListener('input', newWh);
 // юрособа / фізособа
 function partyType() {
   const person = document.querySelector('input[name=party_type]:checked').value === 'person';

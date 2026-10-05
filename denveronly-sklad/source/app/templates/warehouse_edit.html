@@ -29,21 +29,43 @@
 </div>
 
 {% if wh %}
-<div class="card">
+<div class="card" id="price">
   <h2 style="margin-top:0">{{ _("Стоимость аренды в месяц") }}</h2>
   <div class="prices one">
     <div class="price"><small>{{ PAYMENT_TYPES[pt] if pt else _("свободен — цена для предложения") }}</small>
       <b>{{ money(price.total) }} {{ _("грн") }}</b>
       <small>{{ money(price.rate) }} {{ _("грн/м²") }}{% if price.vat %} · {{ _("в т.ч. ПДВ") }} {{ money(price.vat) }}{% endif %}</small></div>
   </div>
+
+  <label class="check" style="margin-top:12px"><input type="checkbox" id="raise_cb" onchange="document.getElementById('raise').hidden = !this.checked"> <b>{{ _("Повышение цены") }}</b></label>
+  <form method="post" action="{{ url_for('warehouse_raise', wid=wh.id) }}" id="raise" class="raisebox" hidden>
+    <div class="grid" style="display:grid">
+      <label>{{ _("На сколько процентов") }}<input name="raise_pct" id="r_pct" inputmode="decimal" placeholder="10"></label>
+      <label>{{ _("или новая цена за м², грн") }}<input name="raise_m2" id="r_m2" inputmode="decimal"></label>
+      <label>{{ _("или новая сумма за месяц, грн") }}<input name="raise_month" id="r_month" inputmode="decimal"></label>
+    </div>
+    <p class="muted" id="r_prev">{{ _("Сейчас") }}: {{ money(price.rate) }} {{ _("грн/м²") }} · {{ money(price.total) }} {{ _("грн/мес") }}</p>
+    <button>{{ _("Повысить цену") }}</button>
+  </form>
+
   {% if history %}
   <h3 class="phh">{{ _("История цены") }}</h3>
-  <table class="kv hist">
-    {% for h in history %}<tr><td class="muted">{{ h.changed_at }}</td>
-      <td class="n">{{ money(h.old_price) if h.old_price is not none else '—' }} → <b>{{ money(h.new_price) }}</b> {{ _("грн/м²") }}</td>
-      <td class="muted">{{ h.tenant_name or _("свободен") }}{% if h.payment_type %} · {{ PAYMENT_TYPES[h.payment_type] }}{% endif %}</td>
-      <td class="muted">{{ h.username or '' }}</td></tr>{% endfor %}
-  </table>
+  <div class="tablewrap"><table class="hist">
+    <thead><tr><th>{{ _("Дата") }}</th><th>{{ _("Изменение") }}</th><th class="n">{{ _("Было") }}</th><th class="n">{{ _("Стало") }}</th><th class="n">%</th><th>{{ _("Арендатор") }}</th><th></th></tr></thead>
+    <tbody>
+    {% for h in history %}{% set ar = h.area or wh.area %}
+      <tr>
+        <td class="muted">{{ h.changed_at[:16] }}</td>
+        <td>{% if h.kind == 'increase' %}<span class="badge up">↑ {{ _("повышение") }}</span>{% elif h.old_price is none %}<span class="badge off">{{ _("установлена") }}</span>{% else %}<span class="badge off">{{ _("изменена") }}</span>{% endif %}</td>
+        <td class="n">{% if h.old_price is not none %}{{ money(h.old_price) }} {{ _("грн/м²") }}<br><span class="muted">{{ money(h.old_price * ar) }} {{ _("грн/мес") }}</span>{% else %}—{% endif %}</td>
+        <td class="n"><b>{{ money(h.new_price) }}</b> {{ _("грн/м²") }}<br><span class="muted">{{ money(h.new_price * ar) }} {{ _("грн/мес") }}</span></td>
+        <td class="n">{% if h.pct is not none %}<b class="{{ 'pos' if h.pct > 0 else 'neg' }}">{{ '%+.2f'|format(h.pct) }}%</b>{% elif h.old_price %}<b>{{ '%+.2f'|format((h.new_price / h.old_price - 1) * 100) }}%</b>{% else %}—{% endif %}</td>
+        <td class="muted">{{ h.tenant_name or _("свободен") }}{% if h.payment_type %}<br>{{ PAYMENT_TYPES[h.payment_type] }}{% endif %}</td>
+        <td class="muted">{{ h.username or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
   {% endif %}
 </div>
 
@@ -90,6 +112,22 @@
   const fromRate = () => { const a = pnum(area.value), v = pnum(rate.value); if (!isNaN(a) && !isNaN(v)) month.value = r2(a * v); };
   rate.addEventListener('input', fromRate); area.addEventListener('input', fromRate);
   month.addEventListener('input', () => { const a = pnum(area.value), v = pnum(month.value); if (a && !isNaN(v)) rate.value = Math.round(v / a * 10000) / 10000; });
+  // підвищення: % <-> нова ціна за м² <-> сума за місяць
+  const cur = {{ (wh.price_m2 or 0) if wh else 0 }}, ar = {{ (wh.area or 0) if wh else 0 }};
+  const pct = document.getElementById('r_pct'), m2 = document.getElementById('r_m2'), mon = document.getElementById('r_month');
+  if (pct) {
+    const set = (src) => {
+      let n = null;
+      if (src === pct) { const p = pnum(pct.value); if (!isNaN(p)) n = cur * (1 + p / 100); }
+      if (src === m2) { const v = pnum(m2.value); if (!isNaN(v)) n = v; }
+      if (src === mon) { const v = pnum(mon.value); if (!isNaN(v) && ar) n = v / ar; }
+      if (n == null) return;
+      if (src !== pct) pct.value = cur ? r2((n / cur - 1) * 100) : '';
+      if (src !== m2) m2.value = r2(n);
+      if (src !== mon) mon.value = r2(n * ar);
+    };
+    [pct, m2, mon].forEach(e => e.addEventListener('input', () => set(e)));
+  }
 })();
 </script>
 {% endblock %}

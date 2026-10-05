@@ -111,6 +111,7 @@ TOOLS = [
          "contract_no": {"type": "string"}, "contract_date": {"type": "string"}, "contract_end": {"type": "string"},
          "deposit_amount": {"type": "number"}, "deposit_date": {"type": "string"},
          "phone": {"type": "string", "description": "телефон контактної особи"}, "contact_person": {"type": "string"},
+         "active": {"type": "boolean", "description": "false — орендар виїхав (склади звільняються)"},
          "note": {"type": "string"}}, "required": ["name"]}}}, "required": ["items"]}},
     {"name": "attach_warehouses", "description": "Закріпити склади за орендарями.",
      "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
@@ -305,10 +306,16 @@ def run_tool(name, args):
                 raise ToolError(f"невідома форма оплати {vals['payment_type']}")
             if it.get("company"):
                 vals["company_id"] = _need("companies", it["company"], "Компанію")["id"]
+            if "active" in it:
+                vals["active"] = 1 if it["active"] else 0
             if t:
                 if vals:
                     db.execute(f"UPDATE tenants SET {', '.join(k + '=?' for k in vals)} WHERE id=?", [*vals.values(), t["id"]])
                 tid, msg = t["id"], f"✎ Орендар «{t['name']}» оновлений"
+                if t["active"] and vals.get("active") == 0:
+                    db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))
+                    db.execute("UPDATE tenants SET moved_out=date('now','localtime') WHERE id=?", (tid,))
+                    msg = f"⤓ Орендар «{t['name']}» виїхав, склади звільнено"
             else:
                 vals["name"] = it["name"].strip()
                 vals.setdefault("payment_type", "bank")

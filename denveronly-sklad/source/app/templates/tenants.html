@@ -1,22 +1,13 @@
 {% extends "base.html" %}
-{% block title %}{{ _("Контакты") }}{% endblock %}
-{% block content %}
-<div class="row"><h1>{{ _("Контакты") }}</h1><span class="spacer"></span>
-  <form method="get"><input name="q" value="{{ q }}" placeholder="{{ _("Поиск: имя, телефон, договор, склад…") }}" style="width:260px"></form>
-  <a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Контакт") }}</a></div>
-
-<div class="tablewrap"><table class="contacts">
-  <thead><tr><th>{{ _("Арендатор") }}</th><th>{{ _("Контактные лица") }}</th><th>{{ _("Договор") }}</th><th>{{ _("Склады") }}</th>
-    <th class="n">{{ _("Аренда в месяц") }}</th><th class="n">{{ _("Задаток") }}</th></tr></thead>
-  <tbody>
-  {% for it in items %}{% set t = it.t %}
-    <tr style="{{ 'opacity:.5' if not t.active }}">
+{% block title %}{{ _("Арендаторы") }}{% endblock %}
+{% macro trow(it) %}{% set t = it.t %}
+    <tr class="{{ 'gone' if not t.active }}">
       <td><a href="{{ url_for('tenant_edit', tid=t.id) }}"><b>{{ t.name }}</b></a>
-        {% if not t.active %} <span class="badge off">{{ _("неактивен") }}</span>{% endif %}
+        {% if not t.active %} <span class="badge off">{{ _("выехал") }}{% if t.moved_out %} {{ t.moved_out }}{% endif %}</span>{% endif %}
         {% if t.party_type == 'person' %}<div class="muted">{{ _("Физлицо") }}{% if t.passport_number %} · {{ _("паспорт") }} {{ t.passport_series or '' }} {{ t.passport_number }}{% endif %}</div>
-        {% elif t.contact %}<div class="muted">{{ t.director_position or _("Директор") }}: {{ t.contact }}</div>{% else %}<div><span class="badge warnb">{{ _("не указан директор") }}</span></div>{% endif %}
+        {% elif t.contact %}<div class="muted">{{ t.director_position or _("Директор") }}: {{ t.contact }}</div>{% elif t.active %}<div><span class="badge warnb">{{ _("не указан директор") }}</span></div>{% endif %}
         <div style="margin-top:3px">
-          {% if t.company_name %}<span class="badge co">→ {{ t.company_name }}</span>{% else %}<span class="badge warnb">{{ _("компания не указана") }}</span>{% endif %}
+          {% if t.company_name %}<span class="badge co">→ {{ t.company_name }}</span>{% elif t.active %}<span class="badge warnb">{{ _("компания не указана") }}</span>{% endif %}
         </div></td>
       <td>{% for c in it.contacts %}<div>{{ c.name }}{% if c.position %} <span class="muted">({{ c.position }})</span>{% endif %}
           {% if c.phone %}<br><a href="tel:{{ c.phone|replace(' ', '') }}">{{ c.phone }}</a>{% endif %}</div>{% else %}<span class="muted">—</span>{% endfor %}</td>
@@ -30,10 +21,28 @@
       <td class="n">{% if it.whs %}<b>{{ money(it.rent) }}</b><br>{% endif %}<span class="badge">{{ PAYMENT_TYPES[t.payment_type] }}</span></td>
       <td class="n">{% if t.deposit_amount %}{{ money(t.deposit_amount) }}{% if t.deposit_date %}<br><span class="muted">{{ t.deposit_date }}</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
     </tr>
+{% endmacro %}
+{% block content %}
+<div class="row"><h1>{{ _("Арендаторы") }}</h1><span class="spacer"></span>
+  <form method="get"><input name="q" value="{{ q }}" placeholder="{{ _("Поиск: имя, телефон, договор, склад…") }}" style="width:260px"></form>
+  <a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Арендатор") }}</a></div>
+
+<div class="tablewrap"><table class="contacts">
+  <thead><tr><th>{{ _("Арендатор") }}</th><th>{{ _("Контактные лица") }}</th><th>{{ _("Договор") }}</th><th>{{ _("Склады") }}</th>
+    <th class="n">{{ _("Аренда в месяц") }}</th><th class="n">{{ _("Гарантийный взнос") }}</th></tr></thead>
+  <tbody>
+  {% for it in items %}{{ trow(it) }}
   {% else %}
-    <tr><td colspan="6" class="muted">{{ _("Ничего не найдено.") if q else _("Контактов пока нет.") }}</td></tr>
+    <tr><td colspan="6" class="muted">{{ _("Ничего не найдено.") if q else _("Арендаторов пока нет.") }}</td></tr>
   {% endfor %}
   </tbody>
 </table></div>
-<p class="muted">{{ _("Сумма — аренда в месяц по всем складам контакта в форме оплаты по договору") }}.</p>
+<p class="muted">{{ _("Сумма — аренда в месяц по всем складам арендатора в форме оплаты по договору") }}.</p>
+
+{% if gone %}
+<h2 class="gonehead">{{ _("Выехавшие") }} <span class="muted">({{ gone|length }})</span></h2>
+<div class="tablewrap gonelist"><table class="contacts">
+  <tbody>{% for it in gone %}{{ trow(it) }}{% endfor %}</tbody>
+</table></div>
+{% endif %}
 {% endblock %}

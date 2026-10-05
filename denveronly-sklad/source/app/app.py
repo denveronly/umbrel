@@ -116,20 +116,23 @@ def uploads(name):
 
 # ---------------- склады ----------------
 
-def set_price(wid, new_price):
-    """Записати нову ціну складу (за м²/міс) та зберегти зміну в історії."""
+def set_price(wid, new_price, kind="set"):
+    """Записати нову ціну складу (за м²/міс) та зберегти зміну в історії (з % зміни)."""
     db = get_db()
-    w = db.execute("SELECT w.price_m2, w.name, t.name AS tname, t.payment_type FROM warehouses w "
+    w = db.execute("SELECT w.price_m2, w.name, w.area, t.name AS tname, t.payment_type FROM warehouses w "
                    "LEFT JOIN tenants t ON t.id=w.tenant_id WHERE w.id=?", (wid,)).fetchone()
     old = w["price_m2"] if w else None
     if new_price is None or (old is not None and abs((old or 0) - new_price) < 1e-9):
         return False
+    pct = round((new_price / old - 1) * 100, 2) if old else None
     db.execute("UPDATE warehouses SET price_m2=? WHERE id=?", (new_price, wid))
-    db.execute("INSERT INTO price_history(warehouse_id, old_price, new_price, tenant_name, payment_type, username) "
-               "VALUES (?,?,?,?,?,?)", (wid, old, new_price, w["tname"] if w else None, w["payment_type"] if w else None,
-                                         g.user["username"] if g.get("user") else None))
-    log("Цена склада изменена", f"{w['name'] if w else wid}: {calc.fmt_money(old or 0)} → {calc.fmt_money(new_price)} грн/м²",
-        commit=False)
+    db.execute("INSERT INTO price_history(warehouse_id, old_price, new_price, tenant_name, payment_type, kind, pct, area, "
+               "username) VALUES (?,?,?,?,?,?,?,?,?)",
+               (wid, old, new_price, w["tname"] if w else None, w["payment_type"] if w else None, kind, pct,
+                w["area"] if w else None, g.user["username"] if g.get("user") else None))
+    log("Повышение цены склада" if kind == "increase" else "Цена склада изменена",
+        f"{w['name'] if w else wid}: {calc.fmt_money(old or 0)} → {calc.fmt_money(new_price)} грн/м²"
+        + (f" ({pct:+.2f}%)" if pct is not None else ""), commit=False)
     return True
 
 
@@ -194,6 +197,30 @@ def warehouse_edit(wid=None):
                            history=history, meter_services=services(mode="meter"))
 
 
+@app.route("/warehouses/<int:wid>/raise", methods=["POST"])
+def warehouse_raise(wid):
+    """Підвищення ціни: на % або до нової ціни (за м² чи за місяць)."""
+    db = get_db()
+    wh = db.execute("SELECT * FROM warehouses WHERE id=?", (wid,)).fetchone()
+    if not wh:
+        abort(404)
+    old = wh["price_m2"] or 0
+    pct = fnum("raise_pct")
+    new = fnum("raise_m2")
+    month = fnum("raise_month")
+    if new is None and month is not None and wh["area"]:
+        new = round(month / wh["area"], 4)
+    if new is None and pct is not None:
+        new = round(old * (1 + pct / 100), 4)
+    if not new or new <= 0:
+        flash(_("Укажите процент или новую цену"))
+    elif set_price(wid, new, kind="increase"):
+        db.commit()
+        p = (new / old - 1) * 100 if old else 0
+        flash(_("Цена повышена") + f": {calc.fmt_money(old)} → {calc.fmt_money(new)} грн/м² ({p:+.2f}%)")
+    return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+
+
 @app.route("/warehouses/<int:wid>/meters", methods=["POST"])
 def meter_save(wid):
     db = get_db()
@@ -235,7 +262,9 @@ def tenants():
         if q and q.lower() not in hay:
             continue
         items.append({"t": t, "contacts": contacts, "whs": whs, "rent": rent})
-    return render_template("tenants.html", items=items, q=q)
+    active = [it for it in items if it["t"]["active"]]
+    gone = [it for it in items if not it["t"]["active"]]
+    return render_template("tenants.html", items=active, gone=gone, q=q)
 
 
 TENANT_FIELDS = ["name", "edrpou", "iban", "address", "party_type", "passport_series", "passport_number",
@@ -262,14 +291,31 @@ def tenant_edit(tid=None):
             db.commit()
             return redirect(url_for("tenants"))
         vals = [request.form.get(f, "").strip() for f in TENANT_FIELDS]
-        vals += [request.form.get("company_id") or None, fnum("deposit_amount"),
-                 1 if request.form.get("active") else 0]
+        active = 1 if request.form.get("active") else 0
+        vals += [request.form.get("company_id") or None, fnum("deposit_amount"), active]
         cols = TENANT_FIELDS + ["company_id", "deposit_amount", "active"]
         if t:
             db.execute(f"UPDATE tenants SET {', '.join(f + '=?' for f in cols)} WHERE id=?", vals + [tid])
+            if t["active"] and not active:              # виїхав: звільняємо склади, фіксуємо дату
+                freed = [r["name"] for r in db.execute("SELECT name FROM warehouses WHERE tenant_id=?", (tid,))]
+                db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))
+                db.execute("UPDATE tenants SET moved_out=date('now','localtime') WHERE id=?", (tid,))
+                log("Арендатор выехал", f"{t['name']}" + (f"; освобождены: {', '.join(freed)}" if freed else ""), commit=False)
+                if freed:
+                    flash(_("Арендатор выехал, склады освобождены") + ": " + ", ".join(freed))
+            elif not t["active"] and active:
+                db.execute("UPDATE tenants SET moved_out=NULL WHERE id=?", (tid,))
         else:
             tid = db.execute(f"INSERT INTO tenants({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
                              vals).lastrowid
+            # склад і ціна оренди за місяць одразу при створенні
+            new_wid = request.form.get("new_wid", type=int)
+            if new_wid:
+                db.execute("UPDATE warehouses SET tenant_id=? WHERE id=? AND tenant_id IS NULL", (tid, new_wid))
+                month = fnum("new_rent_month")
+                w = db.execute("SELECT area FROM warehouses WHERE id=?", (new_wid,)).fetchone()
+                if month is not None and w and w["area"]:
+                    set_price(new_wid, round(month / w["area"], 4))
             # контактные лица из формы создания
             if request.form.get("person_name") or request.form.get("person_phone"):
                 db.execute("INSERT INTO tenant_contacts(tenant_id, name, position, phone, email) VALUES (?,?,?,?,?)",
@@ -284,6 +330,7 @@ def tenant_edit(tid=None):
     pt = t["payment_type"] if t else None
     wh_items = [(w, calc.rent_price(w, pt, st)) for w in whs]
     free = db.execute("SELECT * FROM warehouses WHERE tenant_id IS NULL ORDER BY name").fetchall()
+    free_prices = {w["id"]: calc.rent_price(w, None, st)["total"] for w in free}
     contacts = db.execute("SELECT * FROM tenant_contacts WHERE tenant_id=? ORDER BY id", (tid,)).fetchall() if tid else []
     acts = db.execute("SELECT * FROM acts WHERE tenant_id=? ORDER BY period DESC", (tid,)).fetchall() if tid else []
     tot = {"total": calc.r2(sum(p["total"] for _w, p in wh_items)), "vat": calc.r2(sum(p["vat"] for _w, p in wh_items))}
@@ -294,7 +341,7 @@ def tenant_edit(tid=None):
                             (tid,)).fetchall() if tid else []
     return render_template("tenant_edit.html", t=t, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
                            subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs,
-                           tot=tot, companies=companies(), vat=float(st["vat_rate"]))
+                           tot=tot, companies=companies(), vat=float(st["vat_rate"]), free_prices=free_prices)
 
 
 @app.route("/tenants/<int:tid>/contacts", methods=["POST"])
