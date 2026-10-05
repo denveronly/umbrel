@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block content %}
+<h1>Настройки</h1>
+{% include "_settings_tabs.html" %}
+<form method="post" enctype="multipart/form-data">
+<div class="card grid" style="display:grid">
+  <h2 class="full" style="margin:0">Расчёты</h2>
+  <label>Ставка ПДВ, %<input name="s_vat_rate" inputmode="decimal" value="{{ S.vat_rate }}"></label>
+  <label>Коэффициент для наличных<input name="s_cash_coef" inputmode="decimal" value="{{ S.cash_coef }}">
+    <span class="muted">если у склада не задана своя ставка наличными: безнал × коэф. (напр. 0.9 = скидка 10%)</span></label>
+  <label>Коммунальные в акте
+    <select name="s_util_shift">
+      <option value="1" {{ 'selected' if S.util_shift != '0' }}>за предыдущий месяц (акт наперёд: аренда за октябрь + коммуналка за сентябрь)</option>
+      <option value="0" {{ 'selected' if S.util_shift == '0' }}>за тот же месяц, что и аренда</option>
+    </select></label>
+  <label>Дата акта
+    <select name="s_act_date">
+      <option value="first" {{ 'selected' if S.act_date != 'last' }}>1-е число месяца аренды</option>
+      <option value="last" {{ 'selected' if S.act_date == 'last' }}>последний день месяца аренды</option>
+    </select></label>
+  <label>Аренда в акте
+    <select name="s_include_rent">
+      <option value="1" {{ 'selected' if S.include_rent == '1' }}>аренда + коммунальные в одном акте</option>
+      <option value="0" {{ 'selected' if S.include_rent == '0' }}>только коммунальные</option>
+    </select></label>
+</div>
+
+<div class="card grid" style="display:grid">
+  <h2 class="full" style="margin:0">План территории</h2>
+  <label class="full">Изображение (PNG/JPG — схема, скан или скриншот со спутника)<input type="file" name="plan" accept="image/*"></label>
+  {% if S.plan_image %}<p class="muted full">Загружен: {{ S.plan_w }}×{{ S.plan_h }} px. При замене плана с другими размерами контуры складов нужно будет перерисовать.</p>{% endif %}
+</div>
+<button>Сохранить</button>
+</form>
+
+<p class="muted" style="margin-top:16px">Бэкапы и журнал действий — во вкладке <a href="{{ url_for('logs.database') }}">Логи</a>.</p>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Склады{% endblock %}
+{% block content %}
+<div class="row"><h1>Склады</h1><span class="spacer"></span>
+  <a class="btn" href="{{ url_for('warehouse_edit') }}">+ Склад</a></div>
+
+<div class="kpis">
+  <div class="kpi"><small class="muted">Всего площадь</small><b>{{ num(tot.area) }} м²</b></div>
+  <div class="kpi"><small class="muted">Сдано</small><b>{{ num(tot.rented) }} м²</b></div>
+  <div class="kpi"><small class="muted">Свободно</small><b>{{ num(tot.area - tot.rented) }} м²</b></div>
+  <div class="kpi"><small class="muted">Заполненность</small><b>{{ ((tot.rented / tot.area * 100) if tot.area else 0)|round|int }}%</b></div>
+</div>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Склад</th><th class="n">м²</th><th>Арендатор</th>
+    <th class="n">Безнал</th><th class="n">Безнал+ПДВ</th><th class="n">Наличные</th></tr></thead>
+  <tbody>
+  {% set ns = namespace(b=0, v=0, c=0, cur=0) %}
+  {% for w, p in items %}
+    <tr>
+      <td><a href="{{ url_for('warehouse_edit', wid=w.id) }}"><b>{{ w.name }}</b></a></td>
+      <td class="n">{{ num(w.area) }}</td>
+      <td>{% if w.tenant_name %}{{ w.tenant_name }}<br><span class="badge">{{ PAYMENT_TYPES[w.payment_type] }}</span>{% else %}<span class="badge off">свободен</span>{% endif %}</td>
+      <td class="n">{{ money(p.bank.total) }}<br><span class="muted">{{ money(p.bank.rate) }}/м²</span></td>
+      <td class="n">{{ money(p.bank_vat.total) }}<br><span class="muted">{{ money(p.bank_vat.rate) }}/м²</span></td>
+      <td class="n">{{ money(p.cash.total) }}<br><span class="muted">{{ money(p.cash.rate) }}/м²</span></td>
+    </tr>
+    {% if w.tenant_id %}{% set ns.cur = ns.cur + p[w.payment_type].total %}{% endif %}
+  {% else %}
+    <tr><td colspan="6" class="muted">Складов пока нет — добавьте первый.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="muted">Ожидаемый доход от аренды в месяц по текущим арендаторам (по их форме оплаты): <b>{{ money(ns.cur) }} грн</b></p>
+{% endblock %}

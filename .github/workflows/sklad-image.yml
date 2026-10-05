@@ -1,0 +1,46 @@
+name: Build Склады image
+
+# Собирает Docker-образ приложения «Склады» для amd64 и arm64 и публикует в GHCR.
+# Версия берётся из denveronly-sklad/source/VERSION. После выпуска новой версии
+# обновите тег образа в denveronly-sklad/docker-compose.yml и version в umbrel-app.yml.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "denveronly-sklad/source/**"
+      - ".github/workflows/sklad-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: v
+        run: echo "version=$(tr -d '[:space:]' < denveronly-sklad/source/VERSION)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: denveronly-sklad/source
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/denveronly/sklad:${{ steps.v.outputs.version }}
+            ghcr.io/denveronly/sklad:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

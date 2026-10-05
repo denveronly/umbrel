@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Карта{% endblock %}
+{% block mainclass %}wide{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for("static", filename="vendor/leaflet.css") }}">
+{% endblock %}
+{% block content %}
+<div class="mapwrap">
+  <div style="position:relative">
+    <div id="map"></div>
+    <div class="edithint" id="hint">Кликайте по углам склада · «Готово» — сохранить · Esc — отмена</div>
+  </div>
+  <aside class="side">
+    {% if not plan %}
+      <div class="warn" style="margin-bottom:10px">План территории не загружен. <a href="{{ url_for('settings_page') }}">Загрузить в настройках</a> — схему, скан или спутниковый снимок.</div>
+    {% endif %}
+    <div class="kpis" style="grid-template-columns:1fr 1fr">
+      <div class="kpi"><small class="muted">Площадь</small><b id="k-area">—</b></div>
+      <div class="kpi"><small class="muted">Занято</small><b id="k-occ">—</b></div>
+    </div>
+    <div id="details"></div>
+    <h2>Склады</h2>
+    <div id="list"></div>
+    <p><a class="btn ghost sm" href="{{ url_for('warehouse_edit') }}">+ Добавить склад</a></p>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for("static", filename="vendor/leaflet.js") }}"></script>
+<script>
+const PLAN = {{ (url_for('uploads', name=plan) if plan else None)|tojson }};
+const W = {{ (plan_w or 1000)|int }}, H = {{ (plan_h or 700)|int }};
+const PT = {{ PAYMENT_TYPES|tojson }};
+const fmt = (x, d=2) => (x ?? 0).toLocaleString('uk-UA', {minimumFractionDigits: d, maximumFractionDigits: d});
+
+const map = L.map('map', {crs: L.CRS.Simple, minZoom: -4, maxZoom: 3, zoomSnap: 0.25, doubleClickZoom: false});
+const bounds = [[0, 0], [H, W]];
+if (PLAN) L.imageOverlay(PLAN, bounds).addTo(map);
+else L.rectangle(bounds, {color: '#999', weight: 1, dashArray: '4', fill: false}).addTo(map);
+map.fitBounds(bounds);
+
+let whs = [], layers = {}, selected = null, drawing = null;
+
+const colorOf = w => w.color || (w.tenant_id ? getComputedStyle(document.documentElement).getPropertyValue('--rented').trim() || '#1f6f5c' : '#9b978d');
+
+async function load() {
+  whs = await (await fetch('{{ url_for("api_warehouses") }}')).json();
+  Object.values(layers).forEach(l => map.removeLayer(l)); layers = {};
+  let area = 0, occ = 0;
+  whs.forEach(w => {
+    area += w.area; if (w.tenant_id) occ += w.area;
+    if (w.polygon && w.polygon.length > 2) {
+      const pl = L.polygon(w.polygon, {color: colorOf(w), weight: 2, fillOpacity: w.tenant_id ? .45 : .2})
+        .bindTooltip(w.name, {permanent: true, direction: 'center', className: 'whlabel'})
+        .on('click', () => select(w.id)).addTo(map);
+      layers[w.id] = pl;
+    }
+  });
+  document.getElementById('k-area').textContent = fmt(area, 0) + ' м²';
+  document.getElementById('k-occ').textContent = area ? Math.round(occ / area * 100) + '%' : '—';
+  renderList();
+  if (selected) select(selected, false);
+}
+
+function renderList() {
+  document.getElementById('list').innerHTML = whs.map(w => `
+    <div class="whitem ${w.id === selected ? 'sel' : ''}" onclick="select(${w.id})">
+      <span class="dot" style="background:${colorOf(w)}"></span><b>${esc(w.name)}</b>
+      <span class="muted"> · ${fmt(w.area, 0)} м²</span>
+      ${w.polygon ? '' : '<span class="badge off">нет контура</span>'}
+      ${(w.photos || []).length ? `<span class="muted"> · 📷 ${w.photos.length}</span>` : ''}
+      <div class="muted">${w.tenant_name ? esc(w.tenant_name) : 'свободен'}</div>
+    </div>`).join('') || '<p class="muted">Складов пока нет.</p>';
+}
+
+function esc(s) { return (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function select(id, zoom = true) {
+  selected = id;
+  const w = whs.find(x => x.id === id); if (!w) return;
+  Object.entries(layers).forEach(([k, l]) => l.setStyle({weight: +k === id ? 4 : 2}));
+  if (zoom && layers[id]) map.fitBounds(layers[id].getBounds(), {maxZoom: map.getZoom() + 1, padding: [60, 60]});
+  const p = w.prices;
+  document.getElementById('details').innerHTML = `
+    <div class="card">
+      <div class="row"><h2 style="margin:0">${esc(w.name)}</h2><span class="spacer"></span>
+        <a class="btn ghost sm" href="/warehouses/${w.id}">Открыть</a></div>
+      <p class="muted" style="margin:6px 0 10px">${fmt(w.area, 1)} м² · ${w.tenant_name ? 'арендатор: <b>' + esc(w.tenant_name) + '</b> (' + PT[w.payment_type] + ')' : 'свободен'}</p>
+      <div class="prices">
+        <div class="price"><small>Безнал</small><b>${fmt(p.bank.total)}</b><small>${fmt(p.bank.rate)} грн/м²</small></div>
+        <div class="price"><small>Безнал + ПДВ</small><b>${fmt(p.bank_vat.total)}</b><small>${fmt(p.bank_vat.rate)} грн/м², ПДВ ${fmt(p.bank_vat.vat)}</small></div>
+        <div class="price"><small>Наличные</small><b>${fmt(p.cash.total)}</b><small>${fmt(p.cash.rate)} грн/м²</small></div>
+      </div>
+      <h3 class="phh">Фото</h3>
+      <div id="wh-gallery"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="sm" onclick="startDraw(${w.id})">${w.polygon ? 'Перерисовать' : 'Нарисовать'} контур</button>
+        ${w.polygon ? `<button class="sm danger" onclick="savePoly(${w.id}, null)">Убрать</button>` : ''}
+      </div>
+    </div>`;
+  const gal = document.getElementById('wh-gallery');
+  Gallery.render(gal, w.id, w.photos || []);
+  gal.addEventListener('photoschange', e => { w.photos = e.detail.photos; renderList(); });
+  renderList();
+}
+
+// ---- рисование контура ----
+function startDraw(id) {
+  cancelDraw();
+  drawing = {id, pts: [], line: L.polyline([], {color: '#e0662f', weight: 2, dashArray: '5'}).addTo(map), marks: []};
+  document.getElementById('hint').style.display = 'block';
+  document.getElementById('hint').innerHTML = 'Кликайте по углам склада · <a href="#" style="color:inherit;font-weight:700" onclick="finishDraw();return false">Готово</a> · Esc — отмена';
+  map.getContainer().style.cursor = 'crosshair';
+}
+function cancelDraw() {
+  if (!drawing) return;
+  map.removeLayer(drawing.line); drawing.marks.forEach(m => map.removeLayer(m));
+  drawing = null; document.getElementById('hint').style.display = 'none'; map.getContainer().style.cursor = '';
+}
+async function finishDraw() {
+  if (!drawing || drawing.pts.length < 3) { alert('Нужно минимум 3 точки'); return; }
+  const {id, pts} = drawing; cancelDraw();
+  await savePoly(id, pts.map(p => [Math.round(p.lat * 10) / 10, Math.round(p.lng * 10) / 10]));
+}
+async function savePoly(id, poly) {
+  await fetch(`/api/warehouses/${id}/polygon`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({polygon: poly})});
+  await load();
+}
+map.on('click', e => {
+  if (!drawing) return;
+  const last = drawing.pts[drawing.pts.length - 1];
+  if (last && map.latLngToContainerPoint(last).distanceTo(e.containerPoint) < 4) return;
+  drawing.pts.push(e.latlng);
+  drawing.line.setLatLngs([...drawing.pts, drawing.pts[0]]);
+  drawing.marks.push(L.circleMarker(e.latlng, {radius: 4, color: '#e0662f'}).addTo(map));
+});
+map.on('dblclick', () => drawing && finishDraw());
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cancelDraw(); if (e.key === 'Enter') finishDraw(); });
+
+window.addEventListener("themechange", load);
+load();
+</script>
+{% endblock %}

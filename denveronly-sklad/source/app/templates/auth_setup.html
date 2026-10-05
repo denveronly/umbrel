@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Первый запуск{% endblock %}
+{% block content %}
+<div class="authbox card">
+  <div class="logo">▦</div>
+  <h1>Первый запуск</h1>
+  <p class="muted" style="text-align:center">Создайте главного администратора. Потом в настройках можно будет добавить других пользователей.</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post">
+    <label>Логин<input name="username" required autofocus autocomplete="username" value="{{ request.form.username or '' }}"></label>
+    <label>Имя (необязательно)<input name="full_name" value="{{ request.form.full_name or '' }}" placeholder="Денис"></label>
+    <label>Пароль<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+    <label>Пароль ещё раз<input type="password" name="password2" required minlength="8" autocomplete="new-password"></label>
+    <button>Создать и войти</button>
+  </form>
+</div>
+{% endblock %}

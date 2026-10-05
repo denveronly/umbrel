@@ -1,0 +1,5 @@
+<div class="tabs">
+  <a href="{{ url_for('settings_page') }}" class="{{ 'on' if request.endpoint == 'settings_page' }}">Общие</a>
+  <a href="{{ url_for('companies_page') }}" class="{{ 'on' if request.endpoint == 'companies_page' }}">Компании</a>
+  <a href="{{ url_for('auth.users') }}" class="{{ 'on' if request.endpoint == 'auth.users' }}">Пользователи</a>
+</div>

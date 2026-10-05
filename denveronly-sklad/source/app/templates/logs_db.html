@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}База данных{% endblock %}
+{% block content %}
+<h1>Логи</h1>
+{% include "_logs_tabs.html" %}
+
+<div class="kpis">
+  <div class="kpi"><small class="muted">Размер базы</small><b>{{ st.size|filesize }}</b>{% if st.wal %}<small class="muted">+ журнал {{ st.wal|filesize }}</small>{% endif %}</div>
+  <div class="kpi"><small class="muted">Фото и план</small><b>{{ (st.photos + st.uploads)|filesize }}</b></div>
+  <div class="kpi"><small class="muted">Бэкапов</small><b>{{ backups|length }}</b><small class="muted">{{ (backups|sum(attribute='size'))|filesize }}</small></div>
+  <div class="kpi"><small class="muted">Свободно на диске</small><b>{{ st.disk_free|filesize }}</b><small class="muted">из {{ st.disk_total|filesize }}</small></div>
+</div>
+
+<div class="cols2">
+  <div class="card">
+    <h2 style="margin-top:0">Показатели базы</h2>
+    <table class="kv">
+      {% for label, n in st.tables %}<tr><td>{{ label }}</td><td class="n">{{ num(n) }}</td></tr>{% endfor %}
+      <tr><td>Показания за период</td><td class="n">{% if st.periods[0] %}{{ period_label(st.periods[0]) }} — {{ period_label(st.periods[1]) }}{% else %}—{% endif %}</td></tr>
+      <tr><td>Утверждённых актов</td><td class="n">{{ st.acts_final }}</td></tr>
+      <tr><td>Сумма всех актов</td><td class="n">{{ money(st.acts_sum) }} грн</td></tr>
+      <tr><td>Версия SQLite</td><td class="n">{{ st.sqlite }}</td></tr>
+    </table>
+    <form method="post" class="row" style="margin-top:12px">
+      <button class="sm ghost" name="action" value="check">Проверить целостность</button>
+      <button class="sm ghost" name="action" value="vacuum">Оптимизировать (VACUUM)</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Автоматический бэкап</h2>
+    <form method="post">
+      <input type="hidden" name="action" value="settings">
+      <label class="check"><input type="checkbox" name="auto_backup" value="1" {{ 'checked' if S.auto_backup == '1' }}> делать бэкап раз в сутки</label>
+      <label style="margin-top:8px">Хранить последних автоматических копий<input name="backup_keep" type="number" min="1" value="{{ S.backup_keep }}" style="width:120px"></label>
+      <p class="muted">Последний автобэкап: {{ last_auto.replace('T', ' ') if last_auto else 'ещё не было' }}. Ручные копии не удаляются автоматически.</p>
+      <button class="sm">Сохранить</button>
+    </form>
+    <h2>Очистка журнала</h2>
+    <form method="post" class="row">
+      <input type="hidden" name="action" value="clear_log">
+      <span>удалить записи старше</span><input name="days" type="number" min="30" value="365" style="width:90px"><span>дней</span>
+      <button class="sm danger" onclick="return confirm('Удалить старые записи журнала?')">Очистить</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <h2 style="margin:0">Резервные копии</h2><span class="spacer"></span>
+    <form method="post"><button name="action" value="backup">Создать бэкап сейчас</button></form>
+  </div>
+  <p class="muted">Бэкап — ZIP с базой, фото объектов и планом территории. Лежат в папке <code>data/backups</code> на сервере. Советую периодически скачивать копию на другой диск.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Дата</th><th>Тип</th><th class="n">Размер</th><th></th></tr></thead>
+    <tbody>
+    {% for b in backups %}
+      <tr><td>{{ b.time.strftime('%d.%m.%Y %H:%M:%S') }}</td><td><span class="badge {{ 'off' if b.kind_code != 'manual' }}">{{ b.kind }}</span></td>
+        <td class="n">{{ b.size|filesize }}</td>
+        <td class="n"><form method="post" class="row" style="justify-content:flex-end;gap:6px">
+          <input type="hidden" name="name" value="{{ b.name }}">
+          <a class="btn sm ghost" href="{{ url_for('logs.download', name=b.name) }}">Скачать</a>
+          <button class="sm ghost" name="action" value="restore" onclick="return confirm('Восстановить базу из бэкапа {{ b.time.strftime('%d.%m.%Y %H:%M') }}?\n\nВсё, что изменено после этого момента, будет заменено. Текущее состояние предварительно сохранится отдельным бэкапом.')">Восстановить</button>
+          <button class="sm danger" name="action" value="delete" onclick="return confirm('Удалить этот бэкап?')">×</button>
+        </form></td></tr>
+    {% else %}<tr><td colspan="4" class="muted">Бэкапов пока нет.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <h2>Восстановить из файла</h2>
+  <form method="post" enctype="multipart/form-data" class="row">
+    <input type="hidden" name="action" value="upload">
+    <input type="file" name="file" accept=".zip" required style="max-width:340px">
+    <button class="sm danger" onclick="return confirm('Заменить текущую базу данными из файла? Текущее состояние предварительно сохранится.')">Загрузить и восстановить</button>
+  </form>
+</div>
+{% endblock %}

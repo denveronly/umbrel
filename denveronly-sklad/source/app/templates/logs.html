@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Логи{% endblock %}
+{% block content %}
+<h1>Логи</h1>
+{% include "_logs_tabs.html" %}
+<form method="get" class="row" style="margin-bottom:12px">
+  <input name="q" value="{{ q }}" placeholder="Поиск по действию или деталям" style="max-width:300px">
+  <select name="user" style="width:auto" onchange="this.form.submit()">
+    <option value="">все пользователи</option>
+    {% for u in users %}<option {{ 'selected' if u == user }}>{{ u }}</option>{% endfor %}
+  </select>
+  <button class="sm ghost">Найти</button>
+  <span class="spacer"></span><span class="muted">записей: {{ total }}</span>
+</form>
+<div class="tablewrap"><table class="logtbl">
+  <thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Детали</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr class="{{ 'lwarn' if 'Неудач' in r.action or 'Ошибка' in r.action or 'удал' in r.action|lower or 'восстановлена' in r.action }}">
+      <td class="n muted">{{ r.ts }}</td><td>{{ r.username or '—' }}</td><td>{{ r.action }}</td>
+      <td class="muted">{{ r.details or '' }}</td><td class="muted">{{ r.ip or '' }}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">Записей нет.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% if pages > 1 %}
+<div class="row" style="margin-top:10px">
+  {% if page > 1 %}<a class="btn ghost sm" href="?q={{ q }}&user={{ user }}&page={{ page - 1 }}">← новее</a>{% endif %}
+  <span class="muted">стр. {{ page }} из {{ pages }}</span>
+  {% if page < pages %}<a class="btn ghost sm" href="?q={{ q }}&user={{ user }}&page={{ page + 1 }}">старее →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

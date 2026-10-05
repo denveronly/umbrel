@@ -1,0 +1,59 @@
+<!doctype html>
+{% set theme = request.cookies.get("theme") %}
+<html lang="ru"{% if theme in ("light", "dark") %} data-theme="{{ theme }}"{% endif %}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Склады{% endblock %} · Складская база</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='photos.js') }}" defer></script>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% if current_user %}
+<header class="top">
+  <a class="brand" href="{{ url_for('index') }}">▦ Склады</a>
+  <nav>
+    {% set ep = request.endpoint or '' %}
+    <a href="{{ url_for('index') }}" class="{{ 'on' if ep=='index' }}">Основная</a>
+    <a href="{{ url_for('tenants') }}" class="{{ 'on' if ep.startswith('tenant') }}">Контакты</a>
+    <a href="{{ url_for('readings') }}" class="{{ 'on' if ep in ('readings', 'services_page') }}">Показания</a>
+    <a href="{{ url_for('acts') }}" class="{{ 'on' if ep.startswith('act') }}">Акты</a>
+    <a href="{{ url_for('warehouses') }}" class="{{ 'on' if ep.startswith('warehouse') }}">Склады</a>
+    {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('logs.logs') }}" class="{{ 'on' if ep.startswith('logs.') }}">Логи</a>
+    <a href="{{ url_for('settings_page') }}" class="{{ 'on' if ep in ('settings_page', 'auth.users', 'companies_page') }}" title="Настройки">⚙</a>
+    {% endif %}
+  </nav>
+  <span class="spacer"></span>
+  <div class="usermenu">
+    <button type="button" class="themebtn" onclick="cycleTheme()" id="themebtn" title="Тема"></button>
+    <a href="{{ url_for('auth.account') }}" class="{{ 'on' if ep=='auth.account' }}" title="Мой аккаунт">👤 {{ current_user.full_name or current_user.username }}</a>
+    <form method="post" action="{{ url_for('auth.logout') }}"><button class="sm ghost">Выйти</button></form>
+  </div>
+</header>
+{% else %}
+<div class="themecorner"><button type="button" class="themebtn" onclick="cycleTheme()" id="themebtn" title="Тема"></button></div>
+{% endif %}
+<main class="{% block mainclass %}{% endblock %}">
+  {% with msgs = get_flashed_messages() %}
+    {% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<script>
+const THEMES = {auto: ['◐', 'Тема: авто (как в системе)'], light: ['☀', 'Тема: дневная'], dark: ['☾', 'Тема: ночная']};
+function curTheme() { return document.documentElement.dataset.theme || 'auto'; }
+function showTheme() { const b = document.getElementById('themebtn'), t = THEMES[curTheme()]; if (b) { b.textContent = t[0]; b.title = t[1] + ' — нажмите, чтобы сменить'; } }
+function cycleTheme() {
+  const next = {auto: 'light', light: 'dark', dark: 'auto'}[curTheme()];
+  if (next === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = next;
+  document.cookie = 'theme=' + next + ';path=/;max-age=31536000;SameSite=Lax';
+  showTheme();
+  window.dispatchEvent(new Event('themechange'));
+}
+showTheme();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

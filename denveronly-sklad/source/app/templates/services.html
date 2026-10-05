@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Услуги{% endblock %}
+{% block content %}
+<h1>Показания и цены</h1>
+{% include "_readings_tabs.html" %}
+<p class="muted">Эксплуатационные услуги, которые попадают в акты. Типы:
+  <b>по счётчику</b> — расход по показаниям × цена месяца (электричество, вода, газ);
+  <b>кол-во за месяц</b> — вносите количество каждый месяц (вывоз мусора: 3 вывоза × цена);
+  <b>за м²</b> — площадь складов контакта × цена (охрана, уборка территории);
+  <b>фиксированно</b> — одна сумма в месяц.
+  Услуги «не по счётчику» подключаются каждому контакту в его карточке.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Услуга</th><th>Тип</th><th>Ед.</th><th class="n">Используется</th><th></th></tr></thead>
+  <tbody>
+  {% for s in rows %}
+    <tr style="{{ 'opacity:.55' if not s.active }}">
+      <td colspan="5" style="padding:0">
+        <details class="svc">
+          <summary class="svcrow">
+            <span><b>{{ s.name }}</b>{% if not s.active %} <span class="badge off">выключена</span>{% endif %}</span>
+            <span class="muted">{{ SERVICE_MODES[s.mode] }}</span>
+            <span class="muted">{{ s.unit }}</span>
+            <span class="muted n">{% if s.mode == 'meter' %}{{ s.meters }} счётч.{% else %}{{ s.subs }} контакт.{% endif %}</span>
+            <span class="muted n">изменить ▾</span>
+          </summary>
+          <form method="post" class="grid" style="padding:10px 12px 14px">
+            <input type="hidden" name="sid" value="{{ s.id }}">
+            <label>Название (как в акте)<input name="name" value="{{ s.name }}" required></label>
+            <label>Единица<input name="unit" value="{{ s.unit }}"></label>
+            <label>Тип<select name="mode">{% for k, v in SERVICE_MODES.items() %}<option value="{{ k }}" {{ 'selected' if s.mode == k }}>{{ v }}</option>{% endfor %}</select></label>
+            <label>Порядок в акте<input name="sort" type="number" value="{{ s.sort }}"></label>
+            <div class="full row">
+              <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if s.active }}> включена</label>
+              <span class="spacer"></span>
+              <button class="sm">Сохранить</button>
+              <button class="sm danger" name="delete" value="1" onclick="return confirm('Удалить услугу «{{ s.name }}» вместе с ценами? Уже сформированные акты не изменятся.')">Удалить</button>
+            </div>
+          </form>
+        </details>
+      </td>
+    </tr>
+  {% else %}<tr><td colspan="5" class="muted">Услуг пока нет.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+
+<h2>Добавить услугу</h2>
+<form method="post" class="card grid">
+  <label>Название (как в акте)<input name="name" required placeholder="Вивіз сміття"></label>
+  <label>Единица<input name="unit" placeholder="вивіз / кВт·год / міс."></label>
+  <label>Тип<select name="mode">{% for k, v in SERVICE_MODES.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+  <label>Порядок в акте<input name="sort" type="number" value="100"></label>
+  <div class="full row">
+    <input type="hidden" name="active" value="1">
+    <label class="check"><input type="checkbox" name="subscribe_all" value="1"> сразу подключить всем активным контактам (кроме «по счётчику»)</label>
+    <span class="spacer"></span><button>+ Добавить</button>
+  </div>
+</form>
+{% endblock %}

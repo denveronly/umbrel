@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Акты{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>Акты</h1><span class="spacer"></span>
+  <a class="btn ghost sm" href="?period={{ prev_p }}">←</a>
+  <form method="get"><input type="month" name="period" value="{{ period }}" onchange="this.form.submit()" style="width:auto"></form>
+  <a class="btn ghost sm" href="?period={{ next_p }}">→</a>
+</div>
+<div class="periodnote">
+  <div><span class="muted">Аренда</span><b>{{ period_label(period) }}</b><span class="muted">{{ 'наперёд' if util_period != period }}</span></div>
+  <div class="plus">+</div>
+  <div><span class="muted">Коммунальные</span><b>{{ period_label(util_period) }}</b><span class="muted">по показаниям и ценам этого месяца</span></div>
+</div>
+<p class="muted">Проверьте цифры, затем «PDF» или «Word» — акт сформируется и скачается. Черновик при повторном нажатии пересчитывается, утверждённый — нет.
+  {% if util_period != period %}Показания и цены за {{ period_label(util_period) }} вносятся во вкладке <a href="{{ url_for('readings', period=util_period) }}">Показания</a>.{% endif %}</p>
+
+<div class="kpis">
+  <div class="kpi"><small class="muted">Всего за месяц</small><b>{{ money(grand) }}</b></div>
+  {% for grp in groups %}<div class="kpi"><small class="muted">{{ grp.c.name if grp.c else 'Без компании' }}</small><b>{{ money(grp.tot.total) }}</b></div>{% endfor %}
+</div>
+
+{% for grp in groups %}
+<section class="card cogroup">
+  <div class="row">
+    <h2 style="margin:0">{{ grp.c.name if grp.c else 'Компания не указана' }}</h2>
+    {% if grp.c %}{% if grp.c.vat_payer %}<span class="badge">платник ПДВ</span>{% else %}<span class="badge off">без ПДВ</span>{% endif %}{% endif %}
+    <span class="spacer"></span>
+    <form method="post" action="{{ url_for('acts_make_company') }}" class="row" style="gap:6px">
+      <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="{{ grp.c.id if grp.c else '' }}">
+      <span class="muted">все акты:</span>
+      <button class="sm ghost" name="fmt" value="pdf">PDF zip ↓</button>
+      <button class="sm ghost" name="fmt" value="docx">Word zip ↓</button>
+    </form>
+  </div>
+  {% if not grp.c %}<div class="warn" style="margin-top:8px">У этих контактов не выбрана компания — в акте не будет реквизитов арендодателя.</div>{% endif %}
+
+  <div class="cototals">
+    <div><span class="muted">Без ПДВ</span><b>{{ money(grp.tot.net) }}</b></div>
+    <div><span class="muted">ПДВ</span><b>{{ money(grp.tot.vat) }}</b></div>
+    <div><span class="muted">Итого</span><b>{{ money(grp.tot.total) }}</b></div>
+    {% for k, v in grp.by_pt.items() %}<div><span class="muted">{{ PAYMENT_TYPES[k] }}</span><b>{{ money(v) }}</b></div>{% endfor %}
+  </div>
+
+  {% for it in grp.rows %}
+  <details class="actrow">
+    <summary>
+      <span class="who"><b>{{ it.t.name }}</b><br><span class="badge">{{ PAYMENT_TYPES[it.t.payment_type] }}</span>
+        {% if it.act %}<a href="{{ url_for('act_view', aid=it.act.id) }}" onclick="event.stopPropagation()">№ {{ it.act.number }}</a>
+          <span class="badge {{ 'off' if it.act.status == 'draft' }}">{{ 'утверждён' if it.act.status == 'final' else 'черновик' }}</span>{% endif %}
+        {% if it.changed %}<span class="badge warnb">сумма изменилась</span>{% endif %}
+        {% if it.warnings %}<span class="badge warnb">⚠ {{ it.warnings|length }}</span>{% endif %}
+      </span>
+      <span class="n"><b>{{ money(it.totals.total) }}</b>{% if it.totals.vat %}<br><span class="muted">в т.ч. ПДВ {{ money(it.totals.vat) }}</span>{% endif %}</span>
+      <span class="btns">
+        <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()">
+          <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
+          <button class="sm" name="fmt" value="pdf">PDF ↓</button>
+          <button class="sm ghost" name="fmt" value="docx">Word ↓</button>
+        </form>
+      </span>
+    </summary>
+    <div class="actlines">
+      {% for w in it.warnings %}<div class="warn" style="margin-bottom:4px">{{ w }}</div>{% endfor %}
+      <table>
+        <thead><tr><th>Позиция</th><th class="n">К-сть</th><th class="n">Ціна</th><th class="n">Сума</th></tr></thead>
+        <tbody>{% for l in it.lines %}
+          <tr><td>{{ l.name }}</td><td class="n">{{ num(l.qty) }} {{ l.unit }}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
+        {% else %}<tr><td colspan="4" class="muted">Нечего начислять.</td></tr>{% endfor %}</tbody>
+        <tfoot>
+          {% if it.totals.vat_rate %}
+          <tr><td colspan="3" class="n">Без ПДВ</td><td class="n">{{ money(it.totals.net) }}</td></tr>
+          <tr><td colspan="3" class="n">ПДВ {{ it.totals.vat_rate }}%</td><td class="n">{{ money(it.totals.vat) }}</td></tr>
+          {% endif %}
+          <tr><td colspan="3" class="n">Всего</td><td class="n">{{ money(it.totals.total) }}</td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </details>
+  {% endfor %}
+</section>
+{% else %}
+<p class="muted">Нет активных контактов.</p>
+{% endfor %}
+
+{% if groups %}
+<div class="row">
+  <span class="muted">Уже сформированные акты за месяц:</span>
+  <a class="btn ghost sm" href="{{ url_for('acts_zip', period=period, fmt='pdf') }}">все PDF ↓</a>
+  <a class="btn ghost sm" href="{{ url_for('acts_zip', period=period, fmt='docx') }}">все Word ↓</a>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+// после скачивания обновляем страницу, чтобы появился номер и статус акта
+document.querySelectorAll('form[action$="/acts/make"], form[action$="/acts/make_company"]').forEach(f =>
+  f.addEventListener('submit', () => setTimeout(() => location.reload(), 2500)));
+</script>
+{% endblock %}

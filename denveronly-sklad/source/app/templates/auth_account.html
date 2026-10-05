@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Мой аккаунт{% endblock %}
+{% block content %}
+<h1>Мой аккаунт</h1>
+<p class="muted">Логин: <b>{{ current_user.username }}</b> · роль: {{ ROLES[current_user.role] }}</p>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post" class="card grid" style="max-width:640px">
+  <label class="full">Имя<input name="full_name" value="{{ current_user.full_name or '' }}"></label>
+  <label class="full">Текущий пароль<input type="password" name="current" required autocomplete="current-password"></label>
+  <label>Новый пароль<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+  <label>Новый пароль ещё раз<input type="password" name="password2" required minlength="8" autocomplete="new-password"></label>
+  <div class="full"><button>Сохранить</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Показания{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>Показания и цены</h1><span class="spacer"></span>
+  <a class="btn ghost sm" href="?period={{ prev_p }}">←</a>
+  <form method="get"><input type="month" name="period" value="{{ period }}" onchange="this.form.submit()" style="width:auto"></form>
+  <a class="btn ghost sm" href="?period={{ next_p }}">→</a>
+</div>
+{% include "_readings_tabs.html" %}
+<p class="muted">Месяц потребления: <b>{{ period_label(period) }}</b>. Показания, цены и количества за этот месяц попадут в акты за <b>{{ period_label(acts_period) }}</b> (строка «Компенсація комунальних послуг»).</p>
+
+<form method="post">
+<input type="hidden" name="period" value="{{ period }}">
+
+<!-- 1. цены месяца -->
+<div class="card">
+  <div class="row"><h2 style="margin:0">Цены за {{ period_label(period) }}</h2><span class="spacer"></span>
+    <button type="button" class="sm ghost" onclick="fillPrices()">Подставить цены прошлого месяца</button></div>
+  <p class="muted">Без ПДВ, за единицу. Пустое поле — в акте будет последняя известная цена (с предупреждением).</p>
+  {% for p in price_rows %}
+    <div class="rd rd-price">
+      <div class="who"><b>{{ p.s.name }}</b><div class="muted">{{ SERVICE_MODES[p.s.mode] }}</div></div>
+      <div class="muted">{% if p.last is not none %}было: <b>{{ money(p.last) }}</b><br>{{ period_label(p.last_p) }}{% else %}цены ещё не было{% endif %}</div>
+      <input name="p_{{ p.s.id }}" inputmode="decimal" value="{{ p.price|plain }}"
+             placeholder="{{ p.last|plain }}" data-last="{{ p.last|plain }}">
+      <div class="muted">грн / {{ p.s.unit }}</div>
+    </div>
+  {% else %}
+    <p class="muted">Услуг нет. Добавьте во вкладке <a href="{{ url_for('services_page') }}">Услуги</a>.</p>
+  {% endfor %}
+</div>
+
+<!-- 2. счётчики -->
+<div class="card">
+  <h2 style="margin-top:0">Счётчики</h2>
+  <p class="muted">Показания на конец месяца. Пустое поле — показание не внесено.</p>
+  {% set ns = namespace(filled=0) %}
+  {% for r in rows %}
+    {% if r.cur is not none %}{% set ns.filled = ns.filled + 1 %}{% endif %}
+    <div class="rd">
+      <div class="who">
+        <b>{{ r.m.wh_name }}</b> · {{ r.m.svc_name }}
+        {% if r.m.serial %}<span class="muted">№{{ r.m.serial }}</span>{% endif %}
+        <div class="muted">{{ r.m.tenant_name or 'свободен' }}{% if r.m.coef != 1 %} · коэф. {{ num(r.m.coef) }}{% endif %}</div>
+      </div>
+      <div class="muted">пред.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else 'начальное' }}</div>
+      <input name="m_{{ r.m.id }}" inputmode="decimal" value="{{ r.cur|plain }}"
+             data-prev="{{ r.prev }}" data-coef="{{ r.m.coef }}" data-unit="{{ r.m.unit }}" oninput="upd(this)" placeholder="—">
+      <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ num(r.cons) }} {{ r.m.unit }}</span>{% endif %}</div>
+    </div>
+  {% else %}
+    <p class="muted">Счётчиков нет. Добавьте их в карточке склада.</p>
+  {% endfor %}
+  {% if rows %}<p class="muted">Внесено {{ ns.filled }} из {{ rows|length }}</p>{% endif %}
+</div>
+
+<!-- 3. количества (вывоз мусора и т.п.) -->
+{% if qty_svcs %}
+<div class="card">
+  <h2 style="margin-top:0">Количество за месяц</h2>
+  <p class="muted">Для услуг «по количеству» — например, сколько раз вывозили мусор. Показаны контакты, у которых услуга подключена (в карточке контакта).</p>
+  {% if qty_rows %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Контакт</th>{% for sv in qty_svcs %}<th class="n">{{ sv.name }}<br><span class="muted" style="text-transform:none">{{ sv.unit }}</span></th>{% endfor %}</tr></thead>
+    <tbody>{% for r in qty_rows %}
+      <tr><td>{{ r.t.name }}</td>
+        {% for c in r.cells %}<td class="n">{% if c.sub %}<input name="q_{{ r.t.id }}_{{ c.s.id }}" inputmode="decimal" style="width:90px;text-align:right" value="{{ c.qty|plain }}" placeholder="0">{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}
+      </tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="muted">Ни у одного контакта не подключены такие услуги.</p>{% endif %}
+</div>
+{% endif %}
+
+<div class="savebar"><span class="muted">{{ period_label(period) }}</span><span class="spacer"></span><button>Сохранить всё</button></div>
+</form>
+<p><a href="{{ url_for('acts', period=acts_period) }}">Эти показания попадут в акты за {{ period_label(acts_period) }} — посмотреть расчёт →</a></p>
+{% endblock %}
+{% block scripts %}
+<script>
+function upd(inp) {
+  const cell = inp.parentElement.querySelector('.cons');
+  const v = parseFloat(inp.value.replace(',', '.').replace(/\s/g, ''));
+  if (isNaN(v)) { cell.innerHTML = ''; return; }
+  const c = (v - parseFloat(inp.dataset.prev)) * parseFloat(inp.dataset.coef);
+  cell.innerHTML = `<span class="${c < 0 ? 'badge warnb' : ''}">${c.toLocaleString('uk-UA', {maximumFractionDigits: 3})} ${inp.dataset.unit}</span>`;
+}
+function fillPrices() {
+  document.querySelectorAll('input[data-last]').forEach(i => { if (!i.value && i.dataset.last) i.value = i.dataset.last; });
+}
+</script>
+{% endblock %}

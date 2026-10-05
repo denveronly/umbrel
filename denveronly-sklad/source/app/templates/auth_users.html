@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Пользователи{% endblock %}
+{% block content %}
+<h1>Настройки</h1>
+{% include "_settings_tabs.html" %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<p class="muted"><b>Администратор</b> — всё, включая настройки, пользователей и бэкап. <b>Оператор</b> — склады, арендаторы, показания, тарифы и акты.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Пользователь</th><th>Роль</th><th>Последний вход</th><th></th></tr></thead>
+  <tbody>
+  {% for u in rows %}
+    <tr style="{{ 'opacity:.55' if not u.active }}">
+      <td><b>{{ u.username }}</b>{% if u.full_name %}<br><span class="muted">{{ u.full_name }}</span>{% endif %}
+        {% if u.id == current_user.id %} <span class="badge">это вы</span>{% endif %}
+        {% if not u.active %} <span class="badge off">отключён</span>{% endif %}</td>
+      <td>
+        <form method="post" class="row">
+          <input type="hidden" name="uid" value="{{ u.id }}"><input type="hidden" name="action" value="role">
+          <select name="role" onchange="this.form.submit()" style="width:auto">
+            {% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if u.role == k }}>{{ v }}</option>{% endfor %}
+          </select>
+        </form>
+      </td>
+      <td class="muted">{{ u.last_login or '—' }}</td>
+      <td>
+        <details class="inline"><summary>Сменить пароль</summary>
+          <form method="post" class="row">
+            <input type="hidden" name="uid" value="{{ u.id }}"><input type="hidden" name="action" value="reset">
+            <input type="password" name="password" minlength="{{ MIN_PASSWORD }}" required placeholder="новый пароль" autocomplete="new-password" style="width:170px">
+            <button class="sm">OK</button>
+          </form>
+        </details>
+        {% if u.id != current_user.id %}
+        <form method="post" class="row" style="margin-top:6px">
+          <input type="hidden" name="uid" value="{{ u.id }}">
+          <button class="sm ghost" name="action" value="toggle">{{ 'Отключить' if u.active else 'Включить' }}</button>
+          <button class="sm danger" name="action" value="delete" onclick="return confirm('Удалить пользователя {{ u.username }}?')">Удалить</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<h2>Добавить пользователя</h2>
+<form method="post" class="card grid">
+  <input type="hidden" name="action" value="create">
+  <label>Логин<input name="username" required autocomplete="off"></label>
+  <label>Имя<input name="full_name"></label>
+  <label>Роль<select name="role">{% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'user' }}>{{ v }}</option>{% endfor %}</select></label>
+  <label>Пароль<input type="password" name="password" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
+  <label>Пароль ещё раз<input type="password" name="password2" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
+  <div class="full"><button>Создать</button></div>
+</form>
+{% endblock %}

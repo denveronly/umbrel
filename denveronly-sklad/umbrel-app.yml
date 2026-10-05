@@ -1,0 +1,37 @@
+manifestVersion: 1
+id: denveronly-sklad
+name: Склады
+tagline: Аренда складов, показания счётчиков и ежемесячные акты
+icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
+category: finance
+version: "1.0.0"
+port: 60085
+description: >-
+  Учёт складской базы: план территории со складами, арендаторы и договоры,
+  цены за м² (без ПДВ / с ПДВ / наличка), первый взнос за последний месяц,
+  несколько компаний-получателей.
+
+
+  Каждый месяц вносите показания счётчиков, цены и эксплуатационные услуги
+  (электроэнергия, вода, вывоз мусора и т.д.) — приложение формирует акты на украинском
+  в PDF и Word: аренда наперёд + компенсация коммунальных за прошлый месяц,
+  с отдельным листом «Деталізація комунальних послуг».
+
+
+  Фото объектов, пользователи с ролями, журнал действий, автоматические бэкапы.
+  При первом запуске создайте главного администратора.
+developer: denveronly
+website: https://github.com/denveronly/umbrel
+submitter: denveronly
+submission: https://github.com/denveronly/umbrel
+repo: https://github.com/denveronly/umbrel/tree/main/denveronly-sklad/source
+support: https://github.com/denveronly/umbrel/issues
+gallery:
+  - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/1.jpg
+  - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
+  - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
+releaseNotes: "Первая версия."
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
