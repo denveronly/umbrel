@@ -26,26 +26,17 @@ def prev_period(period):
 
 # ---------- оренда ----------
 
-def rent_prices(wh, s=None):
-    """Вартість оренди складу у трьох варіантах оплати (ставки за м² і сума за місяць).
-
-    Кожну ставку можна задати окремо; не задані рахуються автоматично:
-    з ПДВ = безнал × (1 + ПДВ), готівка = безнал × коефіцієнт з налаштувань.
-    """
+def rent_price(wh, pt=None, s=None):
+    """Оренда складу: одна ціна за м²/міс у формі оплати орендаря (для «з ПДВ» ціна вже з ПДВ)."""
     s = s or settings()
     vat = float(s["vat_rate"]) / 100
     area = wh["area"] or 0
-    rate_bank = wh["rate_bank"] or 0
-    rate_vat = wh["rate_vat"] if wh["rate_vat"] is not None else rate_bank * (1 + vat)
-    rate_cash = wh["rate_cash"] if wh["rate_cash"] is not None else rate_bank * float(s["cash_coef"])
-    gross = r2(area * rate_vat)
-    net = r2(gross / (1 + vat)) if vat else gross
-    return {
-        "bank": {"rate": r2(rate_bank), "total": r2(area * rate_bank)},
-        "bank_vat": {"rate": r2(rate_vat), "net": net, "vat": r2(gross - net), "total": gross,
-                     "manual": wh["rate_vat"] is not None},
-        "cash": {"rate": r2(rate_cash), "total": r2(area * rate_cash), "manual": wh["rate_cash"] is not None},
-    }
+    rate = wh["price_m2"] or 0
+    total = r2(area * rate)
+    if pt == "bank_vat" and vat:
+        net = r2(total / (1 + vat))
+        return {"rate": r2(rate), "total": total, "net": net, "vat": r2(total - net), "pt": pt}
+    return {"rate": r2(rate), "total": total, "net": total, "vat": 0, "pt": pt}
 
 
 # ---------- лічильники ----------
@@ -116,12 +107,9 @@ def build_act(tenant_id, period):
     # --- оренда ---
     if s.get("include_rent") == "1":
         for wh in whs:
-            p = rent_prices(wh, s)
-            if pt == "bank_vat":
-                rent_sum = p["bank_vat"]["net"]          # без ПДВ, ПДВ додається в кінці акта
-                rate = r2(rent_sum / wh["area"]) if wh["area"] else 0
-            else:
-                rate, rent_sum = p[pt]["rate"], p[pt]["total"]
+            p = rent_price(wh, pt, s)
+            rent_sum = p["net"]                              # без ПДВ; ПДВ додається в кінці акта
+            rate = r2(rent_sum / wh["area"]) if wh["area"] and pt == "bank_vat" else p["rate"]
             lines.append({"group": "rent", "name": f"Оренда складу «{wh['name']}» за {plabel}",
                           "unit": "м²", "qty": wh["area"], "price": rate, "sum": rent_sum})
 

@@ -1,40 +1,39 @@
 {% extends "base.html" %}
-{% block title %}Контакты{% endblock %}
+{% block title %}{{ _("Контакты") }}{% endblock %}
 {% block content %}
-<div class="row"><h1>Контакты</h1><span class="spacer"></span>
-  <form method="get"><input name="q" value="{{ q }}" placeholder="Поиск: имя, телефон, договор, склад…" style="width:260px"></form>
-  <a class="btn" href="{{ url_for('tenant_edit') }}">+ Контакт</a></div>
+<div class="row"><h1>{{ _("Контакты") }}</h1><span class="spacer"></span>
+  <form method="get"><input name="q" value="{{ q }}" placeholder="{{ _("Поиск: имя, телефон, договор, склад…") }}" style="width:260px"></form>
+  <a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Контакт") }}</a></div>
 
 <div class="tablewrap"><table class="contacts">
-  <thead><tr><th>Арендатор</th><th>Контактные лица</th><th>Договор</th><th>Склады</th>
-    <th class="n">Без ПДВ</th><th class="n">С ПДВ</th><th class="n">Наличка</th><th class="n">Задаток</th></tr></thead>
+  <thead><tr><th>{{ _("Арендатор") }}</th><th>{{ _("Контактные лица") }}</th><th>{{ _("Договор") }}</th><th>{{ _("Склады") }}</th>
+    <th class="n">{{ _("Аренда в месяц") }}</th><th class="n">{{ _("Задаток") }}</th></tr></thead>
   <tbody>
   {% for it in items %}{% set t = it.t %}
     <tr style="{{ 'opacity:.5' if not t.active }}">
       <td><a href="{{ url_for('tenant_edit', tid=t.id) }}"><b>{{ t.name }}</b></a>
-        {% if not t.active %} <span class="badge off">неактивен</span>{% endif %}
-        {% if t.contact %}<div class="muted">{{ t.director_position or 'Директор' }}: {{ t.contact }}</div>{% else %}<div><span class="badge warnb">не указан директор</span></div>{% endif %}
+        {% if not t.active %} <span class="badge off">{{ _("неактивен") }}</span>{% endif %}
+        {% if t.party_type == 'person' %}<div class="muted">{{ _("Физлицо") }}{% if t.passport_number %} · {{ _("паспорт") }} {{ t.passport_series or '' }} {{ t.passport_number }}{% endif %}</div>
+        {% elif t.contact %}<div class="muted">{{ t.director_position or _("Директор") }}: {{ t.contact }}</div>{% else %}<div><span class="badge warnb">{{ _("не указан директор") }}</span></div>{% endif %}
         <div style="margin-top:3px">
-          {% if t.company_name %}<span class="badge co">→ {{ t.company_name }}</span>{% else %}<span class="badge warnb">компания не указана</span>{% endif %}
+          {% if t.company_name %}<span class="badge co">→ {{ t.company_name }}</span>{% else %}<span class="badge warnb">{{ _("компания не указана") }}</span>{% endif %}
         </div></td>
       <td>{% for c in it.contacts %}<div>{{ c.name }}{% if c.position %} <span class="muted">({{ c.position }})</span>{% endif %}
           {% if c.phone %}<br><a href="tel:{{ c.phone|replace(' ', '') }}">{{ c.phone }}</a>{% endif %}</div>{% else %}<span class="muted">—</span>{% endfor %}</td>
       <td>{% if t.contract_no %}№ {{ t.contract_no }}{% endif %}
-        {% if t.contract_date %}<br><span class="muted">от {{ t.contract_date }}</span>{% endif %}
-        {% if t.contract_end %}<br><span class="muted">до {{ t.contract_end }}</span>{% endif %}</td>
+        {% if t.contract_date %}<br><span class="muted">{{ _("от") }} {{ t.contract_date }}</span>{% endif %}
+        {% if t.contract_end %}<br><span class="muted">{{ _("до") }} {{ t.contract_end }}</span>{% endif %}</td>
       <td>{% for w in it.whs %}{% set ph = photos_for(w.id) %}
-        <div class="whcell">{% if ph %}<img class="minithumb" src="{{ ph[0].thumb }}" alt="" onclick='Gallery.open({{ ph|tojson }}, 0)' title="Фото: {{ ph|length }}">{% endif %}
-          <span>{{ w.name }} <span class="muted">{{ num(w.area) }} м²{% if ph|length > 1 %} · 📷 {{ ph|length }}{% endif %}</span></span></div>
+        <div class="whcell">{% if ph %}<img class="minithumb" src="{{ ph[0].thumb }}" alt="" onclick='Gallery.open({{ ph|tojson }}, 0)' title="{{ _("Фото") }}: {{ ph|length }}">{% endif %}
+          <span>{{ w.name }} <span class="muted">{{ num(w.area) }} {{ _("м²") }}{% if ph|length > 1 %} · 📷 {{ ph|length }}{% endif %}</span></span></div>
         {% else %}<span class="muted">—</span>{% endfor %}</td>
-      {% for k in ('bank', 'bank_vat', 'cash') %}
-      <td class="n {{ 'chosen' if t.payment_type == k }}">{{ money(it.tot[k]) if it.whs else '—' }}</td>
-      {% endfor %}
+      <td class="n">{% if it.whs %}<b>{{ money(it.rent) }}</b><br>{% endif %}<span class="badge">{{ PAYMENT_TYPES[t.payment_type] }}</span></td>
       <td class="n">{% if t.deposit_amount %}{{ money(t.deposit_amount) }}{% if t.deposit_date %}<br><span class="muted">{{ t.deposit_date }}</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
     </tr>
   {% else %}
-    <tr><td colspan="8" class="muted">{{ 'Ничего не найдено.' if q else 'Контактов пока нет.' }}</td></tr>
+    <tr><td colspan="6" class="muted">{{ _("Ничего не найдено.") if q else _("Контактов пока нет.") }}</td></tr>
   {% endfor %}
   </tbody>
 </table></div>
-<p class="muted">Суммы — аренда в месяц по всем складам контакта. Выделена форма оплаты по договору.</p>
+<p class="muted">{{ _("Сумма — аренда в месяц по всем складам контакта в форме оплаты по договору") }}.</p>
 {% endblock %}

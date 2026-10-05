@@ -38,7 +38,9 @@ def _ulabel(act):
 def _party(p):
     rows = [p.get("name") or ""]
     if p.get("edrpou"):
-        rows.append(f"ЄДРПОУ/РНОКПП: {p['edrpou']}")
+        rows.append(f"{'РНОКПП' if p.get('person') else 'ЄДРПОУ/РНОКПП'}: {p['edrpou']}")
+    if p.get("passport"):
+        rows.append(p["passport"][:1].upper() + p["passport"][1:])
     if p.get("address"):
         rows.append(p["address"])
     if p.get("iban"):
@@ -58,6 +60,15 @@ def _company(act):
 
 def _tenant(act):
     t = act["data"]["tenant"]
+    if t.get("party_type") == "person":
+        passport = ""
+        if t.get("passport_number"):
+            passport = (f"паспорт серії {t['passport_series']} № {t['passport_number']}" if t.get("passport_series")
+                        else f"паспорт № {t['passport_number']}")
+            if t.get("passport_issued"):
+                passport += f", виданий {t['passport_issued']}"
+        return {"name": t.get("name"), "edrpou": t.get("edrpou"), "address": t.get("address"), "iban": t.get("iban"),
+                "signer": t.get("name"), "position": "", "basis": "", "person": True, "passport": passport}
     return {"name": t.get("name"), "edrpou": t.get("edrpou"), "address": t.get("address"),
             "iban": t.get("iban"), "signer": t.get("contact"),
             "position": t.get("director_position"), "basis": t.get("basis")}
@@ -73,6 +84,13 @@ def short_name(full):
 
 def _who(p, role):
     """«ТОВ «Альфа» (Орендар), від імені якого діє Директор Іваненко Іван Іванович на підставі Статуту»."""
+    if p.get("person"):                       # фізична особа
+        s = f"громадянин(ка) {p['name'] or ''} (далі — {role})"
+        if p.get("passport"):
+            s += f", {p['passport']}"
+        if p.get("edrpou"):
+            s += f", РНОКПП {p['edrpou']}"
+        return s
     s = f"{p['name'] or ''} (далі — {role})"
     if p.get("signer"):
         s += f", від імені якого діє {p.get('position') or 'представник'} {p['signer']}"

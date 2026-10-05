@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Карта{% endblock %}
+{% block title %}{{ _("Карта") }}{% endblock %}
 {% block mainclass %}wide{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for("static", filename="vendor/leaflet.css") }}">
@@ -8,20 +8,20 @@
 <div class="mapwrap">
   <div style="position:relative">
     <div id="map"></div>
-    <div class="edithint" id="hint">Кликайте по углам склада · «Готово» — сохранить · Esc — отмена</div>
+    <div class="edithint" id="hint">{{ _("Кликайте по углам склада · «Готово» — сохранить · Esc — отмена") }}</div>
   </div>
   <aside class="side">
     {% if not plan %}
-      <div class="warn" style="margin-bottom:10px">План территории не загружен. <a href="{{ url_for('settings_page') }}">Загрузить в настройках</a> — схему, скан или спутниковый снимок.</div>
+      <div class="warn" style="margin-bottom:10px">{{ _("План территории не загружен") }}. <a href="{{ url_for('settings_page') }}">{{ _("Загрузить в настройках") }}</a> — {{ _("схему, скан или спутниковый снимок") }}.</div>
     {% endif %}
     <div class="kpis" style="grid-template-columns:1fr 1fr">
-      <div class="kpi"><small class="muted">Площадь</small><b id="k-area">—</b></div>
-      <div class="kpi"><small class="muted">Занято</small><b id="k-occ">—</b></div>
+      <div class="kpi"><small class="muted">{{ _("Площадь") }}</small><b id="k-area">—</b></div>
+      <div class="kpi"><small class="muted">{{ _("Занято") }}</small><b id="k-occ">—</b></div>
     </div>
     <div id="details"></div>
-    <h2>Склады</h2>
+    <h2>{{ _("Склады") }}</h2>
     <div id="list"></div>
-    <p><a class="btn ghost sm" href="{{ url_for('warehouse_edit') }}">+ Добавить склад</a></p>
+    <p><a class="btn ghost sm" href="{{ url_for('warehouse_edit') }}">+ {{ _("Добавить склад") }}</a></p>
   </aside>
 </div>
 {% endblock %}
@@ -56,7 +56,7 @@ async function load() {
       layers[w.id] = pl;
     }
   });
-  document.getElementById('k-area').textContent = fmt(area, 0) + ' м²';
+  document.getElementById('k-area').textContent = fmt(area, 0) + ' ' + t('м²');
   document.getElementById('k-occ').textContent = area ? Math.round(occ / area * 100) + '%' : '—';
   renderList();
   if (selected) select(selected, false);
@@ -66,11 +66,11 @@ function renderList() {
   document.getElementById('list').innerHTML = whs.map(w => `
     <div class="whitem ${w.id === selected ? 'sel' : ''}" onclick="select(${w.id})">
       <span class="dot" style="background:${colorOf(w)}"></span><b>${esc(w.name)}</b>
-      <span class="muted"> · ${fmt(w.area, 0)} м²</span>
-      ${w.polygon ? '' : '<span class="badge off">нет контура</span>'}
+      <span class="muted"> · ${fmt(w.area, 0)} ${t('м²')}</span>
+      ${w.polygon ? '' : `<span class="badge off">${t('нет контура')}</span>`}
       ${(w.photos || []).length ? `<span class="muted"> · 📷 ${w.photos.length}</span>` : ''}
-      <div class="muted">${w.tenant_name ? esc(w.tenant_name) : 'свободен'}</div>
-    </div>`).join('') || '<p class="muted">Складов пока нет.</p>';
+      <div class="muted">${w.tenant_name ? esc(w.tenant_name) : t('свободен')}</div>
+    </div>`).join('') || `<p class="muted">${t('Складов пока нет.')}</p>`;
 }
 
 function esc(s) { return (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -80,22 +80,20 @@ function select(id, zoom = true) {
   const w = whs.find(x => x.id === id); if (!w) return;
   Object.entries(layers).forEach(([k, l]) => l.setStyle({weight: +k === id ? 4 : 2}));
   if (zoom && layers[id]) map.fitBounds(layers[id].getBounds(), {maxZoom: map.getZoom() + 1, padding: [60, 60]});
-  const p = w.prices;
+  const p = w.price;
   document.getElementById('details').innerHTML = `
     <div class="card">
       <div class="row"><h2 style="margin:0">${esc(w.name)}</h2><span class="spacer"></span>
-        <a class="btn ghost sm" href="/warehouses/${w.id}">Открыть</a></div>
-      <p class="muted" style="margin:6px 0 10px">${fmt(w.area, 1)} м² · ${w.tenant_name ? 'арендатор: <b>' + esc(w.tenant_name) + '</b> (' + PT[w.payment_type] + ')' : 'свободен'}</p>
-      <div class="prices">
-        <div class="price"><small>Безнал</small><b>${fmt(p.bank.total)}</b><small>${fmt(p.bank.rate)} грн/м²</small></div>
-        <div class="price"><small>Безнал + ПДВ</small><b>${fmt(p.bank_vat.total)}</b><small>${fmt(p.bank_vat.rate)} грн/м², ПДВ ${fmt(p.bank_vat.vat)}</small></div>
-        <div class="price"><small>Наличные</small><b>${fmt(p.cash.total)}</b><small>${fmt(p.cash.rate)} грн/м²</small></div>
+        <a class="btn ghost sm" href="/warehouses/${w.id}">${t('Открыть')}</a></div>
+      <p class="muted" style="margin:6px 0 10px">${fmt(w.area, 1)} ${t('м²')} · ${w.tenant_name ? t('арендатор') + ': <b>' + esc(w.tenant_name) + '</b> (' + PT[w.payment_type] + ')' : t('свободен')}</p>
+      <div class="prices one">
+        <div class="price"><small>${w.payment_type ? PT[w.payment_type] : t('свободен — цена для предложения')}</small><b>${fmt(p.total)}</b><small>${fmt(p.rate)} ${t('грн/м²')}${p.vat ? ' · ' + t('в т.ч. ПДВ') + ' ' + fmt(p.vat) : ''}</small></div>
       </div>
-      <h3 class="phh">Фото</h3>
+      <h3 class="phh">${t('Фото')}</h3>
       <div id="wh-gallery"></div>
       <div class="row" style="margin-top:10px">
-        <button class="sm" onclick="startDraw(${w.id})">${w.polygon ? 'Перерисовать' : 'Нарисовать'} контур</button>
-        ${w.polygon ? `<button class="sm danger" onclick="savePoly(${w.id}, null)">Убрать</button>` : ''}
+        <button class="sm" onclick="startDraw(${w.id})">${w.polygon ? t('Перерисовать контур') : t('Нарисовать контур')}</button>
+        ${w.polygon ? `<button class="sm danger" onclick="savePoly(${w.id}, null)">${t('Убрать')}</button>` : ''}
       </div>
     </div>`;
   const gal = document.getElementById('wh-gallery');
@@ -109,7 +107,7 @@ function startDraw(id) {
   cancelDraw();
   drawing = {id, pts: [], line: L.polyline([], {color: '#e0662f', weight: 2, dashArray: '5'}).addTo(map), marks: []};
   document.getElementById('hint').style.display = 'block';
-  document.getElementById('hint').innerHTML = 'Кликайте по углам склада · <a href="#" style="color:inherit;font-weight:700" onclick="finishDraw();return false">Готово</a> · Esc — отмена';
+  document.getElementById('hint').innerHTML = t('Кликайте по углам склада') + ' · <a href="#" style="color:inherit;font-weight:700" onclick="finishDraw();return false">' + t('Готово') + '</a> · Esc — ' + t('отмена');
   map.getContainer().style.cursor = 'crosshair';
 }
 function cancelDraw() {
@@ -118,7 +116,7 @@ function cancelDraw() {
   drawing = null; document.getElementById('hint').style.display = 'none'; map.getContainer().style.cursor = '';
 }
 async function finishDraw() {
-  if (!drawing || drawing.pts.length < 3) { alert('Нужно минимум 3 точки'); return; }
+  if (!drawing || drawing.pts.length < 3) { alert(t('Нужно минимум 3 точки')); return; }
   const {id, pts} = drawing; cancelDraw();
   await savePoly(id, pts.map(p => [Math.round(p.lat * 10) / 10, Math.round(p.lng * 10) / 10]));
 }

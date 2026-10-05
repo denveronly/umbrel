@@ -1,4 +1,4 @@
 <div class="tabs">
-  <a href="{{ url_for('logs.logs') }}" class="{{ 'on' if tab == 'journal' }}">Журнал действий</a>
-  <a href="{{ url_for('logs.database') }}" class="{{ 'on' if tab == 'db' }}">База данных и бэкапы</a>
+  <a href="{{ url_for('logs.logs') }}" class="{{ 'on' if tab == 'journal' }}">{{ _("Журнал действий") }}</a>
+  <a href="{{ url_for('logs.database') }}" class="{{ 'on' if tab == 'db' }}">{{ _("База данных и бэкапы") }}</a>
 </div>

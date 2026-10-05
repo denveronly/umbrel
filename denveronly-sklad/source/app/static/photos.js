@@ -1,5 +1,6 @@
 // Галерея фото объекта: миниатюры, загрузка (несколько файлов / камера телефона), удаление, просмотр на весь экран.
 (function () {
+  const t = window.t || (s => s);
   const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
   function render(el, wid, photos, opts = {}) {
@@ -9,15 +10,15 @@
     const thumbs = el._photos.map((p, i) => `
       <figure class="ph" data-i="${i}">
         <img src="${p.thumb}" alt="${esc(p.caption)}" loading="lazy">
-        ${opts.readonly ? '' : `<button type="button" class="phdel" title="Удалить фото" data-id="${p.id}">×</button>`}
+        ${opts.readonly ? '' : `<button type="button" class="phdel" title="${t('Удалить фото')}" data-id="${p.id}">×</button>`}
         ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
       </figure>`).join('');
     el.innerHTML = `
       <div class="phgrid">${thumbs}
         ${opts.readonly ? '' : `
-        <label class="phadd" title="Добавить фото">
+        <label class="phadd" title="${t('Добавить фото')}">
           <input type="file" accept="image/*" multiple hidden>
-          <span class="plus">＋</span><span class="muted">${el._photos.length ? 'Ещё фото' : 'Добавить фото'}</span>
+          <span class="plus">＋</span><span class="muted">${el._photos.length ? t('Ещё фото') : t('Добавить фото')}</span>
         </label>`}
       </div>
       <div class="phstatus muted"></div>`;
@@ -25,7 +26,7 @@
       open(el._photos, +img.parentElement.dataset.i)));
     el.querySelectorAll('.phdel').forEach(b => b.addEventListener('click', async e => {
       e.stopPropagation();
-      if (!confirm('Удалить это фото?')) return;
+      if (!confirm(t('Удалить это фото?'))) return;
       const r = await fetch(`/photos/${b.dataset.id}/delete`, {method: 'POST', headers: {'X-Requested-With': 'fetch'}});
       if (r.ok) { const j = await r.json(); render(el, wid, j.photos, opts); changed(el, j.photos); }
     }));
@@ -41,17 +42,17 @@
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/warehouses/${wid}/photos`);
     xhr.setRequestHeader('X-Requested-With', 'fetch');
-    xhr.upload.onprogress = e => { if (e.lengthComputable) st.textContent = `Загрузка… ${Math.round(e.loaded / e.total * 100)}%`; };
+    xhr.upload.onprogress = e => { if (e.lengthComputable) st.textContent = `${t('Загрузка…')} ${Math.round(e.loaded / e.total * 100)}%`; };
     xhr.onload = () => {
       if (xhr.status === 200) {
         const j = JSON.parse(xhr.responseText);
         render(el, wid, j.photos, opts); changed(el, j.photos);
-        el.querySelector('.phstatus').textContent = `Загружено: ${j.ok}` + (j.errors.length ? ` · ошибки: ${j.errors.join('; ')}` : '');
-      } else if (xhr.status === 413) st.textContent = 'Слишком большие файлы — загрузите поменьше за раз';
-      else st.textContent = 'Ошибка загрузки (' + xhr.status + ')';
+        el.querySelector('.phstatus').textContent = `${t('Загружено')}: ${j.ok}` + (j.errors.length ? ` · ${t('ошибки')}: ${j.errors.join('; ')}` : '');
+      } else if (xhr.status === 413) st.textContent = t('Слишком большие файлы — загрузите поменьше за раз');
+      else st.textContent = t('Ошибка загрузки') + ' (' + xhr.status + ')';
     };
-    xhr.onerror = () => { st.textContent = 'Нет связи с сервером'; };
-    st.textContent = 'Загрузка…';
+    xhr.onerror = () => { st.textContent = t('Нет связи с сервером'); };
+    st.textContent = t('Загрузка…');
     xhr.send(fd);
   }
 
@@ -66,8 +67,8 @@
     if (!box) {
       box = document.createElement('div');
       box.className = 'lightbox';
-      box.innerHTML = `<button class="lbx lbclose" title="Закрыть">×</button>
-        <button class="lbx lbprev" title="Назад">‹</button><img alt=""><button class="lbx lbnext" title="Вперёд">›</button>
+      box.innerHTML = `<button class="lbx lbclose" title="${t('Закрыть')}">×</button>
+        <button class="lbx lbprev" title="${t('Назад')}">‹</button><img alt=""><button class="lbx lbnext" title="${t('Вперёд')}">›</button>
         <div class="lbcap"></div>`;
       document.body.appendChild(box);
       box.querySelector('.lbclose').onclick = close;

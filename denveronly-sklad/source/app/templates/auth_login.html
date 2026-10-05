@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Вход{% endblock %}
+{% block title %}{{ _("Вход") }}{% endblock %}
 {% block content %}
 <div class="authbox card">
   <div class="logo">▦</div>
-  <h1>Вход</h1>
+  <h1>{{ _("Вход") }}</h1>
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
   <form method="post">
     <input type="hidden" name="next" value="{{ next }}">
-    <label>Логин<input name="username" required autofocus autocomplete="username" value="{{ request.form.username or '' }}"></label>
-    <label>Пароль<input type="password" name="password" required autocomplete="current-password"></label>
-    <button>Войти</button>
+    <label>{{ _("Логин") }}<input name="username" required autofocus autocomplete="username" value="{{ request.form.username or '' }}"></label>
+    <label>{{ _("Пароль") }}<input type="password" name="password" required autocomplete="current-password"></label>
+    <button>{{ _("Войти") }}</button>
   </form>
 </div>
 {% endblock %}

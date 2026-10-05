@@ -10,6 +10,7 @@ from flask import (Blueprint, abort, flash, g, redirect, render_template, reques
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from audit import log
+from i18n import _
 from db import DATA_DIR, get_db
 
 bp = Blueprint("auth", __name__)
@@ -127,7 +128,7 @@ def setup():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         pw, pw2 = request.form.get("password", ""), request.form.get("password2", "")
-        error = (None if username else "Укажите логин") or _check_password(pw, pw2)
+        error = (None if username else _("Укажите логин")) or _check_password(pw, pw2)
         if not error:
             db = get_db()
             db.execute("INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?, 'admin')",
@@ -135,7 +136,7 @@ def setup():
             db.commit()
             _login(db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone())
             log("Создан главный администратор", username, username=username)
-            flash("Главный администратор создан. Добро пожаловать!")
+            flash(_("Главный администратор создан. Добро пожаловать!"))
             return redirect(url_for("settings_page"))
     return render_template("auth_setup.html", error=error)
 
@@ -155,7 +156,7 @@ def login():
         if time.time() - since > LOCK_SECONDS:
             fails, since = 0, time.time()
         if fails >= MAX_FAILS:
-            error = "Слишком много неудачных попыток. Подождите 5 минут."
+            error = _("Слишком много неудачных попыток. Подождите 5 минут.")
         else:
             u = get_db().execute("SELECT * FROM users WHERE username=?",
                                  (request.form.get("username", "").strip(),)).fetchone()
@@ -167,7 +168,7 @@ def login():
             _FAILS[ip] = (fails + 1, since)
             log("Неудачная попытка входа", f"логин: {request.form.get('username', '')[:50]}", username="—")
             time.sleep(0.5)
-            error = "Неверный логин или пароль"
+            error = _("Неверный логин или пароль")
     return render_template("auth_login.html", error=error, next=request.values.get("next", ""))
 
 
@@ -187,7 +188,7 @@ def account():
     if request.method == "POST":
         u = g.user
         if not check_password_hash(u["password_hash"], request.form.get("current", "")):
-            error = "Текущий пароль указан неверно"
+            error = _("Текущий пароль указан неверно")
         else:
             error = _check_password(request.form.get("password", ""), request.form.get("password2", ""))
         if not error:
@@ -198,7 +199,7 @@ def account():
             db.commit()
             _login(db.execute("SELECT * FROM users WHERE id=?", (u["id"],)).fetchone())
             log("Сменил свой пароль")
-            flash("Пароль изменён. На других устройствах нужно будет войти заново.")
+            flash(_("Пароль изменён. На других устройствах нужно будет войти заново."))
             return redirect(url_for("auth.account"))
     return render_template("auth_account.html", error=error)
 
@@ -223,15 +224,15 @@ def users():
         if action == "create":
             username = request.form.get("username", "").strip()
             pw = request.form.get("password", "")
-            error = (None if username else "Укажите логин") or _check_password(pw, request.form.get("password2", ""))
+            error = (None if username else _("Укажите логин")) or _check_password(pw, request.form.get("password2", ""))
             if not error and db.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
-                error = "Такой логин уже есть"
+                error = _("Такой логин уже есть")
             if not error:
                 role = request.form.get("role") if request.form.get("role") in ROLES else "user"
                 db.execute("INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?,?)",
                            (username, request.form.get("full_name", "").strip(), generate_password_hash(pw), role))
                 log("Пользователь создан", f"{username} ({ROLES[role]})", commit=False)
-                flash(f"Пользователь {username} создан")
+                flash(_("Пользователь {u} создан").format(u=username))
 
         elif target and action == "reset":
             pw = request.form.get("password", "")
@@ -239,38 +240,38 @@ def users():
             if not error:
                 db.execute("UPDATE users SET password_hash=? WHERE id=?", (generate_password_hash(pw), uid))
                 log("Пароль пользователя сброшен", target["username"], commit=False)
-                flash(f"Пароль для {target['username']} изменён")
+                flash(_("Пароль для {u} изменён").format(u=target["username"]))
 
         elif target and action == "role":
             role = request.form.get("role")
             if role not in ROLES:
                 abort(400)
             if target["role"] == "admin" and role != "admin" and not _admins_left(uid):
-                error = "Нельзя убрать последнего администратора"
+                error = _("Нельзя убрать последнего администратора")
             else:
                 db.execute("UPDATE users SET role=? WHERE id=?", (role, uid))
                 log("Роль изменена", f"{target['username']} → {ROLES[role]}", commit=False)
-                flash(f"Роль {target['username']}: {ROLES[role]}")
+                flash(_("Роль") + f" {target['username']}: " + _(ROLES[role]))
 
         elif target and action == "toggle":
             if uid == g.user["id"]:
-                error = "Нельзя отключить самого себя"
+                error = _("Нельзя отключить самого себя")
             elif target["role"] == "admin" and target["active"] and not _admins_left(uid):
-                error = "Нельзя отключить последнего администратора"
+                error = _("Нельзя отключить последнего администратора")
             else:
                 db.execute("UPDATE users SET active=1-active WHERE id=?", (uid,))
                 log("Пользователь включён/отключён", f"{target['username']}: {'отключён' if target['active'] else 'включён'}", commit=False)
-                flash(f"{target['username']}: {'отключён' if target['active'] else 'включён'}")
+                flash(f"{target['username']}: " + (_("отключён") if target["active"] else _("включён")))
 
         elif target and action == "delete":
             if uid == g.user["id"]:
-                error = "Нельзя удалить самого себя"
+                error = _("Нельзя удалить самого себя")
             elif target["role"] == "admin" and not _admins_left(uid):
-                error = "Нельзя удалить последнего администратора"
+                error = _("Нельзя удалить последнего администратора")
             else:
                 db.execute("DELETE FROM users WHERE id=?", (uid,))
                 log("Пользователь удалён", target["username"], commit=False)
-                flash(f"Пользователь {target['username']} удалён")
+                flash(_("Пользователь {u} удалён").format(u=target["username"]))
         db.commit()
         if not error:
             return redirect(url_for("auth.users"))

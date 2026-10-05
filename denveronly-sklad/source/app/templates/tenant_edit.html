@@ -1,125 +1,124 @@
 {% extends "base.html" %}
-{% block title %}{{ t.name if t else 'Новый контакт' }}{% endblock %}
+{% block title %}{{ t.name if t else _("Новый контакт") }}{% endblock %}
 {% block content %}
 {% macro v(field) %}{{ (t[field] if t and t[field] is not none else '') }}{% endmacro %}
-<p><a href="{{ url_for('tenants') }}">← Контакты</a></p>
-<h1>{{ t.name if t else 'Новый контакт' }}</h1>
+<p><a href="{{ url_for('tenants') }}">← {{ _("Контакты") }}</a></p>
+<h1>{{ t.name if t else _("Новый контакт") }}</h1>
 
 <form method="post" class="card grid">
-  <h2 class="full" style="margin:0">Арендатор и договор</h2>
-  <label class="full">Название ТОВ / ФОП (как в акте)<input name="name" required value="{{ v('name') }}" placeholder="ТОВ «Приклад» / ФОП Іваненко Іван Іванович"></label>
-  <label>ФИО директора (подписант)<input name="contact" value="{{ v('contact') }}" placeholder="Іваненко Іван Іванович"></label>
-  <label>Должность<input name="director_position" list="positions" value="{{ v('director_position') if t else 'Директор' }}"></label>
-  <label>Действует на основании<input name="basis" list="bases" value="{{ v('basis') if t else 'Статуту' }}"></label>
-  <datalist id="positions"><option>Директор</option><option>Генеральний директор</option><option>ФОП</option><option>Представник</option></datalist>
-  <datalist id="bases"><option>Статуту</option><option>виписки з ЄДР</option><option>довіреності №</option></datalist>
-  <label>ЄДРПОУ / РНОКПП<input name="edrpou" value="{{ v('edrpou') }}"></label>
+  <h2 class="full" style="margin:0">{{ _("Арендатор и договор") }}</h2>
+  {% set person = t and t.party_type == 'person' %}
+  <div class="full segmented" role="radiogroup">
+    <label class="seg"><input type="radio" name="party_type" value="company" {{ 'checked' if not person }} onchange="partyType()"><span>{{ _("Юрлицо / ФОП (действует директор)") }}</span></label>
+    <label class="seg"><input type="radio" name="party_type" value="person" {{ 'checked' if person }} onchange="partyType()"><span>{{ _("Физлицо") }}</span></label>
+  </div>
+  <label class="full"><span class="only-company">{{ _("Название ТОВ / ФОП (как в акте") }})</span><span class="only-person">{{ _("ФИО физлица (как в акте)") }}</span>
+    <input name="name" required value="{{ v('name') }}" placeholder="{{ _("ТОВ «Приклад» / ФОП Іваненко Іван Іванович") }}"></label>
+  <label class="only-company">{{ _("ФИО директора (подписант") }})<input name="contact" value="{{ v('contact') }}" placeholder="{{ _("Іваненко Іван Іванович") }}"></label>
+  <label class="only-company">{{ _("Должность") }}<input name="director_position" list="positions" value="{{ v('director_position') if t else 'Директор' }}"></label>
+  <label class="only-company">{{ _("Действует на основании") }}<input name="basis" list="bases" value="{{ v('basis') if t else 'Статуту' }}"></label>
+  <label class="only-person">{{ _("Паспорт: серия") }}<input name="passport_series" value="{{ v('passport_series') }}" placeholder="АА" maxlength="4" style="text-transform:uppercase"></label>
+  <label class="only-person">{{ _("Паспорт: номер") }}<input name="passport_number" value="{{ v('passport_number') }}" placeholder="123456 / ID-картка 001234567" inputmode="numeric"></label>
+  <label class="only-person full">{{ _("Кем и когда выдан") }}<input name="passport_issued" value="{{ v('passport_issued') }}" placeholder="Кременчуцьким МВ УМВС, 01.01.2005"></label>
+  <datalist id="positions"><option>{{ _("Директор") }}</option><option>{{ _("Генеральний директор") }}</option><option>{{ _("ФОП") }}</option><option>{{ _("Представник") }}</option></datalist>
+  <datalist id="bases"><option>{{ _("Статуту") }}</option><option>{{ _("виписки з ЄДР") }}</option><option>{{ _("довіреності №") }}</option></datalist>
+  <label><span class="only-company">{{ _("ЄДРПОУ / РНОКПП") }}</span><span class="only-person">{{ _("РНОКПП (ИНН)") }}</span><input name="edrpou" value="{{ v('edrpou') }}"></label>
   <label>IBAN<input name="iban" value="{{ v('iban') }}"></label>
-  <label class="full">Адрес<input name="address" value="{{ v('address') }}"></label>
-  <label>Компания-получатель денег
-    <select name="company_id"><option value="">— не выбрана —</option>
-      {% for c in companies %}<option value="{{ c.id }}" {{ 'selected' if t and t.company_id == c.id }} {{ 'disabled' if not c.active and not (t and t.company_id == c.id) }}>{{ c.name }}{{ ' (платник ПДВ)' if c.vat_payer }}{{ ' — отключена' if not c.active }}</option>{% endfor %}
+  <label class="full">{{ _("Адрес") }}<input name="address" value="{{ v('address') }}"></label>
+  <label>{{ _("Компания-получатель денег") }}
+    <select name="company_id"><option value="">— {{ _("не выбрана") }} —</option>
+      {% for c in companies %}<option value="{{ c.id }}" {{ 'selected' if t and t.company_id == c.id }} {{ 'disabled' if not c.active and not (t and t.company_id == c.id) }}>{{ c.name }}{{ _(" (платник ПДВ)") if c.vat_payer }}{{ _(" — отключена") if not c.active }}</option>{% endfor %}
     </select>
-    {% if not companies %}<span class="muted">Компаний нет — {% if current_user.role == 'admin' %}<a href="{{ url_for('companies_page') }}">добавить</a>{% else %}попросите администратора добавить{% endif %}</span>{% endif %}
+    {% if not companies %}<span class="muted">{{ _("Компаний нет") }} — {% if current_user.role == 'admin' %}<a href="{{ url_for('companies_page') }}">{{ _("добавить") }}</a>{% else %}{{ _("попросите администратора добавить") }}{% endif %}</span>{% endif %}
   </label>
-  <label>Форма оплаты
+  <label>{{ _("Форма оплаты") }}
     <select name="payment_type">{% for k, val in PAYMENT_TYPES.items() %}<option value="{{ k }}" {{ 'selected' if t and t.payment_type == k }}>{{ val }}</option>{% endfor %}</select></label>
-  <label>Договор №<input name="contract_no" value="{{ v('contract_no') }}"></label>
-  <label>Дата договора<input name="contract_date" value="{{ v('contract_date') }}" placeholder="01.01.2026"></label>
-  <label>Действует до<input name="contract_end" value="{{ v('contract_end') }}" placeholder="31.12.2026"></label>
+  <label>{{ _("Договор №") }}<input name="contract_no" value="{{ v('contract_no') }}"></label>
+  <label>{{ _("Дата договора") }}<input name="contract_date" value="{{ v('contract_date') }}" placeholder="01.01.2026"></label>
+  <label>{{ _("Действует до") }}<input name="contract_end" value="{{ v('contract_end') }}" placeholder="31.12.2026"></label>
 
-  <h2 class="full" style="margin:8px 0 0">Первый взнос (за последний месяц аренды)</h2>
-  <label>Сумма, грн
+  <h2 class="full" style="margin:8px 0 0">{{ _("Первый взнос (за последний месяц аренды") }})</h2>
+  <label>{{ _("Сумма, грн") }}
     <span class="row"><input name="deposit_amount" id="dep" inputmode="decimal" value="{{ (t.deposit_amount if t else none)|plain }}" style="flex:1">
-    {% if t and wh_items %}<button type="button" class="sm ghost" onclick="document.getElementById('dep').value='{{ tot[t.payment_type] }}'">= 1 месяц</button>{% endif %}</span></label>
-  <label>Дата оплаты<input name="deposit_date" value="{{ v('deposit_date') }}" placeholder="01.01.2026"></label>
-  <label>Заметка по взносу<input name="deposit_note" value="{{ v('deposit_note') }}" placeholder="зачесть в последний месяц"></label>
+    {% if t and wh_items %}<button type="button" class="sm ghost" onclick="document.getElementById('dep').value='{{ tot.total }}'">{{ _("= 1 месяц") }}</button>{% endif %}</span></label>
+  <label>{{ _("Дата оплаты") }}<input name="deposit_date" value="{{ v('deposit_date') }}" placeholder="01.01.2026"></label>
+  <label>{{ _("Заметка по взносу") }}<input name="deposit_note" value="{{ v('deposit_note') }}" placeholder="{{ _("зачесть в последний месяц") }}"></label>
 
   {% if not t %}
-  <h2 class="full" style="margin:8px 0 0">Контактное лицо</h2>
-  <label>Имя<input name="person_name"></label>
-  <label>Должность<input name="person_position"></label>
-  <label>Телефон<input name="person_phone" type="tel"></label>
+  <h2 class="full" style="margin:8px 0 0">{{ _("Контактное лицо") }}</h2>
+  <label>{{ _("Имя") }}<input name="person_name"></label>
+  <label>{{ _("Должность") }}<input name="person_position"></label>
+  <label>{{ _("Телефон") }}<input name="person_phone" type="tel"></label>
   <label>Email<input name="person_email" type="email"></label>
   {% endif %}
 
-  <label class="full">Заметка<textarea name="note" rows="2">{{ v('note') }}</textarea></label>
+  <label class="full">{{ _("Заметка") }}<textarea name="note" rows="2">{{ v('note') }}</textarea></label>
   <div class="full row">
-    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if not t or t.active }}> активен</label>
+    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if not t or t.active }}> {{ _("активен") }}</label>
     <span class="spacer"></span>
-    <button>Сохранить</button>
-    {% if t %}<button class="danger" name="delete" value="1" onclick="return confirm('Удалить контакт? Склады станут свободными.')">Удалить</button>{% endif %}
+    <button>{{ _("Сохранить") }}</button>
+    {% if t %}<button class="danger" name="delete" value="1" onclick="return confirm({{ _("Удалить контакт? Склады станут свободными.")|tojson|forceescape }})">{{ _("Удалить") }}</button>{% endif %}
   </div>
 </form>
 
 {% if t %}
 <!-- контактные лица -->
 <div class="card" id="people">
-  <h2 style="margin-top:0">Контактные лица</h2>
+  <h2 style="margin-top:0">{{ _("Контактные лица") }}</h2>
   {% for c in contacts %}
   <form method="post" action="{{ url_for('tenant_contacts', tid=t.id) }}" class="person">
     <input type="hidden" name="contact_id" value="{{ c.id }}">
-    <input name="name" value="{{ c.name or '' }}" placeholder="Имя">
-    <input name="position" value="{{ c.position or '' }}" placeholder="Должность">
-    <input name="phone" value="{{ c.phone or '' }}" placeholder="Телефон" type="tel">
+    <input name="name" value="{{ c.name or '' }}" placeholder="{{ _("Имя") }}">
+    <input name="position" value="{{ c.position or '' }}" placeholder="{{ _("Должность") }}">
+    <input name="phone" value="{{ c.phone or '' }}" placeholder="{{ _("Телефон") }}" type="tel">
     <input name="email" value="{{ c.email or '' }}" placeholder="Email" type="email">
     <span class="row" style="gap:4px">
-      {% if c.phone %}<a class="btn sm ghost" href="tel:{{ c.phone|replace(' ', '') }}" title="Позвонить">📞</a>{% endif %}
-      <button class="sm ghost" title="Сохранить">✓</button>
-      <button class="sm danger" name="delete" value="1" title="Удалить" onclick="return confirm('Удалить контактное лицо?')">×</button>
+      {% if c.phone %}<a class="btn sm ghost" href="tel:{{ c.phone|replace(' ', '') }}" title="{{ _("Позвонить") }}">📞</a>{% endif %}
+      <button class="sm ghost" title="{{ _("Сохранить") }}">✓</button>
+      <button class="sm danger" name="delete" value="1" title="{{ _("Удалить") }}" onclick="return confirm({{ _("Удалить контактное лицо?")|tojson|forceescape }})">×</button>
     </span>
   </form>
   {% endfor %}
   <form method="post" action="{{ url_for('tenant_contacts', tid=t.id) }}" class="person">
-    <input name="name" placeholder="Имя"><input name="position" placeholder="Должность">
-    <input name="phone" placeholder="Телефон" type="tel"><input name="email" placeholder="Email" type="email">
-    <button class="sm">+ Добавить</button>
+    <input name="name" placeholder="{{ _("Имя") }}"><input name="position" placeholder="{{ _("Должность") }}">
+    <input name="phone" placeholder="{{ _("Телефон") }}" type="tel"><input name="email" placeholder="Email" type="email">
+    <button class="sm">+ {{ _("Добавить") }}</button>
   </form>
 </div>
 
 <!-- склады и цены -->
 <div class="card" id="prices">
-  <h2 style="margin-top:0">Склады и цены по договору</h2>
-  <p class="muted">Ставка за м² в месяц. Можно вводить ставку или сразу сумму за месяц — второе пересчитается. Пустое «с ПДВ» = без ПДВ + {{ S.vat_rate }}%, пустое «наличка» = без ПДВ × {{ S.cash_coef }}.</p>
+  <h2 style="margin-top:0">{{ _("Склады и цены по договору") }}</h2>
+  <p class="muted">{{ _("Одна цена на склад — в форме оплаты по договору") }} (<b>{{ PAYMENT_TYPES[t.payment_type] }}</b>{% if t.payment_type == 'bank_vat' %}, {{ _("цена с ПДВ") }}{% endif %}). {{ _("Можно ввести за м² или сразу сумму за месяц — второе пересчитается. Изменения цены записываются в историю склада.") }}</p>
   {% if wh_items %}
   <form method="post" action="{{ url_for('tenant_warehouses', tid=t.id) }}">
     <input type="hidden" name="action" value="prices">
     <div class="tablewrap"><table class="pricetbl">
-      <thead><tr><th>Склад</th>
-        <th class="n {{ 'chosen' if t.payment_type == 'bank' }}">Без ПДВ</th>
-        <th class="n {{ 'chosen' if t.payment_type == 'bank_vat' }}">С ПДВ</th>
-        <th class="n {{ 'chosen' if t.payment_type == 'cash' }}">Наличка</th><th></th></tr></thead>
+      <thead><tr><th>{{ _("Склад") }}</th><th class="n">{{ _("Цена, грн/м²") }}</th><th class="n">{{ _("В месяц, грн") }}</th><th></th></tr></thead>
       <tbody>
       {% for w, p in wh_items %}
         <tr data-area="{{ w.area }}">
-          <td><a href="{{ url_for('warehouse_edit', wid=w.id) }}"><b>{{ w.name }}</b></a><br><span class="muted">{{ num(w.area) }} м²</span></td>
-          {% for k, field, val, auto in [('bank', 'rate_bank', w.rate_bank, p.bank.rate), ('bank_vat', 'rate_vat', w.rate_vat, p.bank_vat.rate), ('cash', 'rate_cash', w.rate_cash, p.cash.rate)] %}
-          <td class="n">
-            <div class="pricecell"><input class="rate" name="{{ field }}_{{ w.id }}" inputmode="decimal" value="{{ val|plain }}"
-                   placeholder="{{ auto }}" data-kind="{{ k }}"><span class="muted">/м²</span></div>
-            <div class="pricecell"><input class="sum" inputmode="decimal" value="{{ p[k].total }}" data-kind="{{ k }}"><span class="muted">/мес</span></div>
-          </td>
-          {% endfor %}
-          <td><button class="sm ghost" form="detach-{{ w.id }}" onclick="return confirm('Открепить {{ w.name }}? Склад станет свободным.')">Открепить</button></td>
+          <td><a href="{{ url_for('warehouse_edit', wid=w.id) }}"><b>{{ w.name }}</b></a><br><span class="muted">{{ num(w.area) }} {{ _("м²") }}</span></td>
+          <td class="n"><input type="hidden" name="w{{ w.id }}_area_hint" value="{{ w.area }}">
+            <input class="rate" name="w{{ w.id }}_price_m2" inputmode="decimal" value="{{ w.price_m2|plain }}"></td>
+          <td class="n"><input class="sum" name="w{{ w.id }}_price_month" inputmode="decimal" value="{{ p.total|plain }}">
+            {% if p.vat %}<div class="muted">{{ _("в т.ч. ПДВ") }} {{ money(p.vat) }}</div>{% endif %}</td>
+          <td><button class="sm ghost" type="submit" form="detach-{{ w.id }}" onclick="return confirm({{ (_("Открепить") ~ ' ' ~ w.name ~ '? ' ~ _("Склад станет свободным."))|tojson|forceescape }})">{{ _("Открепить") }}</button></td>
         </tr>
       {% endfor %}
       </tbody>
-      <tfoot><tr><td>Итого в месяц</td>
-        <td class="n {{ 'chosen' if t.payment_type == 'bank' }}">{{ money(tot.bank) }}</td>
-        <td class="n {{ 'chosen' if t.payment_type == 'bank_vat' }}">{{ money(tot.bank_vat) }}</td>
-        <td class="n {{ 'chosen' if t.payment_type == 'cash' }}">{{ money(tot.cash) }}</td><td></td></tr></tfoot>
+      <tfoot><tr><td>{{ _("Итого в месяц") }}</td><td></td><td class="n">{{ money(tot.total) }}{% if tot.vat %}<div class="muted">{{ _("в т.ч. ПДВ") }} {{ money(tot.vat) }}</div>{% endif %}</td><td></td></tr></tfoot>
     </table></div>
-    <div class="row" style="margin-top:10px"><span class="muted">Выделено — форма оплаты по договору ({{ PAYMENT_TYPES[t.payment_type] }}).</span>
-      <span class="spacer"></span><button>Сохранить цены</button></div>
+    <div class="row" style="margin-top:10px"><span class="spacer"></span><button>{{ _("Сохранить цены") }}</button></div>
   </form>
   {% for w, p in wh_items %}<form id="detach-{{ w.id }}" method="post" action="{{ url_for('tenant_warehouses', tid=t.id) }}" hidden>
     <input type="hidden" name="detach" value="{{ w.id }}"></form>{% endfor %}
-  {% else %}<p class="muted">Складов пока нет.</p>{% endif %}
+  {% else %}<p class="muted">{{ _("Складов пока нет") }}.</p>{% endif %}
   {% if free %}
   <form method="post" action="{{ url_for('tenant_warehouses', tid=t.id) }}" class="row" style="margin-top:12px">
     <input type="hidden" name="action" value="attach">
-    <select name="wid" style="width:auto">{% for w in free %}<option value="{{ w.id }}">{{ w.name }} · {{ num(w.area) }} м²</option>{% endfor %}</select>
-    <button class="sm ghost">+ Закрепить свободный склад</button>
+    <select name="wid" style="width:auto">{% for w in free %}<option value="{{ w.id }}">{{ w.name }} · {{ num(w.area) }} {{ _("м²") }}</option>{% endfor %}</select>
+    <button class="sm ghost">+ {{ _("Закрепить свободный склад") }}</button>
   </form>
   {% endif %}
 </div>
@@ -127,9 +126,9 @@
 <!-- фото объектов -->
 {% if wh_items %}
 <div class="card" id="photos">
-  <h2 style="margin-top:0">Фото объектов</h2>
+  <h2 style="margin-top:0">{{ _("Фото объектов") }}</h2>
   {% for w, p in wh_items %}
-    <h3 class="phh">{{ w.name }} <span class="muted">· {{ num(w.area) }} м²</span></h3>
+    <h3 class="phh">{{ w.name }} <span class="muted">· {{ num(w.area) }} {{ _("м²") }}</span></h3>
     <div data-gallery data-wid="{{ w.id }}" data-photos='{{ photos_for(w.id)|tojson }}'></div>
   {% endfor %}
 </div>
@@ -137,53 +136,50 @@
 
 <!-- услуги -->
 <div class="card" id="services">
-  <h2 style="margin-top:0">Эксплуатационные услуги</h2>
-  {% if meter_svcs %}<p class="muted">По счётчикам складов: {% for m in meter_svcs %}<b>{{ m.name }}</b>{{ ', ' if not loop.last }}{% endfor %} — считаются автоматически.</p>{% endif %}
+  <h2 style="margin-top:0">{{ _("Эксплуатационные услуги") }}</h2>
+  {% if meter_svcs %}<p class="muted">{{ _("По счётчикам складов") }}: {% for m in meter_svcs %}<b>{{ m.name }}</b>{{ ', ' if not loop.last }}{% endfor %} — {{ _("считаются автоматически") }}.</p>{% endif %}
   {% if all_svcs %}
   <form method="post" action="{{ url_for('tenant_services', tid=t.id) }}">
     {% for sv in all_svcs %}
       <label class="check"><input type="checkbox" name="service_id" value="{{ sv.id }}" {{ 'checked' if sv.id in subs }}>
-        {{ sv.name }} <span class="muted">— {{ SERVICE_MODES[sv.mode] }}</span></label>
+        {{ sv.name }} <span class="muted">— {{ _(SERVICE_MODES[sv.mode]) }}</span></label>
     {% endfor %}
-    <button class="sm" style="margin-top:8px">Сохранить услуги</button>
+    <button class="sm" style="margin-top:8px">{{ _("Сохранить услуги") }}</button>
   </form>
-  {% else %}<p class="muted">Других услуг нет. Добавить: <a href="{{ url_for('services_page') }}">Показания → Услуги</a>.</p>{% endif %}
+  {% else %}<p class="muted">{{ _("Других услуг нет. Добавить") }}: <a href="{{ url_for('services_page') }}">{{ _("Показания → Услуги") }}</a>.</p>{% endif %}
 </div>
 
-<h2>Акты</h2>
+<h2>{{ _("Акты") }}</h2>
 <div class="tablewrap"><table>
-  <thead><tr><th>№</th><th>Период</th><th class="n">Сумма</th><th>Статус</th><th></th></tr></thead>
+  <thead><tr><th>№</th><th>{{ _("Период") }}</th><th class="n">{{ _("Сумма") }}</th><th>{{ _("Статус") }}</th><th></th></tr></thead>
   <tbody>
   {% for a in acts %}
     <tr><td><a href="{{ url_for('act_view', aid=a.id) }}">{{ a.number }}</a></td>
       <td>{{ period_label(a.period) }}</td><td class="n">{{ money(a.total) }}</td>
-      <td><span class="badge {{ 'off' if a.status == 'draft' }}">{{ 'утверждён' if a.status == 'final' else 'черновик' }}</span></td>
+      <td><span class="badge {{ 'off' if a.status == 'draft' }}">{{ _("утверждён") if a.status == 'final' else _("черновик") }}</span></td>
       <td><a href="{{ url_for('act_pdf', aid=a.id) }}" target="_blank">PDF</a> · <a href="{{ url_for('act_docx', aid=a.id) }}">Word</a></td></tr>
-  {% else %}<tr><td colspan="5" class="muted">Актов ещё нет.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="5" class="muted">{{ _("Актов ещё нет") }}.</td></tr>{% endfor %}
   </tbody>
 </table></div>
 {% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
-// ставка за м² <-> сумма в месяц
-const VAT = {{ vat }} / 100, COEF = {{ cash_coef }};
+// ціна за м² <-> сума за місяць
 const pnum = s => parseFloat(String(s).replace(',', '.').replace(/\s/g, ''));
 const r2 = x => Math.round(x * 100) / 100;
 document.querySelectorAll('.pricetbl tbody tr').forEach(tr => {
-  const area = parseFloat(tr.dataset.area) || 0;
-  const rate = k => tr.querySelector(`.rate[data-kind=${k}]`), sum = k => tr.querySelector(`.sum[data-kind=${k}]`);
-  const eff = k => { const v = pnum(rate(k).value); return isNaN(v) ? pnum(rate(k).placeholder) : v; };
-  const refreshAuto = () => {           // пересчёт подсказок для пустых полей
-    const b = pnum(rate('bank').value) || 0;
-    rate('bank_vat').placeholder = r2(b * (1 + VAT)); rate('cash').placeholder = r2(b * COEF);
-    ['bank', 'bank_vat', 'cash'].forEach(k => { if (document.activeElement !== sum(k)) sum(k).value = r2(eff(k) * area); });
-  };
-  tr.querySelectorAll('.rate').forEach(i => i.addEventListener('input', refreshAuto));
-  tr.querySelectorAll('.sum').forEach(i => i.addEventListener('input', () => {
-    const v = pnum(i.value); if (isNaN(v) || !area) return;
-    rate(i.dataset.kind).value = r2(v / area); refreshAuto();
-  }));
+  const area = parseFloat(tr.dataset.area) || 0, rate = tr.querySelector('.rate'), sum = tr.querySelector('.sum');
+  rate.addEventListener('input', () => { const v = pnum(rate.value); if (!isNaN(v)) sum.value = r2(v * area); });
+  sum.addEventListener('input', () => { const v = pnum(sum.value); if (!isNaN(v) && area) rate.value = Math.round(v / area * 10000) / 10000; });
 });
+// юрособа / фізособа
+function partyType() {
+  const person = document.querySelector('input[name=party_type]:checked').value === 'person';
+  document.querySelectorAll('.only-company').forEach(e => e.style.display = person ? 'none' : '');
+  document.querySelectorAll('.only-person').forEach(e => e.style.display = person ? '' : 'none');
+  document.querySelector('input[name=name]').placeholder = person ? 'Коваленко Олена Петрівна' : {{ _("ТОВ «Приклад» / ФОП Іваненко Іван Іванович")|tojson }};
+}
+partyType();
 </script>
 {% endblock %}

@@ -205,3 +205,15 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 .lbprev { left: 14px; top: 50%; transform: translateY(-50%); }
 .lbnext { right: 14px; top: 50%; transform: translateY(-50%); }
 .lbcap { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #ddd; font-size: 13px; }
+.langbtn { font-size: 12px; font-weight: 700; letter-spacing: .03em; padding: 5px 8px; }
+.themecorner { display: flex; gap: 6px; }
+
+/* юрособа / фізособа */
+.segmented { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; width: fit-content; }
+.segmented .seg { flex-direction: row; margin: 0; cursor: pointer; }
+.segmented .seg input { display: none; }
+.segmented .seg span { padding: 7px 14px; color: var(--ink); font-size: 14px; }
+.segmented .seg input:checked + span { background: var(--accent); color: #fff; }
+.prices.one { grid-template-columns: 1fr; max-width: 420px; }
+.pricetbl input { width: 120px; text-align: right; padding: 5px 8px; }
+table.hist td { font-size: 13px; }

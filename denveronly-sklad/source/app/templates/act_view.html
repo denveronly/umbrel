@@ -1,64 +1,65 @@
 {% extends "base.html" %}
-{% block title %}Акт {{ act.number }}{% endblock %}
+{% block title %}{{ _("Акт") }} {{ act.number }}{% endblock %}
 {% block content %}
 {% set d = act.data %}
 <div class="row noprint" style="margin-bottom:14px">
-  <a href="{{ url_for('acts', period=act.period) }}">← Акты за {{ period_label(act.period) }}</a>
+  <a href="{{ url_for('acts', period=act.period) }}">← {{ _("Акты за") }} {{ period_label(act.period) }}</a>
   <span class="spacer"></span>
-  <span class="badge {{ 'off' if act.status == 'draft' }}">{{ 'утверждён' if act.status == 'final' else 'черновик' }}</span>
+  <span class="badge {{ 'off' if act.status == 'draft' }}">{{ _("утверждён") if act.status == 'final' else _("черновик") }}</span>
 </div>
 <div class="row noprint" style="margin-bottom:14px">
   <a class="btn" href="{{ url_for('act_pdf', aid=act.id) }}" target="_blank">PDF</a>
   <a class="btn" href="{{ url_for('act_docx', aid=act.id) }}">Word</a>
-  <button class="ghost" onclick="print()">Печать</button>
+  <button class="ghost" onclick="print()">{{ _("Печать") }}</button>
   <span class="spacer"></span>
   <form method="post" action="{{ url_for('act_status', aid=act.id) }}" class="row">
     {% if act.status == 'draft' %}
-      <button class="ghost" name="action" value="recalc">Пересчитать</button>
-      <button name="action" value="final">Утвердить</button>
-      <button class="danger" name="action" value="delete" onclick="return confirm('Удалить акт?')">Удалить</button>
+      <button class="ghost" name="action" value="recalc">{{ _("Пересчитать") }}</button>
+      <button name="action" value="final">{{ _("Утвердить") }}</button>
+      <button class="danger" name="action" value="delete" onclick="return confirm({{ _("Удалить акт?")|tojson|forceescape }})">{{ _("Удалить") }}</button>
     {% else %}
-      <button class="ghost" name="action" value="draft">Вернуть в черновик</button>
+      <button class="ghost" name="action" value="draft">{{ _("Вернуть в черновик") }}</button>
     {% endif %}
   </form>
 </div>
 
 <div class="actdoc">
-  <h3>АКТ № {{ act.number }}</h3>
-  <p style="text-align:center;margin:2px 0 14px">приймання-передачі наданих послуг від {{ d.act_date or '' }}<br>
-    <span style="font-size:12px">оренда за {{ d.period_label }}{% if lay.util %} · комунальні за {{ d.util_period_label or d.period_label }}{% endif %}</span></p>
-  <p><b>Орендодавець:</b> {{ d.company.company_name }}{% if d.company.company_edrpou %}, ЄДРПОУ {{ d.company.company_edrpou }}{% endif %}
-       {% if d.company.company_signer %}<br><span style="padding-left:1em">{{ d.company.company_signer_position or 'Представник' }} {{ d.company.company_signer }}{% if d.company.company_basis %}, на підставі {{ d.company.company_basis }}{% endif %}</span>{% endif %}<br>
-     <b>Орендар:</b> {{ d.tenant.name }}{% if d.tenant.edrpou %}, ЄДРПОУ/РНОКПП {{ d.tenant.edrpou }}{% endif %}
-       {% if d.tenant.contact %}<br><span style="padding-left:1em">{{ d.tenant.director_position or 'Представник' }} {{ d.tenant.contact }}{% if d.tenant.basis %}, на підставі {{ d.tenant.basis }}{% endif %}</span>{% endif %}
-     {% if d.tenant.contract_no %}<br><b>Договір:</b> № {{ d.tenant.contract_no }}{% if d.tenant.contract_date %} від {{ d.tenant.contract_date }}{% endif %}{% endif %}</p>
+  <h3>{{ _("АКТ №") }} {{ act.number }}</h3>
+  <p style="text-align:center;margin:2px 0 14px">{{ _("приймання-передачі наданих послуг від") }} {{ d.act_date or '' }}<br>
+    <span style="font-size:12px">{{ _("оренда за") }} {{ d.period_label }}{% if lay.util %} · {{ _("комунальні за") }} {{ d.util_period_label or d.period_label }}{% endif %}</span></p>
+  <p><b>{{ _("Орендодавець") }}:</b> {{ d.company.company_name }}{% if d.company.company_edrpou %}, {{ _("ЄДРПОУ") }} {{ d.company.company_edrpou }}{% endif %}
+       {% if d.company.company_signer %}<br><span style="padding-left:1em">{{ d.company.company_signer_position or _("Представник") }} {{ d.company.company_signer }}{% if d.company.company_basis %}, {{ _("на підставі") }} {{ d.company.company_basis }}{% endif %}</span>{% endif %}<br>
+     <b>{{ _("Орендар") }}:</b> {{ d.tenant.name }}{% if d.tenant.edrpou %}, {{ _("ЄДРПОУ/РНОКПП") }} {{ d.tenant.edrpou }}{% endif %}
+       {% if d.tenant.party_type == 'person' %}{% if d.tenant.passport_number %}<br><span style="padding-left:1em">паспорт {{ d.tenant.passport_series or '' }} № {{ d.tenant.passport_number }}{% if d.tenant.passport_issued %}, виданий {{ d.tenant.passport_issued }}{% endif %}</span>{% endif %}
+       {% elif d.tenant.contact %}<br><span style="padding-left:1em">{{ d.tenant.director_position or _("Представник") }} {{ d.tenant.contact }}{% if d.tenant.basis %}, {{ _("на підставі") }} {{ d.tenant.basis }}{% endif %}</span>{% endif %}
+     {% if d.tenant.contract_no %}<br><b>{{ _("Договір") }}:</b> № {{ d.tenant.contract_no }}{% if d.tenant.contract_date %} {{ _("від") }} {{ d.tenant.contract_date }}{% endif %}{% endif %}</p>
   <table>
-    <thead><tr><th>№</th><th>Найменування</th><th>Од.</th><th class="n">К-сть</th><th class="n">Ціна</th><th class="n">Сума</th></tr></thead>
+    <thead><tr><th>№</th><th>{{ _("Найменування") }}</th><th>{{ _("Од") }}.</th><th class="n">{{ _("К-сть") }}</th><th class="n">{{ _("Ціна") }}</th><th class="n">{{ _("Сума") }}</th></tr></thead>
     <tbody>{% for l in lay.main %}
       <tr><td>{{ loop.index }}</td><td>{{ l.name }}</td><td>{{ l.unit }}</td>
         <td class="n">{{ num(l.qty) }}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
     {% endfor %}</tbody>
     <tfoot>
       {% if d.totals.vat_rate %}
-        <tr><td colspan="5" class="n">Разом без ПДВ</td><td class="n">{{ money(d.totals.net) }}</td></tr>
-        <tr><td colspan="5" class="n">ПДВ {{ d.totals.vat_rate }}%</td><td class="n">{{ money(d.totals.vat) }}</td></tr>
-        <tr><td colspan="5" class="n"><b>Всього з ПДВ</b></td><td class="n"><b>{{ money(d.totals.total) }}</b></td></tr>
+        <tr><td colspan="5" class="n">{{ _("Разом без ПДВ") }}</td><td class="n">{{ money(d.totals.net) }}</td></tr>
+        <tr><td colspan="5" class="n">{{ _("ПДВ") }} {{ d.totals.vat_rate }}%</td><td class="n">{{ money(d.totals.vat) }}</td></tr>
+        <tr><td colspan="5" class="n"><b>{{ _("Всього з ПДВ") }}</b></td><td class="n"><b>{{ money(d.totals.total) }}</b></td></tr>
       {% else %}
-        <tr><td colspan="5" class="n"><b>Всього (без ПДВ)</b></td><td class="n"><b>{{ money(d.totals.total) }}</b></td></tr>
+        <tr><td colspan="5" class="n"><b>{{ _("Всього (без ПДВ") }})</b></td><td class="n"><b>{{ money(d.totals.total) }}</b></td></tr>
       {% endif %}
     </tfoot>
   </table>
-  <p>{{ words }}{% if d.totals.vat_rate %}, у т.ч. ПДВ {{ money(d.totals.vat) }} грн{% endif %}.</p>
-  <p>Форма оплати: {{ d.payment_label }}.</p>
+  <p>{{ words }}{% if d.totals.vat_rate %}, {{ _("у т.ч. ПДВ") }} {{ money(d.totals.vat) }} {{ _("грн") }}{% endif %}.</p>
+  <p>{{ _("Форма оплати") }}: {{ d.payment_label }}.</p>
 </div>
 
 {% if lay.util %}
 <div class="actdoc" style="margin-top:16px">
-  <h3>ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ</h3>
-  <p style="text-align:center;margin:2px 0 14px">за {{ d.util_period_label or d.period_label }} — додаток до акта № {{ act.number }}</p>
+  <h3>{{ _("ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ") }}</h3>
+  <p style="text-align:center;margin:2px 0 14px">{{ _("за") }} {{ d.util_period_label or d.period_label }} — {{ _("додаток до акта №") }} {{ act.number }}</p>
   <table>
-    <thead><tr><th>№</th><th>Послуга</th><th>Склад / лічильник</th><th>Показники</th><th>Од.</th>
-      <th class="n">К-сть</th><th class="n">Ціна</th><th class="n">Сума</th></tr></thead>
+    <thead><tr><th>№</th><th>{{ _("Послуга") }}</th><th>{{ _("Склад / лічильник") }}</th><th>{{ _("Показники") }}</th><th>{{ _("Од") }}.</th>
+      <th class="n">{{ _("К-сть") }}</th><th class="n">{{ _("Ціна") }}</th><th class="n">{{ _("Сума") }}</th></tr></thead>
     <tbody>{% for l in lay.util %}
       <tr><td>{{ loop.index }}</td>
         <td>{{ l.service or l.name }}</td>
@@ -68,15 +69,15 @@
     {% endfor %}</tbody>
     <tfoot>
       {% if d.totals.vat_rate %}
-        <tr><td colspan="7" class="n">Разом без ПДВ</td><td class="n">{{ money(lay.util_sum) }}</td></tr>
-        <tr><td colspan="7" class="n">ПДВ {{ d.totals.vat_rate }}%</td><td class="n">{{ money(lay.util_vat) }}</td></tr>
-        <tr><td colspan="7" class="n"><b>Всього з ПДВ</b></td><td class="n"><b>{{ money(lay.util_total) }}</b></td></tr>
+        <tr><td colspan="7" class="n">{{ _("Разом без ПДВ") }}</td><td class="n">{{ money(lay.util_sum) }}</td></tr>
+        <tr><td colspan="7" class="n">{{ _("ПДВ") }} {{ d.totals.vat_rate }}%</td><td class="n">{{ money(lay.util_vat) }}</td></tr>
+        <tr><td colspan="7" class="n"><b>{{ _("Всього з ПДВ") }}</b></td><td class="n"><b>{{ money(lay.util_total) }}</b></td></tr>
       {% else %}
-        <tr><td colspan="7" class="n"><b>Всього (без ПДВ)</b></td><td class="n"><b>{{ money(lay.util_sum) }}</b></td></tr>
+        <tr><td colspan="7" class="n"><b>{{ _("Всього (без ПДВ") }})</b></td><td class="n"><b>{{ money(lay.util_sum) }}</b></td></tr>
       {% endif %}
     </tfoot>
   </table>
-  <p>Сума компенсації комунальних послуг: {{ util_words }}{% if lay.util_vat %}, у т.ч. ПДВ {{ money(lay.util_vat) }} грн{% endif %}.</p>
+  <p>{{ _("Сума компенсації комунальних послуг") }}: {{ util_words }}{% if lay.util_vat %}, {{ _("у т.ч. ПДВ") }} {{ money(lay.util_vat) }} {{ _("грн") }}{% endif %}.</p>
 </div>
 {% endif %}
 {% endblock %}

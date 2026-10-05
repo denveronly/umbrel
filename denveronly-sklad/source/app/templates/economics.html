@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Экономика") }}{% endblock %}
+{% block head %}
+<style>
+.viz-root {
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --line-1: #2a78d6;
+  --grid: #e7e5df; --axis: #8a8d93; --surface: var(--card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --line-1: #3987e5; --grid: #2e3238; --axis: #8d9198; }
+}
+:root[data-theme="dark"] .viz-root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --line-1: #3987e5; --grid: #2e3238; --axis: #8d9198; }
+.econ-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.fxbox { display: flex; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.fxbox b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.kpi .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+.kpi.total { border-color: var(--accent); }
+.chartcard h2 { margin: 0 0 2px; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .val { fill: var(--ink); font-weight: 600; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0 4px; font-size: 13px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; background: var(--c); vertical-align: -1px; }
+.vtip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.14); padding: 8px 10px; font-size: 12px; min-width: 170px; display: none; z-index: 5; }
+.vtip .r { display: flex; justify-content: space-between; gap: 14px; }
+.vtip .r i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.vtip b { font-variant-numeric: tabular-nums; }
+.charts2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 860px) { .charts2 { grid-template-columns: 1fr; } }
+td.est { color: var(--muted); }
+.viz-root table td:first-child { white-space: nowrap; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="viz-root">
+<div class="econ-head">
+  <h1 style="margin:0">{{ _("Экономика") }}</h1>
+  <span class="spacer"></span>
+  <form method="get" class="row" style="gap:6px">
+    <span class="muted">{{ _("Период") }}:</span>
+    <select name="months" onchange="this.form.submit()" style="width:auto">
+      {% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}
+    </select>
+  </form>
+  <div class="fxbox" title="{{ _("Официальный курс НБУ") }}">
+    <span class="muted">USD {{ _("НБУ") }}</span>
+    <b>{{ '%.4f'|format(now_rate) if now_rate else '—' }}</b>
+    <span class="muted">{{ now_rate_date or '' }}</span>
+    <form method="post"><button class="sm ghost" name="action" value="refresh" title="{{ _("Обновить курс") }}">↻</button></form>
+  </div>
+</div>
+
+{% if fx_error or not now_rate %}
+<div class="warn" style="margin-bottom:12px">
+  {{ _("Не удалось получить курс НБУ — нет доступа к интернету или сайт НБУ недоступен. Суммы в USD считаются по последнему сохранённому курсу.") }}
+  <form method="post" class="row" style="margin-top:6px">
+    <input type="hidden" name="action" value="manual">
+    <span>{{ _("Ввести курс вручную") }}:</span>
+    <input name="date" type="date" value="{{ today }}" style="width:auto">
+    <input name="usd" inputmode="decimal" placeholder="41.25" style="width:110px" required>
+    <button class="sm">{{ _("Сохранить") }}</button>
+  </form>
+</div>
+{% endif %}
+
+<p class="muted">{{ _("Суммы за месяц акта: аренда за этот месяц") }}{% if util_shift %} {{ _("и коммунальные за предыдущий") }}{% endif %}. {{ _("Берутся из сформированных актов; для текущего месяца по контактам без акта — расчёт (помечен «оценка»).") }}</p>
+
+<!-- поточний місяць -->
+<h2>{{ sel.label }}{% if sel.estimated %} <span class="badge warnb">{{ _("оценка") }}</span>{% endif %}</h2>
+<div class="kpis">
+  <div class="kpi"><small class="muted"><span class="sw" style="background:var(--series-1)"></span>{{ PAYMENT_TYPES.bank }}</small><b>{{ money(sel.bank) }}</b></div>
+  <div class="kpi"><small class="muted"><span class="sw" style="background:var(--series-2)"></span>{{ PAYMENT_TYPES.bank_vat }}</small><b>{{ money(sel.bank_vat) }}</b><small class="muted">{{ _("в т.ч. ПДВ") }} {{ money(sel.vat) }}</small></div>
+  <div class="kpi"><small class="muted"><span class="sw" style="background:var(--series-3)"></span>{{ PAYMENT_TYPES.cash }}</small><b>{{ money(sel.cash) }}</b></div>
+  <div class="kpi total"><small class="muted">{{ _("Всего, грн") }}</small><b>{{ money(sel.total) }}</b>
+    <small class="muted">{% if sel.usd %}≈ ${{ money(sel.usd) }} {{ _("по курсу") }} {{ '%.2f'|format(sel.rate) }}{% else %}USD —{% endif %}</small></div>
+</div>
+
+<!-- графік 1: надходження за формами оплати -->
+<div class="card chartcard">
+  <h2>{{ _("Начисления по формам оплаты, грн") }}</h2>
+  <div class="legend">
+    <span style="--c:var(--series-1)">{{ PAYMENT_TYPES.bank }}</span>
+    <span style="--c:var(--series-2)">{{ PAYMENT_TYPES.bank_vat }}</span>
+    <span style="--c:var(--series-3)">{{ PAYMENT_TYPES.cash }}</span>
+  </div>
+  <div class="chart" id="ch-stack"></div>
+</div>
+
+<div class="charts2">
+  <div class="card chartcard">
+    <h2>{{ _("Всего в долларах, USD") }}</h2>
+    <p class="muted" style="margin:0 0 6px">{{ _("Сумма месяца ÷ курс НБУ на 1-е число") }}</p>
+    <div class="chart" id="ch-usd"></div>
+  </div>
+  <div class="card chartcard">
+    <h2>{{ _("Курс USD (НБУ), грн") }}</h2>
+    <p class="muted" style="margin:0 0 6px">{{ _("на 1-е число месяца") }}</p>
+    <div class="chart" id="ch-rate"></div>
+  </div>
+</div>
+
+<!-- таблиця -->
+<h2>{{ _("По месяцам") }}</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>{{ _("Месяц") }}</th>
+    <th class="n">{{ PAYMENT_TYPES.bank }}</th><th class="n">{{ PAYMENT_TYPES.bank_vat }}</th><th class="n">{{ _("в т.ч. ПДВ") }}</th>
+    <th class="n">{{ PAYMENT_TYPES.cash }}</th><th class="n">{{ _("Аренда") }}</th><th class="n">{{ _("Коммунальные") }}</th>
+    <th class="n">{{ _("Всего, грн") }}</th><th class="n">{{ _("Курс") }}</th><th class="n">USD</th><th>{{ _("Источник") }}</th></tr></thead>
+  <tbody>
+  {% for r in rows|reverse %}
+    <tr>
+      <td><a href="{{ url_for('acts', period=r.period) }}">{{ r.label }}</a></td>
+      <td class="n">{{ money(r.bank) }}</td><td class="n">{{ money(r.bank_vat) }}</td><td class="n muted">{{ money(r.vat) }}</td>
+      <td class="n">{{ money(r.cash) }}</td><td class="n">{{ money(r.rent) }}</td><td class="n">{{ money(r.util) }}</td>
+      <td class="n"><b>{{ money(r.total) }}</b></td>
+      <td class="n muted">{{ '%.4f'|format(r.rate) if r.rate else '—' }}</td>
+      <td class="n">{{ money(r.usd) if r.usd is not none else '—' }}</td>
+      <td class="{{ 'est' }}">{% if r.acts %}{{ _("акты") }}: {{ r.acts }}{% endif %}{% if r.estimated %}{{ ' + ' if r.acts }}{{ _("оценка") }}: {{ r.estimated }}{% endif %}{% if not r.acts and not r.estimated %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><td>{{ _("Итого за период") }}</td>
+    <td class="n">{{ money(sums.bank) }}</td><td class="n">{{ money(sums.bank_vat) }}</td><td class="n">{{ money(sums.vat) }}</td>
+    <td class="n">{{ money(sums.cash) }}</td><td class="n">{{ money(sums.rent) }}</td><td class="n">{{ money(sums.util) }}</td>
+    <td class="n">{{ money(sums.total) }}</td><td></td><td class="n">{{ money(sums.usd) }}</td><td></td></tr></tfoot>
+</table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const D = {{ chart|tojson }};
+  const NAMES = {bank: {{ PAYMENT_TYPES.bank|tojson }}, bank_vat: {{ PAYMENT_TYPES.bank_vat|tojson }}, cash: {{ PAYMENT_TYPES.cash|tojson }}};
+  const L = {total: {{ _("Всего")|tojson }}, est: {{ _("оценка")|tojson }}, rate: {{ _("Курс")|tojson }}};
+  const KEYS = ['bank', 'bank_vat', 'cash'], VAR = {bank: '--series-1', bank_vat: '--series-2', cash: '--series-3'};
+  const css = v => getComputedStyle(document.querySelector('.viz-root')).getPropertyValue(v).trim();
+  const fmt = (x, d = 0) => x == null ? '—' : x.toLocaleString('uk-UA', {minimumFractionDigits: d, maximumFractionDigits: d});
+  const short = x => Math.abs(x) >= 1e6 ? fmt(x / 1e6, 1) + ' ' + {{ _("млн")|tojson }} : Math.abs(x) >= 1e4 ? fmt(x / 1e3, 0) + ' ' + {{ _("тыс")|tojson }} : fmt(x);
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+  const nice = max => { if (max <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(max))); const f = max / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
+  const monthShort = s => s.split(' ')[0].slice(0, 3) + ' ' + s.split(' ')[1].slice(2);
+
+  function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+  function frame(box, h, yMax, yMin = 0) {
+    box.innerHTML = '';
+    const W = Math.max(300, box.clientWidth), M = {l: 58, r: 12, t: 16, b: 26};
+    const svg = el('svg', {viewBox: `0 0 ${W} ${h}`, role: 'img'}, box);
+    const iw = W - M.l - M.r, ih = h - M.t - M.b;
+    const step = niceStep(Math.max(yMax - yMin, 1e-9) / 4);
+    const lo = Math.floor(yMin / step) * step, top = Math.ceil(yMax / step) * step || step;
+    const y = v => M.t + ih - (v - lo) / (top - lo) * ih;
+    // підписи осі: точність залежить від кроку, щоб не було «42, 42, 41»
+    const big = top >= 10000, unit = big ? 1000 : 1, dec = Math.max(0, Math.ceil(-Math.log10(step / unit) + 1e-9));
+    const lab = v => Math.abs(v) < 1e-9 ? '0' : fmt(v / unit, Math.min(dec, 4)) + (big ? ' ' + {{ _("тыс")|tojson }} : '');
+    for (let v = lo; v <= top + step / 2; v += step) {
+      el('line', {x1: M.l, x2: W - M.r, y1: y(v), y2: y(v), stroke: css('--grid'), 'stroke-width': 1}, svg);
+      el('text', {x: M.l - 6, y: y(v) + 4, 'text-anchor': 'end'}, svg).textContent = lab(v);
+    }
+    const tip = document.createElement('div'); tip.className = 'vtip'; box.appendChild(tip);
+    return {svg, W, h, M, iw, ih, y, tip};
+  }
+  function xLabels(f, n, xc) {
+    const every = Math.ceil(n / Math.max(1, Math.floor(f.iw / 64)));
+    D.labels.forEach((lb, i) => { if (i % every === 0 || i === n - 1)
+      el('text', {x: xc(i), y: f.h - 8, 'text-anchor': 'middle'}, f.svg).textContent = monthShort(lb); });
+  }
+  function showTip(f, html, x, y) {
+    f.tip.innerHTML = html; f.tip.style.display = 'block';
+    const bw = f.tip.offsetWidth, W = f.svg.getBoundingClientRect().width, sc = W / f.W;
+    let left = x * sc + 12; if (left + bw > W) left = x * sc - bw - 12;
+    f.tip.style.left = Math.max(0, left) + 'px'; f.tip.style.top = Math.max(0, y * sc - 10) + 'px';
+  }
+  const row = (c, name, v, d = 2) => `<div class="r"><span>${c ? `<i style="background:${c}"></i>` : ''}${name}</span><b>${fmt(v, d)}</b></div>`;
+
+  // 1) стовпчики з накопиченням
+  function stack() {
+    const box = document.getElementById('ch-stack'), n = D.labels.length;
+    const f = frame(box, 280, Math.max(1, ...D.total));
+    const bw = f.iw / n, barW = Math.min(46, bw * 0.62), xc = i => f.M.l + bw * (i + 0.5);
+    for (let i = 0; i < n; i++) {
+      let acc = 0; const segs = KEYS.filter(k => D.series[k][i] > 0);
+      segs.forEach((k, j) => {
+        const v = D.series[k][i], y0 = f.y(acc), y1 = f.y(acc + v); acc += v;
+        const top = j === segs.length - 1, gap = j > 0 ? 2 : 0;          // 2px просвіт між сегментами
+        const hgt = Math.max(0, y0 - y1 - gap), x = xc(i) - barW / 2;
+        if (top) {   // заокруглений лише верхній край
+          const r = Math.min(4, hgt, barW / 2);
+          el('path', {d: `M${x},${y0 - gap} V${y1 + r} Q${x},${y1} ${x + r},${y1} H${x + barW - r} Q${x + barW},${y1} ${x + barW},${y1 + r} V${y0 - gap} Z`,
+                      fill: css(VAR[k]), opacity: D.estimated[i] ? 0.55 : 1}, f.svg);
+        } else el('rect', {x, y: y1, width: barW, height: hgt, fill: css(VAR[k]), opacity: D.estimated[i] ? 0.55 : 1}, f.svg);
+      });
+      if (i === n - 1 && D.total[i] > 0)   // підпис лише для останнього місяця
+        el('text', {x: xc(i), y: f.y(D.total[i]) - 6, 'text-anchor': 'middle', class: 'val'}, f.svg).textContent = short(D.total[i]);
+      const hit = el('rect', {x: f.M.l + bw * i, y: f.M.t, width: bw, height: f.ih, fill: 'transparent'}, f.svg);
+      hit.addEventListener('mousemove', () => showTip(f,
+        `<b>${D.labels[i]}</b>${D.estimated[i] ? ` <span class="muted">· ${L.est}</span>` : ''}` +
+        KEYS.map(k => row(css(VAR[k]), NAMES[k], D.series[k][i])).join('') + row('', L.total, D.total[i]) +
+        (D.usd[i] != null ? row('', 'USD', D.usd[i]) : ''), xc(i), f.y(D.total[i])));
+      hit.addEventListener('mouseleave', () => f.tip.style.display = 'none');
+    }
+    xLabels(f, n, xc);
+  }
+
+  // 2) лінія з перехрестям
+  function line(id, vals, name, digits) {
+    const box = document.getElementById(id), n = D.labels.length, ok = vals.filter(v => v != null);
+    if (!ok.length) { box.innerHTML = '<p class="muted">—</p>'; return; }
+    const lo = Math.min(...ok), hi = Math.max(...ok), pad = (hi - lo) * 0.12 || hi * 0.02 || 1;
+    const f = frame(box, 210, hi + pad, Math.max(0, lo - pad));
+    const xc = i => f.M.l + (n === 1 ? f.iw / 2 : f.iw * i / (n - 1));
+    const pts = vals.map((v, i) => v == null ? null : [xc(i), f.y(v)]).filter(Boolean);
+    el('path', {d: pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ',' + p[1]).join(' '), fill: 'none', stroke: css('--line-1'), 'stroke-width': 2, 'stroke-linejoin': 'round'}, f.svg);
+    const last = pts[pts.length - 1];
+    el('circle', {cx: last[0], cy: last[1], r: 4, fill: css('--line-1'), stroke: css('--surface'), 'stroke-width': 2}, f.svg);
+    el('text', {x: last[0] - 6, y: last[1] - 9, 'text-anchor': 'end', class: 'val'}, f.svg).textContent = fmt(vals[vals.length - 1], digits);
+    const cross = el('line', {y1: f.M.t, y2: f.M.t + f.ih, stroke: css('--axis'), 'stroke-dasharray': '3 3', visibility: 'hidden'}, f.svg);
+    const dot = el('circle', {r: 4, fill: css('--line-1'), stroke: css('--surface'), 'stroke-width': 2, visibility: 'hidden'}, f.svg);
+    const hit = el('rect', {x: f.M.l, y: f.M.t, width: f.iw, height: f.ih, fill: 'transparent'}, f.svg);
+    hit.addEventListener('mousemove', e => {
+      const r = f.svg.getBoundingClientRect(), x = (e.clientX - r.left) * f.W / r.width;
+      const i = Math.max(0, Math.min(n - 1, Math.round((x - f.M.l) / (f.iw / Math.max(1, n - 1)))));
+      if (vals[i] == null) return;
+      cross.setAttribute('x1', xc(i)); cross.setAttribute('x2', xc(i)); cross.setAttribute('visibility', 'visible');
+      dot.setAttribute('cx', xc(i)); dot.setAttribute('cy', f.y(vals[i])); dot.setAttribute('visibility', 'visible');
+      showTip(f, `<b>${D.labels[i]}</b>` + row('', name, vals[i], digits), xc(i), f.y(vals[i]));
+    });
+    hit.addEventListener('mouseleave', () => { f.tip.style.display = 'none'; cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); });
+    xLabels(f, n, xc);
+  }
+
+  const draw = () => { stack(); line('ch-usd', D.usd, 'USD', 0); line('ch-rate', D.rate, L.rate, 4); };
+  draw();
+  let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(draw, 150); });
+  window.addEventListener('themechange', draw);
+})();
+</script>
+{% endblock %}

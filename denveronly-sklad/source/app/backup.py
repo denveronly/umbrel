@@ -12,6 +12,7 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request, 
 
 import auth
 from audit import log
+from i18n import _
 from db import BACKUP_DIR, DATA_DIR, DB_PATH, PHOTOS_DIR, get_db, set_setting, settings
 
 bp = Blueprint("logs", __name__)
@@ -97,7 +98,7 @@ def restore_from_zip(path):
         try:
             ok = con.execute("PRAGMA integrity_check").fetchone()[0]
             if ok != "ok":
-                raise ValueError(f"База в архиве повреждена: {ok}")
+                raise ValueError("База в архиве повреждена")
             tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not {"warehouses", "tenants", "users"} <= tables:
                 raise ValueError("Это не база этого приложения")
@@ -187,18 +188,18 @@ def database():
         if action == "backup":
             name = create_backup("manual")
             log("Бэкап создан вручную", name)
-            flash(f"Бэкап создан: {name}")
+            flash(_("Бэкап создан") + f": {name}")
         elif action == "settings":
             set_setting("auto_backup", "1" if request.form.get("auto_backup") else "0")
             set_setting("backup_keep", str(max(1, request.form.get("backup_keep", 30, type=int))))
             db.commit()
             log("Настройки бэкапа изменены")
-            flash("Настройки бэкапа сохранены")
+            flash(_("Настройки бэкапа сохранены"))
         elif action == "delete":
             p = _safe_path(request.form.get("name"))
             os.remove(p)
             log("Бэкап удалён", request.form.get("name"))
-            flash("Бэкап удалён")
+            flash(_("Бэкап удалён"))
         elif action in ("restore", "upload"):
             if action == "restore":
                 path = _safe_path(request.form.get("name"))
@@ -212,7 +213,7 @@ def database():
                 f.save(path)
                 if not zipfile.is_zipfile(path):
                     os.remove(path)
-                    flash("Это не ZIP-архив бэкапа")
+                    flash(_("Это не ZIP-архив бэкапа"))
                     return redirect(url_for("logs.database"))
             pre = create_backup("pre-restore")
             try:
@@ -221,29 +222,29 @@ def database():
                 g.pop("db", None)
                 restore_from_zip(path)
             except Exception as e:
-                flash(f"Восстановление не выполнено: {e}")
+                flash(_("Восстановление не выполнено") + f": {_(str(e))}")
                 return redirect(url_for("logs.database"))
             from db import init_db
             init_db()  # досоздаём новые таблицы/колонки, если бэкап старой версии
             log("База восстановлена из бэкапа", f"{src_name} (текущая сохранена как {pre})")
-            flash(f"База восстановлена из {src_name}. Предыдущее состояние сохранено: {pre}")
+            flash(_("База восстановлена из {a}. Предыдущее состояние сохранено: {b}").format(a=src_name, b=pre))
         elif action == "check":
             res = db.execute("PRAGMA integrity_check").fetchone()[0]
             log("Проверка целостности базы", res)
-            flash("Проверка целостности: всё в порядке" if res == "ok" else f"Проблема: {res}")
+            flash(_("Проверка целостности: всё в порядке") if res == "ok" else _("Проблема") + f": {res}")
         elif action == "vacuum":
             before = os.path.getsize(DB_PATH)
             db.commit()
             db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             db.execute("VACUUM")
             log("Оптимизация базы (VACUUM)")
-            flash(f"База оптимизирована: {before // 1024} КБ → {os.path.getsize(DB_PATH) // 1024} КБ")
+            flash(_("База оптимизирована") + f": {before // 1024} КБ → {os.path.getsize(DB_PATH) // 1024} КБ")
         elif action == "clear_log":
             days = max(30, request.form.get("days", 365, type=int))
             n = db.execute("DELETE FROM audit WHERE ts < datetime('now', 'localtime', ?)", (f"-{days} days",)).rowcount
             db.commit()
             log("Журнал очищен", f"удалено {n} записей старше {days} дней")
-            flash(f"Удалено записей журнала: {n}")
+            flash(_("Удалено записей журнала") + f": {n}")
         return redirect(url_for("logs.database"))
     return render_template("logs_db.html", st=db_stats(), backups=list_backups(), tab="db",
                            last_auto=settings().get("last_auto_backup"))

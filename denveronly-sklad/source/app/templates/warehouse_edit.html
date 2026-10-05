@@ -1,73 +1,95 @@
 {% extends "base.html" %}
-{% block title %}{{ wh.name if wh else 'Новый склад' }}{% endblock %}
+{% block title %}{{ wh.name if wh else _("Новый склад") }}{% endblock %}
 {% block content %}
-<p><a href="{{ url_for('warehouses') }}">← Склады</a></p>
-<h1>{{ wh.name if wh else 'Новый склад' }}</h1>
+<p><a href="{{ url_for('warehouses') }}">← {{ _("Склады") }}</a></p>
+<h1>{{ wh.name if wh else _("Новый склад") }}</h1>
 
 <div class="card">
 <form method="post" class="grid">
-  <label>Название / номер<input name="name" required value="{{ wh.name if wh else '' }}" placeholder="Склад 3"></label>
-  <label>Площадь, м²<input name="area" inputmode="decimal" required value="{{ (wh.area if wh else none)|plain }}"></label>
-  <label>Ставка без ПДВ, грн/м²<input name="rate_bank" inputmode="decimal" value="{{ (wh.rate_bank if wh else none)|plain }}"></label>
-  <label>Ставка с ПДВ, грн/м²<input name="rate_vat" inputmode="decimal" value="{{ (wh.rate_vat if wh else none)|plain }}" placeholder="пусто = без ПДВ + {{ S.vat_rate }}%"></label>
-  <label>Ставка наличка, грн/м²<input name="rate_cash" inputmode="decimal" value="{{ (wh.rate_cash if wh else none)|plain }}" placeholder="пусто = безнал × {{ S.cash_coef }}"></label>
-  <label>Арендатор
-    <select name="tenant_id"><option value="">— свободен —</option>
+  <label>{{ _("Название / номер") }}<input name="name" required value="{{ wh.name if wh else '' }}" placeholder="{{ _("Склад 3") }}"></label>
+  <label>{{ _("Площадь, м²") }}<input name="area" inputmode="decimal" required value="{{ (wh.area if wh else none)|plain }}"></label>
+  <label>{{ _("Цена за м² в месяц, грн") }}<input name="price_m2" id="price_m2" inputmode="decimal" value="{{ (wh.price_m2 if wh else none)|plain }}"></label>
+  <label>{{ _("Сумма в месяц, грн") }}<input name="price_month" id="price_month" inputmode="decimal" value="{{ (price.total if price else none)|plain }}">
+    <span class="muted">{{ _("Одна цена — в форме оплаты арендатора (для «з ПДВ» — с ПДВ). Можно ввести за м² или сразу за месяц.") }}</span></label>
+  <label>{{ _("Арендатор") }}
+    <select name="tenant_id"><option value="">— {{ _("свободен") }} —</option>
       {% for t in tenants %}<option value="{{ t.id }}" {{ 'selected' if wh and wh.tenant_id == t.id }}>{{ t.name }}</option>{% endfor %}
     </select></label>
-  <label>Цвет на карте
+  <label>{{ _("Цвет на карте") }}
     <span class="row"><input type="color" name="color" style="width:60px;padding:2px" value="{{ wh.color if wh and wh.color else '#2f7fc1' }}">
-    <label class="check"><input type="checkbox" name="use_color" value="1" {{ 'checked' if wh and wh.color }}> свой цвет</label></span>
-    <span class="muted">без галочки: зелёный — сдан, серый — свободен</span></label>
-  <label class="full">Заметка<textarea name="note" rows="2">{{ wh.note if wh else '' }}</textarea></label>
+    <label class="check"><input type="checkbox" name="use_color" value="1" {{ 'checked' if wh and wh.color }}> {{ _("свой цвет") }}</label></span>
+    <span class="muted">{{ _("без галочки: зелёный — сдан, серый — свободен") }}</span></label>
+  <label class="full">{{ _("Заметка") }}<textarea name="note" rows="2">{{ wh.note if wh else '' }}</textarea></label>
   <div class="full row">
-    <button>Сохранить</button>
+    <button>{{ _("Сохранить") }}</button>
     {% if wh %}<span class="spacer"></span>
-    <button class="danger" name="delete" value="1" onclick="return confirm('Удалить склад вместе со счётчиками и показаниями?')">Удалить</button>{% endif %}
+    <button class="danger" name="delete" value="1" onclick="return confirm({{ _("Удалить склад вместе со счётчиками и показаниями?")|tojson|forceescape }})">{{ _("Удалить") }}</button>{% endif %}
   </div>
 </form>
 </div>
 
-{% if prices %}
+{% if wh %}
 <div class="card">
-  <h2 style="margin-top:0">Стоимость аренды в месяц</h2>
-  <div class="prices">
-    <div class="price"><small>Безнал</small><b>{{ money(prices.bank.total) }} грн</b><small>{{ money(prices.bank.rate) }} грн/м²</small></div>
-    <div class="price"><small>Безнал с ПДВ {{ S.vat_rate }}%</small><b>{{ money(prices.bank_vat.total) }} грн</b><small>{{ money(prices.bank_vat.rate) }} грн/м² · ПДВ {{ money(prices.bank_vat.vat) }}</small></div>
-    <div class="price"><small>Наличные</small><b>{{ money(prices.cash.total) }} грн</b><small>{{ money(prices.cash.rate) }} грн/м²</small></div>
+  <h2 style="margin-top:0">{{ _("Стоимость аренды в месяц") }}</h2>
+  <div class="prices one">
+    <div class="price"><small>{{ PAYMENT_TYPES[pt] if pt else _("свободен — цена для предложения") }}</small>
+      <b>{{ money(price.total) }} {{ _("грн") }}</b>
+      <small>{{ money(price.rate) }} {{ _("грн/м²") }}{% if price.vat %} · {{ _("в т.ч. ПДВ") }} {{ money(price.vat) }}{% endif %}</small></div>
   </div>
+  {% if history %}
+  <h3 class="phh">{{ _("История цены") }}</h3>
+  <table class="kv hist">
+    {% for h in history %}<tr><td class="muted">{{ h.changed_at }}</td>
+      <td class="n">{{ money(h.old_price) if h.old_price is not none else '—' }} → <b>{{ money(h.new_price) }}</b> {{ _("грн/м²") }}</td>
+      <td class="muted">{{ h.tenant_name or _("свободен") }}{% if h.payment_type %} · {{ PAYMENT_TYPES[h.payment_type] }}{% endif %}</td>
+      <td class="muted">{{ h.username or '' }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
 </div>
 
 <div class="card" id="photos">
-  <h2 style="margin-top:0">Фото объекта</h2>
+  <h2 style="margin-top:0">{{ _("Фото объекта") }}</h2>
   <div data-gallery data-wid="{{ wh.id }}" data-photos='{{ photos_for(wh.id)|tojson }}'></div>
 </div>
 
 <div class="card" id="meters">
-  <h2 style="margin-top:0">Счётчики</h2>
+  <h2 style="margin-top:0">{{ _("Счётчики") }}</h2>
   {% for m in meters %}
   <form method="post" action="{{ url_for('meter_save', wid=wh.id) }}" class="grid" style="padding:10px 0;border-bottom:1px solid var(--line)">
     <input type="hidden" name="meter_id" value="{{ m.id }}">
-    <label>Услуга<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}" {{ 'selected' if m.service_id == sv.id }}>{{ sv.name }}</option>{% endfor %}</select></label>
-    <label>Номер счётчика<input name="serial" value="{{ m.serial or '' }}"></label>
-    <label>Коэффициент<input name="coef" inputmode="decimal" value="{{ m.coef }}"></label>
-    <label>Начальное показание<input name="initial_value" inputmode="decimal" value="{{ m.initial_value }}"></label>
+    <label>{{ _("Услуга") }}<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}" {{ 'selected' if m.service_id == sv.id }}>{{ sv.name }}</option>{% endfor %}</select></label>
+    <label>{{ _("Номер счётчика") }}<input name="serial" value="{{ m.serial or '' }}"></label>
+    <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="{{ m.coef }}"></label>
+    <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="{{ m.initial_value }}"></label>
     <div class="full row">
-      <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if m.active }}> активен</label>
+      <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if m.active }}> {{ _("активен") }}</label>
       <span class="spacer"></span>
-      <button class="sm ghost">Сохранить</button>
-      <button class="sm danger" name="delete" value="1" onclick="return confirm('Удалить счётчик и все его показания?')">Удалить</button>
+      <button class="sm ghost">{{ _("Сохранить") }}</button>
+      <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить счётчик и все его показания?")|tojson|forceescape }})">{{ _("Удалить") }}</button>
     </div>
   </form>
   {% endfor %}
   <form method="post" action="{{ url_for('meter_save', wid=wh.id) }}" class="grid" style="padding-top:12px">
-    <label>Услуга<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}">{{ sv.name }}</option>{% endfor %}</select></label>
-    <label>Номер счётчика<input name="serial"></label>
-    <label>Коэффициент<input name="coef" inputmode="decimal" value="1"></label>
-    <label>Начальное показание<input name="initial_value" inputmode="decimal" value="0"></label>
-    <div class="full"><button class="sm">+ Добавить счётчик</button></div>
+    <label>{{ _("Услуга") }}<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}">{{ sv.name }}</option>{% endfor %}</select></label>
+    <label>{{ _("Номер счётчика") }}<input name="serial"></label>
+    <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="1"></label>
+    <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="0"></label>
+    <div class="full"><button class="sm">+ {{ _("Добавить счётчик") }}</button></div>
   </form>
-  <p class="muted">Нет нужной услуги (газ, отопление…)? Добавьте её в <a href="{{ url_for('services_page') }}">Показания → Услуги</a> с типом «по счётчику». Начальное показание используется, пока нет показаний за предыдущий месяц. Коэффициент — для трансформаторов тока (обычно 1).</p>
+  <p class="muted">{{ _("Нет нужной услуги (газ, отопление…)? Добавьте её в") }} <a href="{{ url_for('services_page') }}">{{ _("Показания → Услуги") }}</a> {{ _("с типом «по счётчику». Начальное показание используется, пока нет показаний за предыдущий месяц. Коэффициент — для трансформаторов тока (обычно 1") }}).</p>
 </div>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+// ціна за м² <-> сума за місяць
+(() => {
+  const pnum = s => parseFloat(String(s).replace(',', '.').replace(/\s/g, ''));
+  const r2 = x => Math.round(x * 100) / 100;
+  const area = document.querySelector('input[name=area]'), rate = document.getElementById('price_m2'), month = document.getElementById('price_month');
+  const fromRate = () => { const a = pnum(area.value), v = pnum(rate.value); if (!isNaN(a) && !isNaN(v)) month.value = r2(a * v); };
+  rate.addEventListener('input', fromRate); area.addEventListener('input', fromRate);
+  month.addEventListener('input', () => { const a = pnum(area.value), v = pnum(month.value); if (a && !isNaN(v)) rate.value = Math.round(v / a * 10000) / 10000; });
+})();
+</script>
 {% endblock %}

@@ -5,6 +5,7 @@ import uuid
 from flask import (Blueprint, abort, flash, g, jsonify, redirect, request, send_from_directory, url_for)
 
 from audit import log
+from i18n import _
 from db import PHOTOS_DIR, get_db
 
 bp = Blueprint("photos", __name__)
@@ -32,7 +33,7 @@ def _save(wid, f):
     from PIL import Image, ImageOps
     ext = os.path.splitext(f.filename or "")[1].lower()
     if ext and ext not in ALLOWED:
-        raise ValueError(f"{f.filename}: не изображение")
+        raise ValueError(f"{f.filename}: " + _("не изображение"))
     folder = os.path.join(PHOTOS_DIR, str(wid))
     os.makedirs(folder, exist_ok=True)
     name = uuid.uuid4().hex
@@ -40,7 +41,7 @@ def _save(wid, f):
         im = Image.open(f.stream)
         im = ImageOps.exif_transpose(im)          # поворот за EXIF (фото з телефона)
     except Exception:
-        raise ValueError(f"{f.filename}: не удалось открыть как изображение")
+        raise ValueError(f"{f.filename}: " + _("не удалось открыть как изображение"))
     if im.mode not in ("RGB", "L"):
         bg = Image.new("RGB", im.size, "white")
         bg.paste(im.convert("RGBA"), mask=im.convert("RGBA").split()[-1])
@@ -77,7 +78,7 @@ def upload(wid):
         log("Фото загружены", f"{wh['name']}: {ok} шт.")
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify(ok=ok, errors=errors, photos=photos_for(wid))
-    flash(f"Загружено фото: {ok}" + (f". Ошибки: {'; '.join(errors)}" if errors else ""))
+    flash(_("Загружено фото") + f": {ok}" + (f". {_('Ошибки')}: {'; '.join(errors)}" if errors else ""))
     return redirect(_back(wid))
 
 

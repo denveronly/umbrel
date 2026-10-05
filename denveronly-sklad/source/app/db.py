@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS tenants (
     edrpou TEXT,
     iban TEXT,
     address TEXT,
+    party_type TEXT NOT NULL DEFAULT 'company',  -- company (юрособа, діє директор) | person (фізособа)
+    passport_series TEXT,
+    passport_number TEXT,
+    passport_issued TEXT,                        -- ким і коли виданий
     contact TEXT,                                -- ПІБ директора / підписанта в акті
     director_position TEXT,                      -- посада підписанта (Директор)
     basis TEXT,                                  -- діє на підставі (Статуту / виписки з ЄДР)
@@ -71,6 +75,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
     rate_bank REAL NOT NULL DEFAULT 0,           -- грн/м² без ПДВ
     rate_vat REAL,                               -- грн/м² з ПДВ (NULL = без ПДВ × (1+ПДВ))
     rate_cash REAL,                              -- грн/м² готівка (NULL = з коефіцієнта)
+    price_m2 REAL,                               -- ЄДИНА ціна за м²/міс у формі оплати орендаря (для «з ПДВ» — з ПДВ)
     tenant_id INTEGER REFERENCES tenants(id) ON DELETE SET NULL,
     polygon TEXT,
     color TEXT,
@@ -170,6 +175,24 @@ CREATE TABLE IF NOT EXISTS warehouse_photos (
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- історія зміни ціни складу
+CREATE TABLE IF NOT EXISTS price_history (
+    id INTEGER PRIMARY KEY,
+    warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+    old_price REAL,
+    new_price REAL,
+    tenant_name TEXT,
+    payment_type TEXT,
+    username TEXT,
+    changed_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+-- курс USD (НБУ)
+CREATE TABLE IF NOT EXISTS fx_rates (
+    date TEXT PRIMARY KEY,                       -- YYYY-MM-DD
+    usd REAL NOT NULL
+);
+
 -- журнал дій
 CREATE TABLE IF NOT EXISTS audit (
     id INTEGER PRIMARY KEY,
@@ -228,9 +251,11 @@ def close_db(_e=None):
 
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
-    "warehouses": {"rate_vat": "REAL"},
+    "warehouses": {"rate_vat": "REAL", "price_m2": "REAL"},
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
-                "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT"},
+                "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
+                "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
+                "passport_issued": "TEXT"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT"},
     "acts": {"company_id": "INTEGER"},
     "meters": {"service_id": "INTEGER"},
@@ -263,6 +288,18 @@ def _migrate(con):
     for t in con.execute("SELECT id, contact, phone FROM tenants WHERE (COALESCE(contact,'')<>'' OR "
                          "COALESCE(phone,'')<>'') AND id NOT IN (SELECT tenant_id FROM tenant_contacts)").fetchall():
         con.execute("INSERT INTO tenant_contacts(tenant_id, name, phone) VALUES (?,?,?)", tuple(t))
+
+    # одна ціна складу (з версії 1.1): беремо ставку, що відповідає формі оплати орендаря
+    st = dict(con.execute("SELECT key, value FROM settings").fetchall())
+    vat = float(st.get("vat_rate") or 20) / 100
+    coef = float(st.get("cash_coef") or 1)
+    for w in con.execute("SELECT w.id, w.rate_bank, w.rate_vat, w.rate_cash, t.payment_type FROM warehouses w "
+                         "LEFT JOIN tenants t ON t.id=w.tenant_id WHERE w.price_m2 IS NULL").fetchall():
+        wid, rb, rv, rc, pt = w
+        rb = rb or 0
+        price = (rv if rv is not None else rb * (1 + vat)) if pt == "bank_vat" else \
+                (rc if rc is not None else rb * coef) if pt == "cash" else rb
+        con.execute("UPDATE warehouses SET price_m2=? WHERE id=?", (round(price, 4), wid))
 
     # послуги за замовчуванням (тільки для нової бази)
     if not con.execute("SELECT 1 FROM services").fetchone():

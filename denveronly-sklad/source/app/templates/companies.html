@@ -1,30 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Компании{% endblock %}
+{% block title %}{{ _("Компании") }}{% endblock %}
 {% block content %}
-<h1>Настройки</h1>
+<h1>{{ _("Настройки") }}</h1>
 {% include "_settings_tabs.html" %}
-<p class="muted">Компании, на которые идут деньги от аренды. В карточке контакта выбирается, какой компании он платит, — акт печатается с её реквизитами и в её нумерации. Задайте каждой компании свой префикс номера акта, чтобы номера не пересекались.</p>
+<p class="muted">{{ _("Компании, на которые идут деньги от аренды. В карточке контакта выбирается, какой компании он платит, — акт печатается с её реквизитами и в её нумерации. Задайте каждой компании свой префикс номера акта, чтобы номера не пересекались") }}.</p>
 
 {% macro company_form(c) %}
 <form method="post" class="grid">
   {% if c %}<input type="hidden" name="cid" value="{{ c.id }}">{% endif %}
-  <label class="full">Название ТОВ / ФОП (как в акте)<input name="name" required value="{{ c.name if c else '' }}" placeholder="ТОВ «Склади» / ФОП Петренко П.П."></label>
-  <label>ЄДРПОУ / РНОКПП<input name="edrpou" value="{{ c.edrpou or '' if c else '' }}"></label>
+  <label class="full">{{ _("Название ТОВ / ФОП (как в акте") }})<input name="name" required value="{{ c.name if c else '' }}" placeholder="{{ _("ТОВ «Склади» / ФОП Петренко П.П.") }}"></label>
+  <label>{{ _("ЄДРПОУ / РНОКПП") }}<input name="edrpou" value="{{ c.edrpou or '' if c else '' }}"></label>
   <label>IBAN<input name="iban" value="{{ c.iban or '' if c else '' }}"></label>
-  <label>Банк<input name="bank" value="{{ c.bank or '' if c else '' }}"></label>
-  <label>ФИО директора (подписант)<input name="signer" value="{{ c.signer or '' if c else '' }}" placeholder="Дубінін Денис …"></label>
-  <label>Должность<input name="signer_position" list="positions" value="{{ (c.signer_position or '') if c else 'Директор' }}"></label>
-  <label>Действует на основании<input name="basis" list="bases" value="{{ (c.basis or '') if c else 'Статуту' }}"></label>
-  <label class="full">Адрес<input name="address" value="{{ c.address or '' if c else '' }}"></label>
-  <label>Город (в шапке акта)<input name="city" value="{{ c.city or '' if c else '' }}" placeholder="м. Київ"></label>
-  <label>Префикс номера акта<input name="act_prefix" value="{{ c.act_prefix or '' if c else '' }}" placeholder="А-"></label>
-  <label class="full">Заметка<input name="note" value="{{ c.note or '' if c else '' }}"></label>
+  <label>{{ _("Банк") }}<input name="bank" value="{{ c.bank or '' if c else '' }}"></label>
+  <label>{{ _("ФИО директора (подписант") }})<input name="signer" value="{{ c.signer or '' if c else '' }}" placeholder="{{ _("Дубінін Денис …") }}"></label>
+  <label>{{ _("Должность") }}<input name="signer_position" list="positions" value="{{ (c.signer_position or '') if c else 'Директор' }}"></label>
+  <label>{{ _("Действует на основании") }}<input name="basis" list="bases" value="{{ (c.basis or '') if c else 'Статуту' }}"></label>
+  <label class="full">{{ _("Адрес") }}<input name="address" value="{{ c.address or '' if c else '' }}"></label>
+  <label>{{ _("Город (в шапке акта") }})<input name="city" value="{{ c.city or '' if c else '' }}" placeholder="{{ _("м. Київ") }}"></label>
+  <label>{{ _("Префикс номера акта") }}<input name="act_prefix" value="{{ c.act_prefix or '' if c else '' }}" placeholder="{{ _("А-") }}"></label>
+  <label class="full">{{ _("Заметка") }}<input name="note" value="{{ c.note or '' if c else '' }}"></label>
   <div class="full row">
-    <label class="check"><input type="checkbox" name="vat_payer" value="1" {{ 'checked' if c and c.vat_payer }}> платник ПДВ</label>
-    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if not c or c.active }}> активна</label>
+    <label class="check"><input type="checkbox" name="vat_payer" value="1" {{ 'checked' if c and c.vat_payer }}> {{ _("платник ПДВ") }}</label>
+    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if not c or c.active }}> {{ _("активна") }}</label>
     <span class="spacer"></span>
-    <button class="sm">{{ 'Сохранить' if c else '+ Добавить компанию' }}</button>
-    {% if c %}<button class="sm danger" name="delete" value="1" onclick="return confirm('Удалить компанию {{ c.name }}?')">Удалить</button>{% endif %}
+    <button class="sm">{{ _("Сохранить") if c else _("+ Добавить компанию") }}</button>
+    {% if c %}<button class="sm danger" name="delete" value="1" onclick="return confirm({{ (_("Удалить компанию") ~ ' ' ~ c.name ~ '?')|tojson|forceescape }})">{{ _("Удалить") }}</button>{% endif %}
   </div>
 </form>
 {% endmacro %}
@@ -33,19 +33,19 @@
 <details class="card cocard" {{ 'open' if rows|length == 1 }}>
   <summary class="row">
     <b>{{ c.name }}</b>
-    {% if c.vat_payer %}<span class="badge">платник ПДВ</span>{% else %}<span class="badge off">без ПДВ</span>{% endif %}
-    {% if not c.active %}<span class="badge off">отключена</span>{% endif %}
+    {% if c.vat_payer %}<span class="badge">{{ _("платник ПДВ") }}</span>{% else %}<span class="badge off">{{ _("без ПДВ") }}</span>{% endif %}
+    {% if not c.active %}<span class="badge off">{{ _("отключена") }}</span>{% endif %}
     <span class="spacer"></span>
-    <span class="muted">{{ c.used }} контакт(ов){% if c.act_prefix %} · акты {{ c.act_prefix }}…{% endif %}</span>
+    <span class="muted">{{ c.used }} {{ _("контакт(ов") }}){% if c.act_prefix %} · {{ _("акты") }} {{ c.act_prefix }}…{% endif %}</span>
   </summary>
   <div style="margin-top:12px">{{ company_form(c) }}</div>
 </details>
 {% else %}
-<div class="warn" style="margin-bottom:12px">Компаний пока нет — добавьте хотя бы одну, иначе в актах не будет реквизитов арендодателя.</div>
+<div class="warn" style="margin-bottom:12px">{{ _("Компаний пока нет — добавьте хотя бы одну, иначе в актах не будет реквизитов арендодателя") }}.</div>
 {% endfor %}
 
-<h2>Новая компания</h2>
+<h2>{{ _("Новая компания") }}</h2>
 <div class="card">{{ company_form(None) }}</div>
-<datalist id="positions"><option>Директор</option><option>Генеральний директор</option><option>ФОП</option></datalist>
-<datalist id="bases"><option>Статуту</option><option>виписки з ЄДР</option><option>довіреності №</option></datalist>
+<datalist id="positions"><option>{{ _("Директор") }}</option><option>{{ _("Генеральний директор") }}</option><option>{{ _("ФОП") }}</option></datalist>
+<datalist id="bases"><option>{{ _("Статуту") }}</option><option>{{ _("виписки з ЄДР") }}</option><option>{{ _("довіреності №") }}</option></datalist>
 {% endblock %}

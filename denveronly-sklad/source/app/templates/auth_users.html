@@ -1,41 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Пользователи{% endblock %}
+{% block title %}{{ _("Пользователи") }}{% endblock %}
 {% block content %}
-<h1>Настройки</h1>
+<h1>{{ _("Настройки") }}</h1>
 {% include "_settings_tabs.html" %}
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
-<p class="muted"><b>Администратор</b> — всё, включая настройки, пользователей и бэкап. <b>Оператор</b> — склады, арендаторы, показания, тарифы и акты.</p>
+<p class="muted"><b>{{ _("Администратор") }}</b> — {{ _("всё, включая настройки, пользователей и бэкап") }}. <b>{{ _("Оператор") }}</b> — {{ _("склады, арендаторы, показания, тарифы и акты") }}.</p>
 
 <div class="tablewrap"><table>
-  <thead><tr><th>Пользователь</th><th>Роль</th><th>Последний вход</th><th></th></tr></thead>
+  <thead><tr><th>{{ _("Пользователь") }}</th><th>{{ _("Роль") }}</th><th>{{ _("Последний вход") }}</th><th></th></tr></thead>
   <tbody>
   {% for u in rows %}
     <tr style="{{ 'opacity:.55' if not u.active }}">
       <td><b>{{ u.username }}</b>{% if u.full_name %}<br><span class="muted">{{ u.full_name }}</span>{% endif %}
-        {% if u.id == current_user.id %} <span class="badge">это вы</span>{% endif %}
-        {% if not u.active %} <span class="badge off">отключён</span>{% endif %}</td>
+        {% if u.id == current_user.id %} <span class="badge">{{ _("это вы") }}</span>{% endif %}
+        {% if not u.active %} <span class="badge off">{{ _("отключён") }}</span>{% endif %}</td>
       <td>
         <form method="post" class="row">
           <input type="hidden" name="uid" value="{{ u.id }}"><input type="hidden" name="action" value="role">
           <select name="role" onchange="this.form.submit()" style="width:auto">
-            {% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if u.role == k }}>{{ v }}</option>{% endfor %}
+            {% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if u.role == k }}>{{ _(v) }}</option>{% endfor %}
           </select>
         </form>
       </td>
       <td class="muted">{{ u.last_login or '—' }}</td>
       <td>
-        <details class="inline"><summary>Сменить пароль</summary>
+        <details class="inline"><summary>{{ _("Сменить пароль") }}</summary>
           <form method="post" class="row">
             <input type="hidden" name="uid" value="{{ u.id }}"><input type="hidden" name="action" value="reset">
-            <input type="password" name="password" minlength="{{ MIN_PASSWORD }}" required placeholder="новый пароль" autocomplete="new-password" style="width:170px">
+            <input type="password" name="password" minlength="{{ MIN_PASSWORD }}" required placeholder="{{ _("новый пароль") }}" autocomplete="new-password" style="width:170px">
             <button class="sm">OK</button>
           </form>
         </details>
         {% if u.id != current_user.id %}
         <form method="post" class="row" style="margin-top:6px">
           <input type="hidden" name="uid" value="{{ u.id }}">
-          <button class="sm ghost" name="action" value="toggle">{{ 'Отключить' if u.active else 'Включить' }}</button>
-          <button class="sm danger" name="action" value="delete" onclick="return confirm('Удалить пользователя {{ u.username }}?')">Удалить</button>
+          <button class="sm ghost" name="action" value="toggle">{{ _("Отключить") if u.active else _("Включить") }}</button>
+          <button class="sm danger" name="action" value="delete" onclick="return confirm({{ (_("Удалить пользователя") ~ ' ' ~ u.username ~ '?')|tojson|forceescape }})">{{ _("Удалить") }}</button>
         </form>
         {% endif %}
       </td>
@@ -44,14 +44,14 @@
   </tbody>
 </table></div>
 
-<h2>Добавить пользователя</h2>
+<h2>{{ _("Добавить пользователя") }}</h2>
 <form method="post" class="card grid">
   <input type="hidden" name="action" value="create">
-  <label>Логин<input name="username" required autocomplete="off"></label>
-  <label>Имя<input name="full_name"></label>
-  <label>Роль<select name="role">{% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'user' }}>{{ v }}</option>{% endfor %}</select></label>
-  <label>Пароль<input type="password" name="password" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
-  <label>Пароль ещё раз<input type="password" name="password2" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
-  <div class="full"><button>Создать</button></div>
+  <label>{{ _("Логин") }}<input name="username" required autocomplete="off"></label>
+  <label>{{ _("Имя") }}<input name="full_name"></label>
+  <label>{{ _("Роль") }}<select name="role">{% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'user' }}>{{ _(v) }}</option>{% endfor %}</select></label>
+  <label>{{ _("Пароль") }}<input type="password" name="password" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
+  <label>{{ _("Пароль ещё раз") }}<input type="password" name="password2" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
+  <div class="full"><button>{{ _("Создать") }}</button></div>
 </form>
 {% endblock %}

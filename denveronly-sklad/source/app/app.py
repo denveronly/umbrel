@@ -4,7 +4,7 @@ import re
 from datetime import date
 from functools import wraps
 
-from flask import (Flask, abort, flash, jsonify, redirect, render_template, request,
+from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request,
                    send_file, send_from_directory, url_for)
 
 import auth
@@ -13,18 +13,23 @@ import documents
 from db import (DATA_DIR, PAYMENT_TYPES, SERVICE_MODES, close_db, companies, get_db, init_db, price_for,
                 services, set_setting, settings)
 import audit
+import i18n
 import backup
+import economics
 import photos
 from audit import log
+from i18n import _
 
 app = Flask(__name__)
 app.teardown_appcontext(close_db)
 UPLOADS = os.path.join(DATA_DIR, "uploads")
 init_db()
 auth.init_app(app)
+i18n.init_app(app)
 backup.init_app(app)
 audit.init_app(app)
 photos.init_app(app)
+economics.init_app(app)
 
 
 @app.template_filter("plain")
@@ -66,7 +71,7 @@ def fnum(name, default=None):
     try:
         return float(v)
     except ValueError:
-        abort(400, f"Некорректное число в поле {name}")
+        abort(400, _("Некорректное число в поле") + f" {name}")
 
 
 # ---------------- карта ----------------
@@ -87,7 +92,7 @@ def api_warehouses():
                         "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name"):
         d = dict(w)
         d["polygon"] = json.loads(w["polygon"]) if w["polygon"] else None
-        d["prices"] = calc.rent_prices(w, s)
+        d["price"] = calc.rent_price(w, w["payment_type"], s)
         d["photos"] = photos.photos_for(w["id"])
         out.append(d)
     return jsonify(out)
@@ -109,13 +114,39 @@ def uploads(name):
 
 # ---------------- склады ----------------
 
+def set_price(wid, new_price):
+    """Записати нову ціну складу (за м²/міс) та зберегти зміну в історії."""
+    db = get_db()
+    w = db.execute("SELECT w.price_m2, w.name, t.name AS tname, t.payment_type FROM warehouses w "
+                   "LEFT JOIN tenants t ON t.id=w.tenant_id WHERE w.id=?", (wid,)).fetchone()
+    old = w["price_m2"] if w else None
+    if new_price is None or (old is not None and abs((old or 0) - new_price) < 1e-9):
+        return False
+    db.execute("UPDATE warehouses SET price_m2=? WHERE id=?", (new_price, wid))
+    db.execute("INSERT INTO price_history(warehouse_id, old_price, new_price, tenant_name, payment_type, username) "
+               "VALUES (?,?,?,?,?,?)", (wid, old, new_price, w["tname"] if w else None, w["payment_type"] if w else None,
+                                         g.user["username"] if g.get("user") else None))
+    log("Цена склада изменена", f"{w['name'] if w else wid}: {calc.fmt_money(old or 0)} → {calc.fmt_money(new_price)} грн/м²",
+        commit=False)
+    return True
+
+
+def form_price(prefix=""):
+    """Ціна за м² з форми: або явно за м², або з суми за місяць ÷ площа."""
+    rate = fnum(prefix + "price_m2")
+    month = fnum(prefix + "price_month")
+    area = fnum(prefix + "area_hint") or fnum(prefix + "area")
+    if rate is None and month is not None and area:
+        rate = round(month / area, 4)
+    return rate
+
 @app.route("/warehouses")
 def warehouses():
     db = get_db()
     s = settings()
     rows = db.execute("SELECT w.*, t.name AS tenant_name, t.payment_type FROM warehouses w "
                       "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name").fetchall()
-    items = [(w, calc.rent_prices(w, s)) for w in rows]
+    items = [(w, calc.rent_price(w, w["payment_type"], s)) for w in rows]
     tot = {"area": sum(w["area"] for w in rows),
            "rented": sum(w["area"] for w in rows if w["tenant_id"])}
     return render_template("warehouses.html", items=items, tot=tot)
@@ -133,27 +164,32 @@ def warehouse_edit(wid=None):
             photos.remove_warehouse_photos(wid)
             db.execute("DELETE FROM warehouses WHERE id=?", (wid,))
             db.commit()
-            flash("Склад удалён")
+            flash(_("Склад удалён"))
             return redirect(url_for("warehouses"))
-        vals = (request.form["name"].strip(), fnum("area", 0), fnum("rate_bank", 0), fnum("rate_vat"), fnum("rate_cash"),
-                request.form.get("tenant_id") or None,
+        vals = (request.form["name"].strip(), fnum("area", 0), request.form.get("tenant_id") or None,
                 request.form.get("color") if request.form.get("use_color") else None,
                 request.form.get("note", "").strip())
         if wh:
-            db.execute("UPDATE warehouses SET name=?, area=?, rate_bank=?, rate_vat=?, rate_cash=?, tenant_id=?, "
-                       "color=?, note=? WHERE id=?", vals + (wid,))
+            db.execute("UPDATE warehouses SET name=?, area=?, tenant_id=?, color=?, note=? WHERE id=?", vals + (wid,))
         else:
-            wid = db.execute("INSERT INTO warehouses(name, area, rate_bank, rate_vat, rate_cash, tenant_id, color, note) "
-                             "VALUES (?,?,?,?,?,?,?,?)", vals).lastrowid
+            wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note) VALUES (?,?,?,?,?)",
+                             vals).lastrowid
+        set_price(wid, form_price())
         db.commit()
-        flash("Сохранено")
+        flash(_("Сохранено"))
         return redirect(url_for("warehouse_edit", wid=wid))
     tenants = db.execute("SELECT id, name FROM tenants WHERE active=1 ORDER BY name").fetchall()
     meters = db.execute("SELECT m.*, s.name AS svc_name FROM meters m LEFT JOIN services s ON s.id=m.service_id "
                         "WHERE warehouse_id=? ORDER BY s.sort", (wid,)).fetchall() if wid else []
-    prices = calc.rent_prices(wh) if wh else None
-    return render_template("warehouse_edit.html", wh=wh, tenants=tenants, meters=meters, prices=prices,
-                           meter_services=services(mode="meter"))
+    pt = None
+    if wh and wh["tenant_id"]:
+        r = db.execute("SELECT payment_type FROM tenants WHERE id=?", (wh["tenant_id"],)).fetchone()
+        pt = r["payment_type"] if r else None
+    price = calc.rent_price(wh, pt) if wh else None
+    history = db.execute("SELECT * FROM price_history WHERE warehouse_id=? ORDER BY id DESC LIMIT 30",
+                         (wid,)).fetchall() if wid else []
+    return render_template("warehouse_edit.html", wh=wh, tenants=tenants, meters=meters, price=price, pt=pt,
+                           history=history, meter_services=services(mode="meter"))
 
 
 @app.route("/warehouses/<int:wid>/meters", methods=["POST"])
@@ -173,7 +209,7 @@ def meter_save(wid):
                    (wid, request.form.get("service_id", type=int), request.form.get("serial", "").strip(),
                     fnum("coef", 1), fnum("initial_value", 0)))
     db.commit()
-    flash("Счётчики обновлены")
+    flash(_("Счётчики обновлены"))
     return redirect(url_for("warehouse_edit", wid=wid) + "#meters")
 
 
@@ -191,20 +227,17 @@ def tenants():
     for t in rows:
         contacts = db.execute("SELECT * FROM tenant_contacts WHERE tenant_id=? ORDER BY id", (t["id"],)).fetchall()
         whs = db.execute("SELECT * FROM warehouses WHERE tenant_id=? ORDER BY name", (t["id"],)).fetchall()
-        tot = {"bank": 0, "bank_vat": 0, "cash": 0}
-        for w in whs:
-            p = calc.rent_prices(w, st)
-            for k in tot:
-                tot[k] += p[k]["total"]
+        rent = calc.r2(sum(calc.rent_price(w, t["payment_type"], st)["total"] for w in whs))
         hay = " ".join(str(x or "") for x in [t["name"], t["edrpou"], t["contract_no"], t["company_name"]]
                        + [f"{c['name']} {c['phone']}" for c in contacts] + [w["name"] for w in whs]).lower()
         if q and q.lower() not in hay:
             continue
-        items.append({"t": t, "contacts": contacts, "whs": whs, "tot": {k: calc.r2(v) for k, v in tot.items()}})
+        items.append({"t": t, "contacts": contacts, "whs": whs, "rent": rent})
     return render_template("tenants.html", items=items, q=q)
 
 
-TENANT_FIELDS = ["name", "edrpou", "iban", "address", "contact", "director_position", "basis", "payment_type", "contract_no",
+TENANT_FIELDS = ["name", "edrpou", "iban", "address", "party_type", "passport_series", "passport_number",
+                 "passport_issued", "contact", "director_position", "basis", "payment_type", "contract_no",
                  "contract_date", "contract_end", "deposit_date", "deposit_note", "note"]
 
 
@@ -219,10 +252,10 @@ def tenant_edit(tid=None):
         if request.form.get("delete"):
             if db.execute("SELECT 1 FROM acts WHERE tenant_id=?", (tid,)).fetchone():
                 db.execute("UPDATE tenants SET active=0 WHERE id=?", (tid,))
-                flash("У контакта есть акты — он помечен неактивным")
+                flash(_("У контакта есть акты — он помечен неактивным"))
             else:
                 db.execute("DELETE FROM tenants WHERE id=?", (tid,))
-                flash("Контакт удалён")
+                flash(_("Контакт удалён"))
             db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))
             db.commit()
             return redirect(url_for("tenants"))
@@ -241,16 +274,17 @@ def tenant_edit(tid=None):
                            (tid, request.form.get("person_name", "").strip(), request.form.get("person_position", "").strip(),
                             request.form.get("person_phone", "").strip(), request.form.get("person_email", "").strip()))
         db.commit()
-        flash("Сохранено")
+        flash(_("Сохранено"))
         return redirect(url_for("tenant_edit", tid=tid))
 
     st = settings()
     whs = db.execute("SELECT * FROM warehouses WHERE tenant_id=? ORDER BY name", (tid,)).fetchall() if tid else []
-    wh_items = [(w, calc.rent_prices(w, st)) for w in whs]
+    pt = t["payment_type"] if t else None
+    wh_items = [(w, calc.rent_price(w, pt, st)) for w in whs]
     free = db.execute("SELECT * FROM warehouses WHERE tenant_id IS NULL ORDER BY name").fetchall()
     contacts = db.execute("SELECT * FROM tenant_contacts WHERE tenant_id=? ORDER BY id", (tid,)).fetchall() if tid else []
     acts = db.execute("SELECT * FROM acts WHERE tenant_id=? ORDER BY period DESC", (tid,)).fetchall() if tid else []
-    tot = {k: calc.r2(sum(p[k]["total"] for _, p in wh_items)) for k in ("bank", "bank_vat", "cash")}
+    tot = {"total": calc.r2(sum(p["total"] for _w, p in wh_items)), "vat": calc.r2(sum(p["vat"] for _w, p in wh_items))}
     subs = {r[0] for r in db.execute("SELECT service_id FROM tenant_services WHERE tenant_id=?", (tid,))} if tid else set()
     all_svcs = [sv for sv in services() if sv["mode"] != "meter"]
     meter_svcs = db.execute("SELECT DISTINCT s.name FROM meters m JOIN services s ON s.id=m.service_id "
@@ -258,8 +292,7 @@ def tenant_edit(tid=None):
                             (tid,)).fetchall() if tid else []
     return render_template("tenant_edit.html", t=t, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
                            subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs,
-                           tot=tot, companies=companies(), vat=float(st["vat_rate"]),
-                           cash_coef=float(st["cash_coef"]))
+                           tot=tot, companies=companies(), vat=float(st["vat_rate"]))
 
 
 @app.route("/tenants/<int:tid>/contacts", methods=["POST"])
@@ -289,16 +322,14 @@ def tenant_warehouses(tid):
         action, wid = "detach", request.form.get("detach", type=int)
     if action == "attach" and wid:
         db.execute("UPDATE warehouses SET tenant_id=? WHERE id=? AND tenant_id IS NULL", (tid, wid))
-        flash("Склад закреплён")
+        flash(_("Склад закреплён"))
     elif action == "detach" and wid:
         db.execute("UPDATE warehouses SET tenant_id=NULL WHERE id=? AND tenant_id=?", (wid, tid))
-        flash("Склад откреплён и стал свободным")
+        flash(_("Склад откреплён и стал свободным"))
     elif action == "prices":
         for w in db.execute("SELECT id FROM warehouses WHERE tenant_id=?", (tid,)).fetchall():
-            i = w["id"]
-            db.execute("UPDATE warehouses SET rate_bank=?, rate_vat=?, rate_cash=? WHERE id=?",
-                       (fnum(f"rate_bank_{i}", 0), fnum(f"rate_vat_{i}"), fnum(f"rate_cash_{i}"), i))
-        flash("Цены сохранены")
+            set_price(w["id"], form_price(f"w{w['id']}_"))
+        flash(_("Цены сохранены"))
     db.commit()
     return redirect(url_for("tenant_edit", tid=tid) + "#prices")
 
@@ -310,7 +341,7 @@ def tenant_services(tid):
     for sid in request.form.getlist("service_id"):
         db.execute("INSERT INTO tenant_services(tenant_id, service_id) VALUES (?,?)", (tid, int(sid)))
     db.commit()
-    flash("Услуги сохранены")
+    flash(_("Услуги сохранены"))
     return redirect(url_for("tenant_edit", tid=tid) + "#services")
 
 
@@ -329,21 +360,21 @@ def companies_page():
         if request.form.get("delete") and cid:
             used = db.execute("SELECT COUNT(*) FROM tenants WHERE company_id=?", (cid,)).fetchone()[0]
             if used:
-                flash(f"Компания используется в {used} договорах — сначала переназначьте их или отключите компанию")
+                flash(_("Компания используется в {n} договорах — сначала переназначьте их или отключите компанию").format(n=used))
             else:
                 db.execute("DELETE FROM companies WHERE id=?", (cid,))
-                flash("Компания удалена")
+                flash(_("Компания удалена"))
         else:
             vals = [request.form.get(f, "").strip() for f in COMPANY_FIELDS]
             vals += [1 if request.form.get("vat_payer") else 0, 1 if request.form.get("active") else 0]
             cols = COMPANY_FIELDS + ["vat_payer", "active"]
             if not vals[0]:
-                abort(400, "Название обязательно")
+                abort(400, _("Название обязательно"))
             if cid:
                 db.execute(f"UPDATE companies SET {', '.join(c + '=?' for c in cols)} WHERE id=?", vals + [cid])
             else:
                 db.execute(f"INSERT INTO companies({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", vals)
-            flash("Компания сохранена")
+            flash(_("Компания сохранена"))
         db.commit()
         return redirect(url_for("companies_page"))
     rows = db.execute("SELECT c.*, (SELECT COUNT(*) FROM tenants t WHERE t.company_id=c.id AND t.active=1) AS used "
@@ -391,7 +422,7 @@ def readings():
                     n_qty += 1
         db.commit()
         log("Показания сохранены", f"{calc.period_label(period)}: показаний {n_read}, цен {n_price}, количеств {n_qty}")
-        flash(f"Сохранено: показаний {n_read}, цен {n_price}, количеств {n_qty}")
+        flash(_("Сохранено: показаний {a}, цен {b}, количеств {c}").format(a=n_read, b=n_price, c=n_qty))
         return redirect(url_for("readings", period=period))
 
     # цены месяца
@@ -444,11 +475,11 @@ def services_page():
             name = db.execute("SELECT name FROM services WHERE id=?", (sid,)).fetchone()
             used = db.execute("SELECT COUNT(*) FROM meters WHERE service_id=?", (sid,)).fetchone()[0]
             if used:
-                flash(f"У услуги {used} счётчиков — сначала удалите их или просто выключите услугу")
+                flash(_("У услуги {n} счётчиков — сначала удалите их или просто выключите услугу").format(n=used))
             else:
                 db.execute("DELETE FROM services WHERE id=?", (sid,))
                 log("Услуга удалена", name["name"] if name else sid)
-                flash("Услуга удалена")
+                flash(_("Услуга удалена"))
         else:
             mode = request.form.get("mode")
             if mode not in SERVICE_MODES:
@@ -463,7 +494,7 @@ def services_page():
                     db.execute("INSERT OR IGNORE INTO tenant_services(tenant_id, service_id) "
                                "SELECT id, ? FROM tenants WHERE active=1", (sid,))
             log("Услуга сохранена", vals[0])
-            flash("Услуга сохранена")
+            flash(_("Услуга сохранена"))
         db.commit()
         return redirect(url_for("services_page"))
     rows = db.execute("SELECT s.*, (SELECT COUNT(*) FROM meters m WHERE m.service_id=s.id) AS meters, "
@@ -643,7 +674,7 @@ def settings_page():
                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, v))
         db.commit()
         log("Настройки изменены")
-        flash("Настройки сохранены")
+        flash(_("Настройки сохранены"))
         return redirect(url_for("settings_page"))
     return render_template("settings.html")
 
