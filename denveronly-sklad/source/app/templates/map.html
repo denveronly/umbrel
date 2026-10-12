@@ -45,7 +45,7 @@ if (PLAN) L.imageOverlay(PLAN, bounds).addTo(map);
 else L.rectangle(bounds, {color: '#999', weight: 1, dashArray: '4', fill: false}).addTo(map);
 map.fitBounds(bounds);
 
-let whs = [], layers = {}, selected = null, drawing = null;
+let whs = [], layers = {}, selected = null, drawing = null, dots = null;
 
 const colorOf = w => w.color || (w.tenant_id ? getComputedStyle(document.documentElement).getPropertyValue('--rented').trim() || '#1f6f5c' : '#9b978d');
 
@@ -95,6 +95,7 @@ function select(id, zoom = true) {
   const w = whs.find(x => x.id === id); if (!w) return;
   Object.entries(layers).forEach(([k, l]) => l.setStyle({weight: +k === id ? 4 : 2}));
   if (zoom && layers[id]) map.fitBounds(layers[id].getBounds(), {maxZoom: map.getZoom() + 1, padding: [60, 60]});
+  showDots(w);
   const p = w.price;
   document.getElementById('details').innerHTML = `
     <div class="card">
@@ -121,6 +122,37 @@ function select(id, zoom = true) {
   Gallery.render(gal, w.id, w.photos || []);
   gal.addEventListener('photoschange', e => { w.photos = e.detail.photos; renderList(); });
   renderList();
+}
+
+// ---- кнопка «⋯» на контурі вибраного складу: віконце з деталями ----
+function showDots(w) {
+  if (dots) { map.removeLayer(dots); dots = null; }
+  map.closePopup();
+  if (!w || drawing || !w.polygon || w.polygon.length < 3) return;
+  const v = w.polygon.reduce((a, p) => (p[0] + p[1] > a[0] + a[1] ? p : a));     // правий верхній кут контуру
+  dots = L.marker(v, {icon: L.divIcon({className: 'whdots', html: '<span>⋯</span>', iconSize: [28, 22], iconAnchor: [14, 11]}),
+                      zIndexOffset: 1000, title: t('Подробнее о складе'), keyboard: true})
+    .on('click', () => L.popup({className: 'whpop', maxWidth: 300, offset: [0, -8]}).setLatLng(v).setContent(popupHtml(w)).openOn(map))
+    .addTo(map);
+}
+function popupHtml(w) {
+  const p = w.price || {}, cat = CATS.find(c => c.id === w.category_id);
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  return `<b class="whpop-t">${esc(w.name)}</b>${cat ? ` <span class="badge co">${esc(cat.name)}</span>` : ''}
+    <table class="whpop-kv">
+      ${row(t('Площадь'), fmt(w.area, 1) + ' ' + t('м²') + (w.adjacent_area ? ` <span class="muted">+ ${fmt(w.adjacent_area, 0)} ${t('прилег.')}</span>` : ''))}
+      ${row(t('Арендатор'), w.tenant_id ? `<a href="/tenants/${w.tenant_id}">${esc(w.tenant_name)}</a>` : `<span class="badge off">${t('свободен')}</span>`)}
+      ${w.payment_type ? row(t('Форма оплаты'), PT[w.payment_type]) : ''}
+      ${row(t('В месяц'), `<b>${fmt(p.total)}</b> ${t('грн')}${p.vat ? ` <span class="muted">(${t('в т.ч. ПДВ')} ${fmt(p.vat)})</span>` : ''}`)}
+      ${row(t('Цена за м²'), fmt(p.rate) + ' ' + t('грн'))}
+      ${(w.photos || []).length ? row(t('Фото'), (w.photos || []).length) : ''}
+      ${w.note ? row(t('Заметка'), esc(w.note)) : ''}
+    </table>
+    <div class="whpop-btns">
+      <a class="btn sm" href="/warehouses/${w.id}">${t('Карточка склада')}</a>
+      ${w.tenant_id ? `<a class="btn sm ghost" href="/tenants/${w.tenant_id}">${t('Арендатор')}</a>` : ''}
+      <button type="button" class="sm ghost" onclick="map.closePopup(); startDraw(${w.id})">${t('Перерисовать контур')}</button>
+    </div>`;
 }
 
 async function setCat(id, sel) {
@@ -151,6 +183,7 @@ function startDraw(id) {
   document.getElementById('draw-name').textContent = (whs.find(x => x.id === id) || {}).name || '';
   if (layers[id]) layers[id].setStyle({opacity: .25, fillOpacity: .08});
   map.getContainer().style.cursor = 'crosshair';
+  showDots(null);
   drawUi();
 }
 function undoPoint() {
@@ -166,6 +199,7 @@ function cancelDraw() {
   if (layers[drawing.id] && w) layers[drawing.id].setStyle({opacity: 1, fillOpacity: w.tenant_id ? .45 : .2});
   drawing = null; map.getContainer().style.cursor = '';
   drawUi();
+  if (selected) showDots(whs.find(x => x.id === selected));
 }
 async function finishDraw() {
   if (!drawing || drawing.pts.length < 3) { alert(t('Нужно минимум 3 точки')); return; }

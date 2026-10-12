@@ -298,3 +298,18 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .cattabs a small { opacity: .65; font-size: 11px; margin-left: 2px; }
 .cattabs a:not(.on):hover { background: var(--accent-soft); }
 .cattabs { margin: -4px 0 12px; flex-wrap: wrap; }
+/* мапа: кнопка «⋯» на контурі вибраного складу і віконце з деталями */
+.whdots span { display: flex; align-items: center; justify-content: center; width: 28px; height: 22px; border-radius: 11px;
+               background: var(--card); color: var(--ink); border: 1.5px solid var(--accent); font: 700 18px/1 system-ui, sans-serif;
+               letter-spacing: 1px; box-shadow: 0 2px 8px rgba(0,0,0,.3); cursor: pointer; padding-bottom: 6px; }
+.whdots span:hover { background: var(--accent); color: #fff; }
+.whpop .leaflet-popup-content-wrapper, .whpop .leaflet-popup-tip { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.whpop .leaflet-popup-content { margin: 12px 14px; font: 13.5px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.whpop-t { font-size: 15px; }
+.whpop-kv { margin: 8px 0; background: transparent; }
+.whpop-kv td { padding: 3px 0; border: 0; font-size: 13px; vertical-align: top; }
+.whpop-kv td:first-child { color: var(--muted); padding-right: 12px; white-space: nowrap; }
+.whpop-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.whpop-btns .btn { color: #fff; }
+.whpop-btns .btn.ghost { color: var(--accent); }
+.whpop a:not(.btn) { color: var(--accent); }
