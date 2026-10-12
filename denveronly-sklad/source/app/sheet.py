@@ -2,6 +2,7 @@
 три вартості (з ПДВ / без ПДВ / готівка) і ціна за м². Клітинки редагуються прямо в таблиці.
 Також: керування підкатегоріями та вивантаження в .xlsx."""
 import io
+import re
 from datetime import date
 
 from flask import Blueprint, abort, flash, jsonify, redirect, request, send_file, url_for
@@ -15,6 +16,11 @@ bp = Blueprint("sheet", __name__)
 NO_CAT = None
 COST_COLS = ("bank_vat", "bank", "cash")          # порядок колонок: з ПДВ, без ПДВ, готівка
 SUMS = ("area", "adj", "bank_vat", "bank", "cash")
+
+
+def no_key(no):
+    """Природне сортування номерів: 2 < 2.1 < 2.2 < 10; нечислові частини — за алфавітом після чисел."""
+    return tuple((0, int(p), "") if p.isdigit() else (1, 0, p.lower()) for p in re.split(r"[.\-/\s]+", str(no).strip()) if p)
 
 
 def build(q="", cat=None):
@@ -46,6 +52,7 @@ def build(q="", cat=None):
             [t["name"], t["edrpou"], t["contract_no"], t["company_name"], t["note"], t["contact"], t["activity"]]
             if t else []) + ([w["name"], w["note"]] if w else []) + [f"{c['name']} {c['phone']}" for c in cts]).lower()
         r = {"t": t, "w": w, "contacts": cts, "pt": pt, "price": price, "m2": (w["price_m2"] if w else None),
+             "row_no": ((w["row_no"] or "").strip() if w else "") or None,
              "area": (w["area"] or 0) if w else 0, "adj": (w["adjacent_area"] or 0) if w else 0, "hay": hay}
         for k in COST_COLS:
             r[k] = cost if pt == k else 0
@@ -62,9 +69,10 @@ def build(q="", cat=None):
     out = []
     for g in groups.values():
         rows = [r for r in g["rows"] if not ql or ql in r["hay"] or ql in g["name"].lower()]
-        # орендарі за назвою, їхні склади поруч; вільні склади — в кінці групи
-        rows.sort(key=lambda r: (r["t"] is None, (r["t"]["name"].lower() if r["t"] else ""),
-                                 (r["w"]["name"].lower() if r["w"] else "")))
+        # спершу рядки з номером, вписаним вручну (2 < 2.1 < 10), далі решта: орендарі за назвою,
+        # їхні склади поруч, вільні склади — в кінці групи
+        rows.sort(key=lambda r: (r["row_no"] is None, no_key(r["row_no"] or ""), r["t"] is None,
+                                 (r["t"]["name"].lower() if r["t"] else ""), (r["w"]["name"].lower() if r["w"] else "")))
         if not rows and (g["cat"] is None or ql):
             continue
         if cat not in (None, "") and str(g["id"]) != str(cat):       # вкладка підкатегорії
@@ -73,26 +81,43 @@ def build(q="", cat=None):
         g["tot"] = _totals(rows)
         out.append(g)
 
-    # нумерація як у таблиці: 1, 2.1, 2.2, 3… (номер орендаря + номер його складу, якщо складів кілька)
+    # автоматична нумерація для рядків без власного номера: 1, 2.1, 2.2, 3… (номер орендаря + номер складу,
+    # якщо складів кілька); продовжує після найбільшого номера, вписаного вручну, щоб не було повторів
     nwh = {}
     for g in out:
         for r in g["rows"]:
-            if r["t"]:
+            if r["t"] and not r["row_no"]:
                 nwh[r["t"]["id"]] = nwh.get(r["t"]["id"], 0) + 1
-    num, seen, sub = 0, {}, {}
+    manual = [no_key(r["row_no"]) for g in out for r in g["rows"] if r["row_no"]]
+    num = max([k[0][1] for k in manual if k and k[0][0] == 0] or [0])
+    seen, sub = {}, {}
+    # орендар, у якого номер уже вписаний на одному складі (напр. 2.1), — підказка для інших: 2.2, 2.3…
+    for g in out:
+        for r in g["rows"]:
+            k = no_key(r["row_no"]) if r["t"] and r["row_no"] else None
+            if k and k[0][0] == 0 and r["t"]["id"] not in seen:
+                seen[r["t"]["id"]] = k[0][1]
+            if k and len(k) > 1 and k[1][0] == 0:
+                sub[r["t"]["id"]] = max(sub.get(r["t"]["id"], 0), k[1][1])
+    has_manual = set(seen)
     for g in out:
         prev = None
         for r in g["rows"]:
             t = r["t"]
-            if t:
+            if r["row_no"]:
+                r["auto"], r["no"] = "", r["row_no"]
+                r["first"] = not prev or not t or not prev["t"] or prev["t"]["id"] != t["id"]
+            elif t:
                 if t["id"] not in seen:
                     num += 1
                     seen[t["id"]] = num
                 sub[t["id"]] = sub.get(t["id"], 0) + 1
-                r["no"] = f"{seen[t['id']]}.{sub[t['id']]}" if nwh[t["id"]] > 1 else str(seen[t["id"]])
+                r["no"] = f"{seen[t['id']]}.{sub[t['id']]}" if nwh[t["id"]] > 1 or t["id"] in has_manual \
+                    else str(seen[t["id"]])
+                r["auto"] = r["no"]
                 r["first"] = not prev or not prev["t"] or prev["t"]["id"] != t["id"]
             else:
-                r["no"], r["first"] = "", True
+                r["no"], r["auto"], r["first"] = "", "", True
             prev = r
     grand = _totals([r for g in out for r in g["rows"]])
     return out, grand
@@ -154,6 +179,9 @@ def _apply(wid, f, ev):
         db.execute("UPDATE warehouses SET area=? WHERE id=?", (a, wid))
     if "adj" in f:
         db.execute("UPDATE warehouses SET adjacent_area=? WHERE id=?", (_num(f["adj"]), wid))
+    if "no" in f:
+        no = re.sub(r"\s+", " ", str(f["no"] or "")).strip()[:20]
+        db.execute("UPDATE warehouses SET row_no=? WHERE id=?", (no or None, wid))
     w = db.execute("SELECT w.*, t.payment_type, t.name AS tname FROM warehouses w LEFT JOIN tenants t ON t.id=w.tenant_id "
                    "WHERE w.id=?", (wid,)).fetchone()
     if costs and w["tenant_id"]:
@@ -180,7 +208,7 @@ def save():
     per, ev, errors = {}, [], []
     for key, val in (data.get("cells") or {}).items():
         kind, wid, field = (key.split("|") + ["", ""])[:3]       # w|12|area
-        if kind != "w" or not wid.isdigit() or field not in ("tenant", "area", "adj", "m2") + COST_COLS:
+        if kind != "w" or not wid.isdigit() or field not in ("no", "tenant", "area", "adj", "m2") + COST_COLS:
             abort(400)
         per.setdefault(int(wid), {})[field] = val
     for wid, f in per.items():
@@ -211,7 +239,7 @@ def save():
                 wid = w["id"]
                 if cat and not w["category_id"]:
                     db.execute("UPDATE warehouses SET category_id=? WHERE id=?", (cat, wid))
-            f = {k: it[k] for k in ("tenant", "area", "adj", "m2") + COST_COLS if it.get(k) not in (None, "")}
+            f = {k: it[k] for k in ("no", "tenant", "area", "adj", "m2") + COST_COLS if it.get(k) not in (None, "")}
             _apply(wid, f, ev)
         except ValueError as e:
             errors.append(str(e))

@@ -75,7 +75,7 @@
     </tr>
     {% for r in g.rows %}{% set t = r.t %}{% set w = r.w %}
     <tr class="{{ 'tstart' if r.first }} {{ 'free' if not t }}" data-wid="{{ w.id if w else '' }}" data-pt="{{ r.pt or '' }}">
-      <td class="n">{{ r.no }}</td>
+      <td class="n">{% if w %}<input class="rno" data-key="w|{{ w.id }}|no" value="{{ r.row_no or '' }}" placeholder="{{ r.auto }}" autocomplete="off" title="{{ _("№ строки: впишите свой — таблица отсортируется по нему") }}">{% else %}{{ r.no }}{% endif %}</td>
       <td class="who">
         {% if t %}<a href="{{ url_for('tenant_edit', tid=t.id) }}" class="tname">{{ t.name }}</a>
         {% elif w %}<input class="tin" data-key="w|{{ w.id }}|tenant" list="tenant_names" placeholder="{{ _("свободен — впишите арендатора") }}" autocomplete="off">{% endif %}
@@ -104,7 +104,7 @@
   {% endif %}
 </table></div>
 <template id="newrow"><tr class="newrow tstart">
-  <td class="n">＋</td>
+  <td class="n"><input class="rno" data-f="no" placeholder="＋" autocomplete="off"></td>
   <td class="who"><input class="tin" data-f="tenant" list="tenant_names" placeholder="{{ _("Арендатор (новый или из списка)") }}" autocomplete="off">
     <div class="newwh"><input class="tin" data-f="wh" list="free_whs" placeholder="{{ _("Склад (можно позже)") }}" autocomplete="off">
     <select data-f="cat" title="{{ _("Подкатегория") }}"><option value="">{{ _("без подкатегории") }}</option>{% for c in cats %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div></td>

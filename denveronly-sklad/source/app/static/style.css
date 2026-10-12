@@ -313,3 +313,6 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .whpop-btns .btn { color: #fff; }
 .whpop-btns .btn.ghost { color: var(--accent); }
 .whpop a:not(.btn) { color: var(--accent); }
+.sheet input.rno { padding: 4px 4px; }
+.sheet input.rno::placeholder { color: var(--muted); opacity: .75; }
+.sheet input.rno:not(:placeholder-shown) { font-weight: 600; }

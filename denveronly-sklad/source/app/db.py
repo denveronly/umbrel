@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
     tenant_id INTEGER REFERENCES tenants(id) ON DELETE SET NULL,
     category_id INTEGER REFERENCES warehouse_categories(id) ON DELETE SET NULL,
     adjacent_area REAL,                          -- прилегла територія, м² (довідково, в оренду не рахується)
+    row_no TEXT,                                 -- № у таблиці орендарів, вписаний вручну (1, 2.1, 2.2…); сортування
     polygon TEXT,
     color TEXT,
     note TEXT
@@ -304,7 +305,8 @@ def close_db(_e=None):
 
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
-    "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL"},
+    "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
+                   "row_no": "TEXT"},
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
