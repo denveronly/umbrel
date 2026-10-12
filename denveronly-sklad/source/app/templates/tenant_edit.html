@@ -14,6 +14,7 @@
   </div>
   <label class="full"><span class="only-company">{{ _("Название ТОВ / ФОП (как в акте") }})</span><span class="only-person">{{ _("ФИО физлица (как в акте)") }}</span>
     <input name="name" required value="{{ v('name') }}" placeholder="{{ _("ТОВ «Приклад» / ФОП Іваненко Іван Іванович") }}"></label>
+  <label class="full">{{ _("Вид деятельности") }}<input name="activity" value="{{ v('activity') }}" placeholder="{{ _("Производство мебели, продажа мороженого…") }}"></label>
   <label class="only-company">{{ _("ФИО директора (подписант") }})<input name="contact" value="{{ v('contact') }}" placeholder="{{ _("Іваненко Іван Іванович") }}"></label>
   <label class="only-company">{{ _("Должность") }}<input name="director_position" list="positions" value="{{ v('director_position') if t else 'Директор' }}"></label>
   <label class="only-company">{{ _("Действует на основании") }}<input name="basis" list="bases" value="{{ v('basis') if t else 'Статуту' }}"></label>

@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     deposit_date TEXT,
     deposit_note TEXT,
     moved_out TEXT,                              -- дата виїзду (коли зроблено неактивним)
+    activity TEXT,                               -- вид діяльності (виробництво меблів, продаж морозива…)
     note TEXT,
     active INTEGER NOT NULL DEFAULT 1
 );
@@ -307,7 +308,7 @@ MIGRATIONS = {
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
-                "passport_issued": "TEXT", "moved_out": "TEXT"},
+                "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT"},
     "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
     "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT"},

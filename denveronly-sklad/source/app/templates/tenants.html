@@ -35,52 +35,71 @@
   <a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Арендатор") }}</a></div>
 
 {% if view == 'sheet' %}
-<div class="sheetwrap"><table class="sheet">
-  <colgroup><col style="width:3.5%"><col style="width:15%"><col style="width:11%"><col style="width:6.5%"><col style="width:6.5%">
-    <col style="width:11.5%"><col style="width:9%"><col style="width:9.5%"><col style="width:11.5%"><col style="width:8%"><col style="width:8%"></colgroup>
+{% macro cell(key, val, cls='') %}<input class="{{ cls }}" data-key="{{ key }}" value="{{ val }}" inputmode="decimal" autocomplete="off">{% endmacro %}
+<datalist id="tenant_names">{% for n in tenant_names %}<option value="{{ n }}">{% endfor %}</datalist>
+<datalist id="free_whs">{% for w in all_whs if not w.tenant %}<option value="{{ w.name }}">{% endfor %}</datalist>
+<div class="sheetwrap"><table class="sheet" id="sheet">
+  <colgroup><col style="width:5%"><col style="width:31%"><col style="width:9%"><col style="width:9%">
+    <col style="width:11.5%"><col style="width:11.5%"><col style="width:11.5%"><col style="width:10.5%"></colgroup>
   <thead><tr>
-    <th>№</th><th>{{ _("Арендатор") }}</th><th>{{ _("Объект") }}</th><th class="n">{{ _("S, м²") }}</th><th class="n">{{ _("S прилег., м²") }}</th>
-    <th>{{ _("Примечание") }}</th><th>{{ _("Договор") }}</th><th>{{ _("до даты") }}</th><th>{{ _("Контактное лицо") }}</th>
-    <th class="n">{{ _("Стоимость 1") }}<small>{{ _("безнал") }}</small></th><th class="n">{{ _("Стоимость 2") }}<small>{{ _("наличка") }}</small></th>
+    <th>№</th><th>{{ _("Арендатор") }}<small>{{ _("нажмите на название — карточка: IBAN, директор, контакты, договор") }}</small></th>
+    <th class="n">{{ _("Площадь") }}<small>{{ _("м²") }}</small></th><th class="n">{{ _("Прилегающая") }}<small>{{ _("м²") }}</small></th>
+    <th class="n c-bank_vat">{{ _("С ПДВ") }}<small>{{ _("грн/мес") }}</small></th>
+    <th class="n c-bank">{{ _("Без ПДВ") }}<small>{{ _("грн/мес") }}</small></th>
+    <th class="n c-cash">{{ _("Наличка") }}<small>{{ _("грн/мес") }}</small></th>
+    <th class="n">{{ _("Цена за м²") }}<small>{{ _("грн/мес") }}</small></th>
   </tr></thead>
   {% for g in groups %}
-  <tbody>
+  <tbody data-cat="{{ g.id }}">
     <tr class="grp">
-      <td colspan="3" class="gname">{{ g.name }} <small>{{ _("сдано") }} {{ num(g.rented) }} {{ _("из") }} {{ num(g.tot.area) }} {{ _("м²") }}</small></td>
+      <td colspan="2" class="gname">{{ g.name }} <small>{{ _("сдано") }} {{ num(g.tot.rented) }} {{ _("из") }} {{ num(g.tot.area) }} {{ _("м²") }}</small></td>
       <td class="n">{{ num(g.tot.area) }}</td><td class="n">{{ num(g.tot.adj) if g.tot.adj else '' }}</td>
-      <td colspan="4"></td>
-      <td class="n gsum">{{ money(g.tot.bank) }}</td><td class="n gsum">{{ money(g.tot.cash) }}</td>
+      <td class="n gsum">{{ money(g.tot.bank_vat) if g.tot.bank_vat else '' }}</td>
+      <td class="n gsum">{{ money(g.tot.bank) if g.tot.bank else '' }}</td>
+      <td class="n gsum">{{ money(g.tot.cash) if g.tot.cash else '' }}</td>
+      <td class="n" title="{{ _("средняя цена сданных м²") }}">{{ money(g.tot.m2) if g.tot.m2 else '' }}</td>
     </tr>
     {% for r in g.rows %}{% set t = r.t %}{% set w = r.w %}
-    <tr class="{{ 'tstart' if r.first }} {{ 'free' if not t }}">
+    <tr class="{{ 'tstart' if r.first }} {{ 'free' if not t }}" data-wid="{{ w.id if w else '' }}" data-pt="{{ r.pt or '' }}">
       <td class="n">{{ r.no }}</td>
-      <td>{% if t %}<a href="{{ url_for('tenant_edit', tid=t.id) }}" class="tname">{{ t.name }}</a>
-            {% if t.company_name %}<div class="muted">→ {{ t.company_name }}</div>{% endif %}
-          {% else %}<span class="badge off">{{ _("свободен") }}</span>{% endif %}</td>
-      <td>{% if w %}<a href="{{ url_for('warehouse_edit', wid=w.id) }}" class="plain">{{ w.name }}</a>{% if w.note %}<div class="muted">{{ w.note }}</div>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
-      <td class="n">{{ num(r.area) if w else '' }}</td>
-      <td class="n">{{ num(r.adj) if r.adj else '' }}</td>
-      <td>{{ t.note if t and t.note else '' }}</td>
-      <td>{% if t %}{% if t.contract_no %}№ {{ t.contract_no }}{% endif %}{% if t.contract_date %}<div>{{ t.contract_date }}</div>{% endif %}{% endif %}</td>
-      <td>{{ t.contract_end if t and t.contract_end else '' }}</td>
-      <td>{% for c in r.contacts %}<div>{{ c.name }}{% if c.phone %} <a href="tel:{{ c.phone|replace(' ', '') }}">{{ c.phone }}</a>{% endif %}</div>{% endfor %}</td>
-      <td class="n">{% if t %}{{ money(r.bank) if r.bank else '0' }}{% if r.pt == 'bank_vat' and r.bank %}<div class="muted">{{ _("с ПДВ") }}</div>{% endif %}{% endif %}</td>
-      <td class="n">{% if t %}{{ money(r.cash) if r.cash else '0' }}{% endif %}</td>
+      <td class="who">
+        {% if t %}<a href="{{ url_for('tenant_edit', tid=t.id) }}" class="tname">{{ t.name }}</a>
+        {% elif w %}<input class="tin" data-key="w|{{ w.id }}|tenant" list="tenant_names" placeholder="{{ _("свободен — впишите арендатора") }}" autocomplete="off">{% endif %}
+        <div class="muted">{% if w %}<a href="{{ url_for('warehouse_edit', wid=w.id) }}" class="plain">{{ w.name }}</a>{% else %}{{ _("без склада") }}{% endif %}{% if t and (t.activity or t.note) %} · {{ t.activity or t.note }}{% endif %}</div>
+      </td>
+      {% if w %}
+      <td>{{ cell('w|%d|area'|format(w.id), num(r.area), 'area') }}</td>
+      <td>{{ cell('w|%d|adj'|format(w.id), num(r.adj) if r.adj else '', 'adj') }}</td>
+      {% for k in ('bank_vat', 'bank', 'cash') %}<td class="c-{{ k }}">{{ cell('w|%d|%s'|format(w.id, k), money(r[k]) if r[k] else '', 'cost') }}</td>{% endfor %}
+      <td>{{ cell('w|%d|m2'|format(w.id), money(r.m2) if r.m2 else '', 'm2') }}</td>
+      {% else %}<td colspan="6" class="muted"><a href="{{ url_for('tenant_edit', tid=t.id) }}#prices">{{ _("закрепить склад") }}</a></td>{% endif %}
     </tr>
     {% endfor %}
+    <tr class="addrow"><td></td><td colspan="7"><button type="button" class="sm ghost" onclick="addRow(this)">+ {{ _("строка") }}</button></td></tr>
   </tbody>
   {% else %}
-  <tbody><tr><td colspan="11" class="muted">{{ _("Ничего не найдено.") if q else _("Арендаторов пока нет.") }}</td></tr></tbody>
+  <tbody><tr><td colspan="8" class="muted">{{ _("Ничего не найдено.") if q else _("Арендаторов пока нет.") }}</td></tr></tbody>
   {% endfor %}
   {% if groups %}
   <tfoot><tr>
-    <td colspan="3">{{ _("Итого") }} <small class="muted">{{ _("сдано") }} {{ num(grand.rented) }} {{ _("из") }} {{ num(grand.area) }} {{ _("м²") }}</small></td>
-    <td class="n">{{ num(grand.area) }}</td><td class="n">{{ num(grand.adj) if grand.adj else '' }}</td><td colspan="4"></td>
-    <td class="n">{{ money(grand.bank) }}</td><td class="n">{{ money(grand.cash) }}</td>
+    <td colspan="2">{{ _("Итого") }} <small class="muted">{{ _("сдано") }} {{ num(grand.rented) }} {{ _("из") }} {{ num(grand.area) }} {{ _("м²") }}</small></td>
+    <td class="n">{{ num(grand.area) }}</td><td class="n">{{ num(grand.adj) if grand.adj else '' }}</td>
+    <td class="n">{{ money(grand.bank_vat) }}</td><td class="n">{{ money(grand.bank) }}</td><td class="n">{{ money(grand.cash) }}</td>
+    <td class="n" title="{{ _("средняя цена сданных м²") }}">{{ money(grand.m2) if grand.m2 else '' }}</td>
   </tr></tfoot>
   {% endif %}
 </table></div>
-<p class="muted">{{ _("Стоимость — аренда в месяц по складу в форме оплаты арендатора: безнал (с ПДВ и без) — в «Стоимость 1», наличка — в «Стоимость 2». Склад и подкатегория меняются в карточке склада или ниже.") }}</p>
+<template id="newrow"><tr class="newrow tstart">
+  <td class="n">＋</td>
+  <td class="who"><input class="tin" data-f="tenant" list="tenant_names" placeholder="{{ _("Арендатор (новый или из списка)") }}" autocomplete="off">
+    <input class="tin" data-f="wh" list="free_whs" placeholder="{{ _("Склад: свободный из списка или новый") }}" autocomplete="off"></td>
+  <td><input class="area" data-f="area" inputmode="decimal"></td><td><input class="adj" data-f="adj" inputmode="decimal"></td>
+  <td class="c-bank_vat"><input class="cost" data-f="bank_vat" inputmode="decimal"></td><td class="c-bank"><input class="cost" data-f="bank" inputmode="decimal"></td>
+  <td class="c-cash"><input class="cost" data-f="cash" inputmode="decimal"></td><td><input class="m2" data-f="m2" inputmode="decimal"></td>
+</tr></template>
+<div class="savebar"><span class="muted" id="dirtyinfo">{{ _("Клетки редактируются прямо в таблице: Enter или ↑↓ — соседняя строка. Сумму вписывайте в колонку формы оплаты — цена за м² пересчитается сама.") }}</span><span class="spacer"></span>
+  <button type="button" class="ghost" id="undobtn" onclick="location.reload()" hidden>{{ _("Отменить") }}</button>
+  <button type="button" id="savebtn" onclick="saveSheet()" disabled>{{ _("Сохранить") }}</button></div>
 
 <details class="card catbox" id="cats"{{ ' open' if request.args.get('cats') }}>
   <summary><b>{{ _("Подкатегории") }}</b> <span class="muted">({{ cats|length }}): {{ cats|map(attribute='name')|join(', ') }}</span></summary>
@@ -139,3 +158,92 @@
 </table></div>
 {% endif %}
 {% endblock %}
+{% block scripts %}{% if view == 'sheet' %}
+<script>
+(() => {
+const changed = {};                  // 'w|12|area' -> значення
+const pnum = v => { v = String(v || '').replace(/[\s  ]/g, '').replace(',', '.'); return v === '' ? NaN : Number(v); };
+const fmt = (x, d) => isNaN(x) ? '' : x.toLocaleString('uk-UA', {minimumFractionDigits: d, maximumFractionDigits: d}).replace(/ | /g, ' ');
+const COSTS = ['bank_vat', 'bank', 'cash'];
+const PT_NAMES = {{ PAYMENT_TYPES|tojson }};
+
+function mark(inp) {
+  if (inp.closest('tr.newrow')) return refresh();
+  const k = inp.dataset.key;
+  if (inp.value !== inp.dataset.orig) { changed[k] = inp.value; inp.classList.add('dirty'); }
+  else { delete changed[k]; inp.classList.remove('dirty'); }
+  refresh();
+}
+function refresh() {
+  const n = Object.keys(changed).length + document.querySelectorAll('tr.newrow').length;
+  document.getElementById('savebtn').disabled = !n;
+  document.getElementById('undobtn').hidden = !n;
+  document.getElementById('dirtyinfo').textContent = n ? t('Изменено') + ': ' + n : '';
+}
+// перерахунок рядка, як формула в Excel: сума = площа × ціна за м²
+function recalc(tr, src) {
+  const area = pnum(tr.querySelector('input.area')?.value), m2 = tr.querySelector('input.m2');
+  const costs = [...tr.querySelectorAll('input.cost')];
+  let pt = tr.dataset.pt;
+  if (src.classList.contains('cost')) {
+    const col = src.closest('td').className.match(/c-(\w+)/)[1];
+    if (src.value.trim() === '') return;
+    if (pt && col !== pt && !tr.classList.contains('newrow') &&
+        !confirm(t('Сменить форму оплаты арендатора на') + ' «' + PT_NAMES[col] + '»? ' + t('Она одна на все его склады и акты.'))) {
+      src.value = src.dataset.orig || ''; mark(src); return;
+    }
+    tr.dataset.pt = col;
+    costs.forEach(c => { if (c !== src && c.value !== '') { c.value = ''; if (c.dataset.key) { c.classList.remove('dirty'); delete changed[c.dataset.key]; } } });
+    const v = pnum(src.value);
+    if (area > 0 && !isNaN(v)) m2.value = fmt(Math.round(v / area * 10000) / 10000, 2);
+  } else if (src.classList.contains('m2') || src.classList.contains('area')) {
+    const v = pnum(m2.value), cur = costs.find(c => c.closest('td').classList.contains('c-' + (tr.dataset.pt || 'none')));
+    if (cur && area > 0 && !isNaN(v)) cur.value = fmt(Math.round(area * v * 100) / 100, 2);
+  }
+}
+function wire(inp) {
+  inp.dataset.orig = inp.value;
+  inp.addEventListener('input', () => { recalc(inp.closest('tr'), inp); mark(inp); });
+  inp.addEventListener('keydown', e => {
+    if (!['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key) || inp.getAttribute('list') && e.key !== 'Enter') return;
+    e.preventDefault();
+    const td = inp.closest('td'), idx = [...td.parentNode.children].indexOf(td), down = e.key !== 'ArrowUp';
+    const rows = [...document.querySelectorAll('#sheet tbody tr')].filter(r => r.querySelector('input'));
+    const i = rows.indexOf(td.parentNode);
+    for (let j = i + (down ? 1 : -1); j >= 0 && j < rows.length; j += down ? 1 : -1) {
+      const target = rows[j].children[idx]?.querySelector('input');
+      if (target) { target.focus(); target.select(); break; }
+    }
+  });
+  inp.addEventListener('focus', () => inp.select());
+}
+document.querySelectorAll('#sheet input').forEach(wire);
+
+window.addRow = btn => {
+  const tr = document.getElementById('newrow').content.firstElementChild.cloneNode(true);
+  btn.closest('tr').before(tr);
+  tr.querySelectorAll('input').forEach(wire);
+  tr.querySelector('input').focus();
+  refresh();
+};
+window.saveSheet = async () => {
+  const fresh = [];
+  for (const tr of document.querySelectorAll('tr.newrow')) {
+    const it = {cat: tr.closest('tbody').dataset.cat};
+    tr.querySelectorAll('input').forEach(i => { if (i.value.trim()) it[i.dataset.f] = i.value.trim(); });
+    if (Object.keys(it).length === 1) continue;            // порожній рядок — пропускаємо
+    if (!it.wh) { alert(t('Укажите название склада в новой строке')); return; }
+    fresh.push(it);
+  }
+  const btn = document.getElementById('savebtn'); btn.disabled = true;
+  const r = await fetch({{ url_for('sheet.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({cells: changed, new: fresh})});
+  if (r.ok) { for (const k in changed) delete changed[k]; location.reload(); return; }
+  btn.disabled = false;
+  let msg = await r.text(); try { msg = JSON.parse(msg).errors.join('\n'); } catch (e) {}
+  alert(t('Ошибка сохранения') + ':\n' + msg.slice(0, 400));
+};
+window.addEventListener('beforeunload', e => { if (Object.keys(changed).length || [...document.querySelectorAll('tr.newrow input')].some(i => i.value.trim())) { e.preventDefault(); e.returnValue = ''; } });
+})();
+</script>
+{% endif %}{% endblock %}

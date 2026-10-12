@@ -122,6 +122,7 @@ TOOLS = [
          "company": {"type": "string", "description": "назва компанії-отримувача (має існувати)"},
          "contract_no": {"type": "string"}, "contract_date": {"type": "string"}, "contract_end": {"type": "string"},
          "deposit_amount": {"type": "number"}, "deposit_date": {"type": "string"},
+         "activity": {"type": "string", "description": "вид діяльності (виробництво меблів, продаж морозива…)"},
          "phone": {"type": "string", "description": "телефон контактної особи"}, "contact_person": {"type": "string"},
          "active": {"type": "boolean", "description": "false — орендар виїхав (склади звільняються)"},
          "note": {"type": "string"}}, "required": ["name"]}}}, "required": ["items"]}},
@@ -353,7 +354,8 @@ def run_tool(name, args):
                        "passport_series": "passport_series", "passport_number": "passport_number",
                        "passport_issued": "passport_issued", "payment_type": "payment_type",
                        "contract_no": "contract_no", "contract_date": "contract_date", "contract_end": "contract_end",
-                       "deposit_amount": "deposit_amount", "deposit_date": "deposit_date", "note": "note"}
+                       "deposit_amount": "deposit_amount", "deposit_date": "deposit_date", "note": "note",
+                       "activity": "activity"}
             for k, col in mapping.items():
                 if it.get(k) not in (None, ""):
                     vals[col] = it[k]

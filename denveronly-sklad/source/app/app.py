@@ -309,7 +309,9 @@ def tenants():
     all_whs = db.execute("SELECT w.id, w.name, w.area, w.category_id, t.name AS tenant FROM warehouses w "
                          "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name COLLATE NOCASE").fetchall()
     resp = app.make_response(render_template("tenants.html", items=active, gone=gone, q=q, view=view, groups=groups,
-                                             grand=grand, cats=categories(), all_whs=all_whs))
+                                             grand=grand, cats=categories(), all_whs=all_whs,
+                                             tenant_names=[r["name"] for r in db.execute(
+                                                 "SELECT name FROM tenants WHERE active=1 ORDER BY name COLLATE NOCASE")]))
     if request.args.get("view"):
         resp.set_cookie("tenants_view", view, max_age=31536000, samesite="Lax")
     return resp
@@ -317,7 +319,7 @@ def tenants():
 
 TENANT_FIELDS = ["name", "edrpou", "iban", "address", "party_type", "passport_series", "passport_number",
                  "passport_issued", "contact", "director_position", "basis", "payment_type", "contract_no",
-                 "contract_date", "contract_end", "deposit_date", "deposit_note", "note"]
+                 "contract_date", "contract_end", "deposit_date", "deposit_note", "activity", "note"]
 
 
 @app.route("/tenants/new", methods=["GET", "POST"])

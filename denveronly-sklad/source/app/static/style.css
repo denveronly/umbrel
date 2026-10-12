@@ -264,3 +264,19 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .catw { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
 .catw:last-child { border-bottom: 0; }
 .catw select { width: 170px; padding: 4px 6px; }
+/* редагування в таблиці */
+.sheet td:has(> input) { padding: 2px 3px; }
+.sheet input { width: 100%; padding: 4px 6px; font: inherit; font-variant-numeric: tabular-nums; text-align: right;
+               border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); }
+.sheet input:hover { border-color: var(--line); }
+.sheet input:focus { outline: none; border-color: var(--accent); background: var(--bg); box-shadow: 0 0 0 2px var(--accent-soft); }
+.sheet input.dirty { background: var(--warn-soft); border-color: var(--warn); }
+.sheet input.tin { text-align: left; border-color: var(--line); background: var(--bg); margin: 1px 0; }
+.sheet td.who { vertical-align: middle; }
+.sheet td.who .muted { margin-top: 1px; }
+.sheet td.c-bank_vat, .sheet th.c-bank_vat { background: color-mix(in srgb, #3b74d8 5%, transparent); }
+.sheet td.c-cash, .sheet th.c-cash { background: color-mix(in srgb, #eda100 7%, transparent); }
+.sheet tr.newrow td { background: var(--accent-soft); }
+.sheet tr.addrow td { border-bottom: 0; padding: 3px 8px; }
+.sheet tr.addrow:hover td { background: transparent !important; }
+.sheet tr.free input.cost { opacity: .5; }
