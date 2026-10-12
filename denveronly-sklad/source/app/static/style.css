@@ -228,3 +228,39 @@ tr.gone .badge, tr.gone img { filter: grayscale(1); opacity: .7; }
 .badge.up { background: var(--warn-soft); color: var(--warn); }
 b.pos { color: var(--warn); } b.neg { color: var(--accent); }
 table.hist td { font-size: 13px; }
+
+/* таблиця орендарів «як в Excel» */
+.viewsw a { padding: 6px 12px; font-size: 13px; color: var(--ink); text-decoration: none; }
+.viewsw a.on { background: var(--accent); color: #fff; }
+.sheetwrap { overflow: auto; max-height: calc(100vh - 175px); border: 1px solid var(--line); border-radius: 10px; background: var(--card); margin-bottom: 10px; }
+table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; width: 100%; min-width: 1250px; table-layout: fixed; }
+.sheet th, .sheet td { padding: 5px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); vertical-align: bottom;
+                       overflow-wrap: break-word; hyphens: auto; line-height: 1.3; }
+.sheet th:last-child, .sheet td:last-child { border-right: 0; }
+.sheet thead th { position: sticky; top: 0; z-index: 3; background: var(--card); color: var(--ink); text-transform: none; letter-spacing: 0;
+                  font-size: 13px; font-weight: 700; border-bottom: 2px solid var(--ink); }
+.sheet thead th small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.sheet tr.grp td { background: color-mix(in srgb, #3b74d8 17%, var(--card)); font-weight: 700; border-top: 2px solid var(--ink);
+                   border-bottom: 2px solid var(--ink); padding-top: 9px; padding-bottom: 9px; }
+.sheet tr.grp td.gname { font-size: 18px; }
+.sheet tr.grp td.gname small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+.sheet tr.grp td.gsum { font-size: 16px; white-space: nowrap; }
+.sheet td.n { white-space: nowrap; }
+.sheet tr.tstart td { border-top: 2px solid color-mix(in srgb, var(--ink) 45%, transparent); }
+.sheet tr.grp + tr.tstart td { border-top: 0; }
+.sheet tbody tr:not(.grp):hover td { background: var(--accent-soft); }
+.sheet tr.free td { color: var(--muted); background: color-mix(in srgb, var(--muted) 5%, var(--card)); }
+.sheet td .muted { font-size: 12px; }
+.sheet a.tname { font-weight: 600; }
+.sheet a.plain { color: var(--ink); text-decoration: none; }
+.sheet a.plain:hover { color: var(--accent); text-decoration: underline; }
+.sheet tfoot td { position: sticky; bottom: 0; z-index: 2; background: var(--card); border-top: 2px solid var(--ink); font-size: 15px; }
+.catbox > summary { cursor: pointer; }
+.catrow { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.catrow input[name=name] { flex: 1; }
+.catrow .sortin { width: 64px; text-align: right; }
+.catrow .muted { white-space: nowrap; }
+.catassign { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
+.catw { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
+.catw:last-child { border-bottom: 0; }
+.catw select { width: 170px; padding: 4px 6px; }

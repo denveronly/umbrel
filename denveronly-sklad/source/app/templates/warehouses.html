@@ -12,13 +12,14 @@
 </div>
 
 <div class="tablewrap"><table>
-  <thead><tr><th>{{ _("Склад") }}</th><th class="n">{{ _("м²") }}</th><th>{{ _("Арендатор") }}</th>
+  <thead><tr><th>{{ _("Склад") }}</th><th>{{ _("Подкатегория") }}</th><th class="n">{{ _("м²") }}</th><th>{{ _("Арендатор") }}</th>
     <th class="n">{{ _("Цена, грн/м²") }}</th><th class="n">{{ _("В месяц") }}</th></tr></thead>
   <tbody>
   {% set ns = namespace(b=0, v=0, c=0, cur=0) %}
   {% for w, p in items %}
     <tr>
       <td><a href="{{ url_for('warehouse_edit', wid=w.id) }}"><b>{{ w.name }}</b></a></td>
+      <td>{% if w.cat_name %}<span class="badge co">{{ w.cat_name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td class="n">{{ num(w.area) }}</td>
       <td>{% if w.tenant_name %}{{ w.tenant_name }}<br><span class="badge">{{ PAYMENT_TYPES[w.payment_type] }}</span>{% else %}<span class="badge off">{{ _("свободен") }}</span>{% endif %}</td>
       <td class="n">{{ money(p.rate) }}</td>
@@ -26,7 +27,7 @@
     </tr>
     {% if w.tenant_id %}{% set ns.cur = ns.cur + p.total %}{% endif %}
   {% else %}
-    <tr><td colspan="5" class="muted">{{ _("Складов пока нет — добавьте первый") }}.</td></tr>
+    <tr><td colspan="6" class="muted">{{ _("Складов пока нет — добавьте первый") }}.</td></tr>
   {% endfor %}
   </tbody>
 </table></div>

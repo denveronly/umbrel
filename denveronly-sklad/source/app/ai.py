@@ -81,6 +81,9 @@ SYSTEM_PROMPT = """Ти — помічник у веб-застосунку об
   прив'язані до лінії (assign_meters_to_line). Показники складів — set_readings (можна з reactive — реактивна енергія),
   показники власних лічильників лінії — set_line_readings. Таблиця «по лінії» (як аркуш «База 76»): колонки — лічильники,
   рядки — місяці; кожен лічильник має показник і витрату, реактивну — якщо є. Переносиш показники, а не витрату.
+- Склади згруповані в підкатегорії (Ангари, Навіси…) — поле category в upsert_warehouses; якщо в таблиці користувача є
+  рядки-заголовки груп (напр. «Ангары»), це підкатегорія складів під ними. «S прилег.» — adjacent_area.
+  Назви підкатегорій пиши так, як вони вже є в застосунку (за замовчуванням «Ангари», «Навіси»; «Ангары» = «Ангари»).
 - Окремий аркуш Google Таблиці читай через get_google_sheet (url + назва аркуша).
 """
 
@@ -104,6 +107,8 @@ TOOLS = [
          "price_m2": {"type": "number", "description": "грн за м²/міс у формі оплати орендаря"},
          "price_month": {"type": "number", "description": "або сума за місяць"},
          "tenant": {"type": "string", "description": "назва орендаря, до якого прив'язати (має існувати)"},
+         "category": {"type": "string", "description": "підкатегорія (Ангари, Навіси…); якщо такої немає — створюється"},
+         "adjacent_area": {"type": "number", "description": "прилегла територія, м² (довідково)"},
          "note": {"type": "string"}}, "required": ["name"]}}}, "required": ["items"]}},
     {"name": "upsert_tenants", "description": "Створити або оновити орендарів (за назвою).",
      "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
@@ -248,8 +253,9 @@ def run_tool(name, args):
     items = args.get("items") or []
 
     if name == "list_warehouses":
-        rows = db.execute("SELECT w.id, w.name, w.area, w.price_m2, t.name AS tenant, t.payment_type FROM warehouses w "
-                          "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name").fetchall()
+        rows = db.execute("SELECT w.id, w.name, w.area, w.adjacent_area, w.price_m2, c.name AS category, t.name AS tenant, "
+                          "t.payment_type FROM warehouses w LEFT JOIN tenants t ON t.id=w.tenant_id "
+                          "LEFT JOIN warehouse_categories c ON c.id=w.category_id ORDER BY w.name").fetchall()
         return [dict(r) for r in rows], ev
     if name == "list_tenants":
         out = []
@@ -393,6 +399,13 @@ def run_tool(name, args):
                 vals["note"] = it["note"]
             if it.get("tenant"):
                 vals["tenant_id"] = _need("tenants", it["tenant"], "Орендаря")["id"]
+            if it.get("adjacent_area") is not None:
+                vals["adjacent_area"] = float(it["adjacent_area"])
+            if it.get("category"):
+                c = _find("warehouse_categories", it["category"])
+                vals["category_id"] = c["id"] if c else db.execute(
+                    "INSERT INTO warehouse_categories(name, sort) VALUES (?, (SELECT COALESCE(MAX(sort), 0) + 10 "
+                    "FROM warehouse_categories))", (it["category"].strip(),)).lastrowid
             if w:
                 if vals:
                     db.execute(f"UPDATE warehouses SET {', '.join(k + '=?' for k in vals)} WHERE id=?", [*vals.values(), w["id"]])

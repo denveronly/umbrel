@@ -10,8 +10,8 @@ from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, r
 import auth
 import calc
 import documents
-from db import (DATA_DIR, PAYMENT_TYPES, SERVICE_MODES, close_db, companies, get_db, init_db, price_for,
-                services, set_setting, settings)
+from db import (DATA_DIR, PAYMENT_TYPES, SERVICE_MODES, categories, close_db, companies, get_db, init_db,
+                price_for, services, set_setting, settings)
 import audit
 import i18n
 import backup
@@ -19,6 +19,7 @@ import ai
 import economics
 import photos
 import lines
+import sheet
 from audit import log
 from i18n import _
 
@@ -34,6 +35,7 @@ photos.init_app(app)
 economics.init_app(app)
 ai.init_app(app)
 lines.init_app(app)
+sheet.init_app(app)
 
 
 @app.template_filter("plain")
@@ -151,8 +153,9 @@ def form_price(prefix=""):
 def warehouses():
     db = get_db()
     s = settings()
-    rows = db.execute("SELECT w.*, t.name AS tenant_name, t.payment_type FROM warehouses w "
-                      "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name").fetchall()
+    rows = db.execute("SELECT w.*, t.name AS tenant_name, t.payment_type, c.name AS cat_name FROM warehouses w "
+                      "LEFT JOIN tenants t ON t.id=w.tenant_id LEFT JOIN warehouse_categories c ON c.id=w.category_id "
+                      "ORDER BY c.id IS NULL, c.sort, c.name, w.name").fetchall()
     items = [(w, calc.rent_price(w, w["payment_type"], s)) for w in rows]
     tot = {"area": sum(w["area"] for w in rows),
            "rented": sum(w["area"] for w in rows if w["tenant_id"])}
@@ -175,12 +178,14 @@ def warehouse_edit(wid=None):
             return redirect(url_for("warehouses"))
         vals = (request.form["name"].strip(), fnum("area", 0), request.form.get("tenant_id") or None,
                 request.form.get("color") if request.form.get("use_color") else None,
-                request.form.get("note", "").strip())
+                request.form.get("note", "").strip(), request.form.get("category_id", type=int),
+                fnum("adjacent_area"))
         if wh:
-            db.execute("UPDATE warehouses SET name=?, area=?, tenant_id=?, color=?, note=? WHERE id=?", vals + (wid,))
+            db.execute("UPDATE warehouses SET name=?, area=?, tenant_id=?, color=?, note=?, category_id=?, "
+                       "adjacent_area=? WHERE id=?", vals + (wid,))
         else:
-            wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note) VALUES (?,?,?,?,?)",
-                             vals).lastrowid
+            wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area) "
+                             "VALUES (?,?,?,?,?,?,?)", vals).lastrowid
         set_price(wid, form_price())
         db.commit()
         flash(_("Сохранено"))
@@ -197,7 +202,8 @@ def warehouse_edit(wid=None):
                          (wid,)).fetchall() if wid else []
     power_lines = db.execute("SELECT id, name FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
     return render_template("warehouse_edit.html", wh=wh, tenants=tenants, meters=meters, price=price, pt=pt,
-                           history=history, meter_services=services(mode="meter"), power_lines=power_lines)
+                           history=history, meter_services=services(mode="meter"), power_lines=power_lines,
+                           cats=categories())
 
 
 @app.route("/warehouses/<int:wid>/raise", methods=["POST"])
@@ -297,7 +303,16 @@ def tenants():
         items.append({"t": t, "contacts": contacts, "whs": whs, "rent": rent})
     active = [it for it in items if it["t"]["active"]]
     gone = [it for it in items if not it["t"]["active"]]
-    return render_template("tenants.html", items=active, gone=gone, q=q)
+    view = request.args.get("view") or request.cookies.get("tenants_view") or "sheet"
+    view = view if view in ("sheet", "cards") else "sheet"
+    groups, grand = sheet.build(q) if view == "sheet" else ([], {})
+    all_whs = db.execute("SELECT w.id, w.name, w.area, w.category_id, t.name AS tenant FROM warehouses w "
+                         "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name COLLATE NOCASE").fetchall()
+    resp = app.make_response(render_template("tenants.html", items=active, gone=gone, q=q, view=view, groups=groups,
+                                             grand=grand, cats=categories(), all_whs=all_whs))
+    if request.args.get("view"):
+        resp.set_cookie("tenants_view", view, max_age=31536000, samesite="Lax")
+    return resp
 
 
 TENANT_FIELDS = ["name", "edrpou", "iban", "address", "party_type", "passport_series", "passport_number",

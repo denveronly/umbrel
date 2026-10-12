@@ -8,6 +8,13 @@
 <form method="post" class="grid">
   <label>{{ _("Название / номер") }}<input name="name" required value="{{ wh.name if wh else '' }}" placeholder="{{ _("Склад 3") }}"></label>
   <label>{{ _("Площадь, м²") }}<input name="area" inputmode="decimal" required value="{{ (wh.area if wh else none)|plain }}"></label>
+  <label>{{ _("Подкатегория") }}
+    <select name="category_id"><option value="">— {{ _("без подкатегории") }} —</option>
+      {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if wh and wh.category_id == c.id }}>{{ c.name }}</option>{% endfor %}
+    </select>
+    <span class="muted"><a href="{{ url_for('tenants', cats=1) }}#cats">{{ _("Добавить или переименовать подкатегории") }}</a></span></label>
+  <label>{{ _("Прилегающая территория, м²") }}<input name="adjacent_area" inputmode="decimal" value="{{ (wh.adjacent_area if wh else none)|plain }}">
+    <span class="muted">{{ _("для справки, в аренду не считается") }}</span></label>
   <label>{{ _("Цена за м² в месяц, грн") }}<input name="price_m2" id="price_m2" inputmode="decimal" value="{{ (wh.price_m2 if wh else none)|plain }}"></label>
   <label>{{ _("Сумма в месяц, грн") }}<input name="price_month" id="price_month" inputmode="decimal" value="{{ (price.total if price else none)|plain }}">
     <span class="muted">{{ _("Одна цена — в форме оплаты арендатора (для «з ПДВ» — с ПДВ). Можно ввести за м² или сразу за месяц.") }}</span></label>

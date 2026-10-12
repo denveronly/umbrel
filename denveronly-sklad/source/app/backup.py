@@ -21,7 +21,7 @@ NAME_RE = re.compile(r"^sklad_\d{4}-\d{2}-\d{2}_\d{6}_(manual|auto|pre-restore|p
 KINDS = {"manual": "вручную", "auto": "авто", "pre-restore": "перед восстановлением", "pre-ai": "перед ИИ", "upload": "загружен"}
 
 TABLES = [("warehouses", "Склады"), ("tenants", "Контакты"), ("tenant_contacts", "Контактные лица"),
-          ("companies", "Компании"), ("services", "Услуги"), ("meters", "Счётчики"),
+          ("companies", "Компании"), ("warehouse_categories", "Подкатегории"), ("services", "Услуги"), ("meters", "Счётчики"),
           ("readings", "Показания"), ("service_prices", "Цены по месяцам"), ("service_usage", "Количества услуг"),
           ("acts", "Акты"), ("warehouse_photos", "Фото объектов"), ("users", "Пользователи"), ("audit", "Записи журнала")]
 

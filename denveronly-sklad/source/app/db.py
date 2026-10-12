@@ -78,9 +78,18 @@ CREATE TABLE IF NOT EXISTS warehouses (
     rate_cash REAL,                              -- грн/м² готівка (NULL = з коефіцієнта)
     price_m2 REAL,                               -- ЄДИНА ціна за м²/міс у формі оплати орендаря (для «з ПДВ» — з ПДВ)
     tenant_id INTEGER REFERENCES tenants(id) ON DELETE SET NULL,
+    category_id INTEGER REFERENCES warehouse_categories(id) ON DELETE SET NULL,
+    adjacent_area REAL,                          -- прилегла територія, м² (довідково, в оренду не рахується)
     polygon TEXT,
     color TEXT,
     note TEXT
+);
+
+-- підкатегорії складів: Ангари, Навіси… (групи в таблиці орендарів)
+CREATE TABLE IF NOT EXISTS warehouse_categories (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    sort INTEGER NOT NULL DEFAULT 100
 );
 
 -- експлуатаційні послуги
@@ -258,6 +267,12 @@ DEFAULT_SERVICES = [
     ("Вивіз сміття", "вивіз", "qty", 30),
 ]
 
+# (назва, порядок, початок назви складу для автоматичного розкладання)
+DEFAULT_CATEGORIES = [
+    ("Ангари", 10, ("ангар",)),
+    ("Навіси", 20, ("навіс", "навес")),
+]
+
 SERVICE_MODES = {
     "meter": "по счётчику",
     "qty": "кол-во за месяц (вносим вручную)",
@@ -288,7 +303,7 @@ def close_db(_e=None):
 
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
-    "warehouses": {"rate_vat": "REAL", "price_m2": "REAL"},
+    "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL"},
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
@@ -340,6 +355,16 @@ def _migrate(con):
         price = (rv if rv is not None else rb * (1 + vat)) if pt == "bank_vat" else \
                 (rc if rc is not None else rb * coef) if pt == "cash" else rb
         con.execute("UPDATE warehouses SET price_m2=? WHERE id=?", (round(price, 4), wid))
+
+    # підкатегорії складів (з 1.5.0): один раз створюємо Ангари й Навіси і розкладаємо склади за назвою
+    if not con.execute("SELECT 1 FROM settings WHERE key='categories_seeded'").fetchone():
+        if not con.execute("SELECT 1 FROM warehouse_categories").fetchone():
+            for name, sort, prefixes in DEFAULT_CATEGORIES:
+                cid = con.execute("INSERT INTO warehouse_categories(name, sort) VALUES (?,?)", (name, sort)).lastrowid
+                for wid, wname in con.execute("SELECT id, name FROM warehouses WHERE category_id IS NULL").fetchall():
+                    if (wname or "").strip().lower().startswith(prefixes):
+                        con.execute("UPDATE warehouses SET category_id=? WHERE id=?", (cid, wid))
+        con.execute("INSERT INTO settings(key, value) VALUES ('categories_seeded', '1')")
 
     # послуги за замовчуванням (тільки для нової бази)
     if not con.execute("SELECT 1 FROM services").fetchone():
@@ -393,6 +418,11 @@ def set_setting(key, value):
 def companies(active_only=False):
     q = "SELECT * FROM companies" + (" WHERE active=1" if active_only else "") + " ORDER BY name"
     return get_db().execute(q).fetchall()
+
+
+def categories():
+    return get_db().execute("SELECT c.*, (SELECT COUNT(*) FROM warehouses w WHERE w.category_id=c.id) AS n "
+                            "FROM warehouse_categories c ORDER BY c.sort, c.name").fetchall()
 
 
 def services(active_only=True, mode=None):

@@ -22,11 +22,103 @@
       <td class="n">{% if t.deposit_amount %}{{ money(t.deposit_amount) }}{% if t.deposit_date %}<br><span class="muted">{{ t.deposit_date }}</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
     </tr>
 {% endmacro %}
+{% block head %}{% if view == 'sheet' %}<style>main { max-width: none; }</style>{% endif %}{% endblock %}
 {% block content %}
-<div class="row"><h1>{{ _("Арендаторы") }}</h1><span class="spacer"></span>
+<div class="row"><h1>{{ _("Арендаторы") }}</h1>
+  <div class="segmented viewsw">
+    <a class="{{ 'on' if view == 'sheet' }}" href="?view=sheet{{ '&q=' ~ q|urlencode if q }}">▦ {{ _("Таблица") }}</a>
+    <a class="{{ 'on' if view == 'cards' }}" href="?view=cards{{ '&q=' ~ q|urlencode if q }}">☰ {{ _("Карточки") }}</a>
+  </div>
+  <span class="spacer"></span>
   <form method="get"><input name="q" value="{{ q }}" placeholder="{{ _("Поиск: имя, телефон, договор, склад…") }}" style="width:260px"></form>
+  {% if view == 'sheet' %}<a class="btn ghost" href="{{ url_for('sheet.xlsx', q=q or None) }}">⤓ Excel</a>{% endif %}
   <a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Арендатор") }}</a></div>
 
+{% if view == 'sheet' %}
+<div class="sheetwrap"><table class="sheet">
+  <colgroup><col style="width:3.5%"><col style="width:15%"><col style="width:11%"><col style="width:6.5%"><col style="width:6.5%">
+    <col style="width:11.5%"><col style="width:9%"><col style="width:9.5%"><col style="width:11.5%"><col style="width:8%"><col style="width:8%"></colgroup>
+  <thead><tr>
+    <th>№</th><th>{{ _("Арендатор") }}</th><th>{{ _("Объект") }}</th><th class="n">{{ _("S, м²") }}</th><th class="n">{{ _("S прилег., м²") }}</th>
+    <th>{{ _("Примечание") }}</th><th>{{ _("Договор") }}</th><th>{{ _("до даты") }}</th><th>{{ _("Контактное лицо") }}</th>
+    <th class="n">{{ _("Стоимость 1") }}<small>{{ _("безнал") }}</small></th><th class="n">{{ _("Стоимость 2") }}<small>{{ _("наличка") }}</small></th>
+  </tr></thead>
+  {% for g in groups %}
+  <tbody>
+    <tr class="grp">
+      <td colspan="3" class="gname">{{ g.name }} <small>{{ _("сдано") }} {{ num(g.rented) }} {{ _("из") }} {{ num(g.tot.area) }} {{ _("м²") }}</small></td>
+      <td class="n">{{ num(g.tot.area) }}</td><td class="n">{{ num(g.tot.adj) if g.tot.adj else '' }}</td>
+      <td colspan="4"></td>
+      <td class="n gsum">{{ money(g.tot.bank) }}</td><td class="n gsum">{{ money(g.tot.cash) }}</td>
+    </tr>
+    {% for r in g.rows %}{% set t = r.t %}{% set w = r.w %}
+    <tr class="{{ 'tstart' if r.first }} {{ 'free' if not t }}">
+      <td class="n">{{ r.no }}</td>
+      <td>{% if t %}<a href="{{ url_for('tenant_edit', tid=t.id) }}" class="tname">{{ t.name }}</a>
+            {% if t.company_name %}<div class="muted">→ {{ t.company_name }}</div>{% endif %}
+          {% else %}<span class="badge off">{{ _("свободен") }}</span>{% endif %}</td>
+      <td>{% if w %}<a href="{{ url_for('warehouse_edit', wid=w.id) }}" class="plain">{{ w.name }}</a>{% if w.note %}<div class="muted">{{ w.note }}</div>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="n">{{ num(r.area) if w else '' }}</td>
+      <td class="n">{{ num(r.adj) if r.adj else '' }}</td>
+      <td>{{ t.note if t and t.note else '' }}</td>
+      <td>{% if t %}{% if t.contract_no %}№ {{ t.contract_no }}{% endif %}{% if t.contract_date %}<div>{{ t.contract_date }}</div>{% endif %}{% endif %}</td>
+      <td>{{ t.contract_end if t and t.contract_end else '' }}</td>
+      <td>{% for c in r.contacts %}<div>{{ c.name }}{% if c.phone %} <a href="tel:{{ c.phone|replace(' ', '') }}">{{ c.phone }}</a>{% endif %}</div>{% endfor %}</td>
+      <td class="n">{% if t %}{{ money(r.bank) if r.bank else '0' }}{% if r.pt == 'bank_vat' and r.bank %}<div class="muted">{{ _("с ПДВ") }}</div>{% endif %}{% endif %}</td>
+      <td class="n">{% if t %}{{ money(r.cash) if r.cash else '0' }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% else %}
+  <tbody><tr><td colspan="11" class="muted">{{ _("Ничего не найдено.") if q else _("Арендаторов пока нет.") }}</td></tr></tbody>
+  {% endfor %}
+  {% if groups %}
+  <tfoot><tr>
+    <td colspan="3">{{ _("Итого") }} <small class="muted">{{ _("сдано") }} {{ num(grand.rented) }} {{ _("из") }} {{ num(grand.area) }} {{ _("м²") }}</small></td>
+    <td class="n">{{ num(grand.area) }}</td><td class="n">{{ num(grand.adj) if grand.adj else '' }}</td><td colspan="4"></td>
+    <td class="n">{{ money(grand.bank) }}</td><td class="n">{{ money(grand.cash) }}</td>
+  </tr></tfoot>
+  {% endif %}
+</table></div>
+<p class="muted">{{ _("Стоимость — аренда в месяц по складу в форме оплаты арендатора: безнал (с ПДВ и без) — в «Стоимость 1», наличка — в «Стоимость 2». Склад и подкатегория меняются в карточке склада или ниже.") }}</p>
+
+<details class="card catbox" id="cats"{{ ' open' if request.args.get('cats') }}>
+  <summary><b>{{ _("Подкатегории") }}</b> <span class="muted">({{ cats|length }}): {{ cats|map(attribute='name')|join(', ') }}</span></summary>
+  <div class="cols2" style="margin-top:12px">
+    <div>
+      {% for c in cats %}
+      <form method="post" action="{{ url_for('sheet.manage') }}" class="catrow">
+        <input type="hidden" name="action" value="save"><input type="hidden" name="cid" value="{{ c.id }}">
+        <input name="name" value="{{ c.name }}" required>
+        <input name="sort" value="{{ c.sort }}" inputmode="numeric" title="{{ _("Порядок") }}" class="sortin">
+        <span class="muted">{{ c.n }} {{ _("скл.") }}</span>
+        <button class="sm">{{ _("Сохранить") }}</button>
+        <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить подкатегорию? Склады останутся, но без подкатегории.")|tojson|forceescape }})">✕</button>
+      </form>
+      {% endfor %}
+      <form method="post" action="{{ url_for('sheet.manage') }}" class="catrow">
+        <input type="hidden" name="action" value="add">
+        <input name="name" required placeholder="{{ _("Новая подкатегория, напр. Открытые площадки") }}">
+        <input name="sort" value="{{ (cats|map(attribute='sort')|max or 0) + 10 }}" inputmode="numeric" class="sortin">
+        <button class="sm">+ {{ _("Добавить") }}</button>
+      </form>
+      <p class="muted">{{ _("Порядок — число: меньше = выше в таблице.") }}</p>
+    </div>
+    <form method="post" action="{{ url_for('sheet.manage') }}">
+      <input type="hidden" name="action" value="assign">
+      <div class="catassign">
+      {% for w in all_whs %}
+        <label class="catw"><span>{{ w.name }} <span class="muted">{{ num(w.area) }} {{ _("м²") }}{% if w.tenant %} · {{ w.tenant }}{% endif %}</span></span>
+          <select name="wc_{{ w.id }}"><option value="">— {{ _("без подкатегории") }} —</option>
+            {% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if w.category_id == c.id }}>{{ c.name }}</option>{% endfor %}</select></label>
+      {% else %}<p class="muted">{{ _("Складов пока нет") }}.</p>{% endfor %}
+      </div>
+      {% if all_whs %}<button class="sm" style="margin-top:8px">{{ _("Сохранить распределение") }}</button>{% endif %}
+    </form>
+  </div>
+</details>
+
+{% else %}
 <div class="tablewrap"><table class="contacts">
   <thead><tr><th>{{ _("Арендатор") }}</th><th>{{ _("Контактные лица") }}</th><th>{{ _("Договор") }}</th><th>{{ _("Склады") }}</th>
     <th class="n">{{ _("Аренда в месяц") }}</th><th class="n">{{ _("Гарантийный взнос") }}</th></tr></thead>
@@ -38,6 +130,7 @@
   </tbody>
 </table></div>
 <p class="muted">{{ _("Сумма — аренда в месяц по всем складам арендатора в форме оплаты по договору") }}.</p>
+{% endif %}
 
 {% if gone %}
 <h2 class="gonehead">{{ _("Выехавшие") }} <span class="muted">({{ gone|length }})</span></h2>
