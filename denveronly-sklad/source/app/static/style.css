@@ -69,9 +69,13 @@ button, .btn { font: inherit; padding: 8px 14px; border-radius: 7px; border: 1px
 .whitem { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
 .whitem:hover, .whitem.sel { background: var(--accent-soft); border-color: var(--accent); }
 .whitem .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
-.leaflet-tooltip.whlabel { background: transparent; border: 0; box-shadow: none; font-weight: 700; color: #111;
-       text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
-.leaflet-tooltip.whlabel::before { display: none; }
+.whlblwrap { pointer-events: none; }
+.whlbl { position: absolute; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden;
+         font-weight: 700; line-height: 1.12; color: #111; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff;
+         overflow-wrap: normal; word-break: normal; hyphens: none; }
+.whlbl.rot { transform: rotate(-90deg); }
+.whlbl span { max-width: 100%; }
+.leaflet-tooltip.whhover { font-weight: 600; }
 .edithint { position: absolute; z-index: 999; top: 10px; left: 50%; transform: translateX(-50%);
        background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; display: none; }
 @media (max-width: 760px) {

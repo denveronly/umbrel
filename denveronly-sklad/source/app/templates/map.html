@@ -44,7 +44,7 @@ if (PLAN) L.imageOverlay(PLAN, bounds).addTo(map);
 else L.rectangle(bounds, {color: '#999', weight: 1, dashArray: '4', fill: false}).addTo(map);
 map.fitBounds(bounds);
 
-let whs = [], layers = {}, selected = null, drawing = null, dots = null;
+let whs = [], layers = {}, labels = [], selected = null, drawing = null, dots = null;
 
 const colorOf = w => w.color || (w.tenant_id ? getComputedStyle(document.documentElement).getPropertyValue('--rented').trim() || '#1f6f5c' : '#9b978d');
 
@@ -56,13 +56,14 @@ async function load() {
     area += w.area; if (w.tenant_id) occ += w.area;
     if (w.polygon && w.polygon.length > 2) {
       const pl = L.polygon(w.polygon, {color: colorOf(w), weight: 2, fillOpacity: w.tenant_id ? .45 : .2})
-        .bindTooltip(w.name, {permanent: true, direction: 'center', className: 'whlabel'})
+        .bindTooltip(w.name, {sticky: true, direction: 'top', className: 'whhover', offset: [0, -6]})
         .on('click', () => select(w.id)).addTo(map);
       layers[w.id] = pl;
     }
   });
   document.getElementById('k-area').textContent = fmt(area, 0) + ' ' + t('м²');
   document.getElementById('k-occ').textContent = area ? Math.round(occ / area * 100) + '%' : '—';
+  layoutLabels();
   renderList();
   if (selected) select(selected, false);
 }
@@ -248,6 +249,47 @@ map.on('click', e => {
   drawUi();
 });
 map.on('dblclick', () => drawing && finishDraw());
+map.on('zoomend', () => layoutLabels());
+
+// ---- підписи складів, що не налазять один на одного ----
+// Підпис займає лише прямокутник свого контуру: переноситься на рядки й зменшується; у вузькому високому
+// складі повертається вертикально; не влазить — коротка назва (останнє слово: «2_3», «Ж-1»); і вона не влазить —
+// підпису немає, повна назва — при наведенні на склад.
+const shortName = n => { const p = String(n).trim().split(/\s+/); return p.length > 1 ? p[p.length - 1] : n; };
+function fits(el) { return el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1; }
+function tryFit(el, box, text, W, H, rotate) {
+  box.textContent = text;
+  el.classList.toggle('rot', rotate);
+  el.style.width = (rotate ? H : W) + 'px'; el.style.height = (rotate ? W : H) + 'px';
+  el.style.left = (rotate ? (W - H) / 2 : 0) + 'px'; el.style.top = (rotate ? (H - W) / 2 : 0) + 'px';
+  for (const s of [14, 13, 12, 11, 10, 9]) { el.style.fontSize = s + 'px'; if (fits(el)) return s; }
+  return 0;
+}
+// повна назва (або коротка, якщо повна ніяк) — в тій орієнтації, де шрифт виходить більшим
+function placeLabel(el, box, name, W, H) {
+  for (const text of [name, shortName(name)]) {
+    const flat = tryFit(el, box, text, W, H, false);
+    const up = H > W ? tryFit(el, box, text, W, H, true) : 0;
+    if (flat || up) return tryFit(el, box, text, W, H, up > flat);
+    if (text === shortName(name)) break;
+  }
+  return 0;
+}
+function layoutLabels() {
+  labels.forEach(m => map.removeLayer(m)); labels = [];
+  for (const w of whs) {
+    const pl = layers[w.id]; if (!pl) continue;
+    const b = pl.getBounds(), a = map.latLngToContainerPoint(b.getNorthWest()), c = map.latLngToContainerPoint(b.getSouthEast());
+    const W = Math.floor(Math.abs(c.x - a.x) * .86), H = Math.floor(Math.abs(c.y - a.y) * .86);
+    if (W < 14 || H < 10) continue;
+    const m = L.marker(pl.getCenter(), {interactive: false, keyboard: false,
+      icon: L.divIcon({className: 'whlblwrap', iconSize: [W, H], iconAnchor: [W / 2, H / 2],
+                       html: '<div class="whlbl"><span></span></div>'})}).addTo(map);
+    labels.push(m);
+    const el = m.getElement().querySelector('.whlbl');
+    if (!placeLabel(el, el.firstChild, w.name, W, H)) { map.removeLayer(m); labels.pop(); }
+  }
+}
 document.addEventListener('keydown', e => {
   if (!drawing || e.target.matches('input, textarea, select')) return;
   if (e.key === 'Escape') cancelDraw();
