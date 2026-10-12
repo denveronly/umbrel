@@ -23,7 +23,6 @@
       <div class="kpi"><small class="muted">{{ _("Площадь") }}</small><b id="k-area">—</b></div>
       <div class="kpi"><small class="muted">{{ _("Занято") }}</small><b id="k-occ">—</b></div>
     </div>
-    <div id="details"></div>
     <h2>{{ _("Склады") }}</h2>
     <div id="list"></div>
     <p><a class="btn ghost sm" href="{{ url_for('warehouse_edit') }}">+ {{ _("Добавить склад") }}</a></p>
@@ -79,23 +78,36 @@ function renderList() {
 }
 function itemHtml(w) {
   return `
-    <div class="whitem ${w.id === selected ? 'sel' : ''}" onclick="select(${w.id})">
+    <div class="whitem ${w.id === selected ? 'sel' : ''}" data-id="${w.id}" onclick="pick(${w.id})">
       <span class="dot" style="background:${colorOf(w)}"></span><b>${esc(w.name)}</b>
       <span class="muted"> · ${fmt(w.area, 0)} ${t('м²')}</span>
-      ${w.polygon ? '' : `<span class="badge off">${t('нет контура')}</span>`}
-      ${(w.photos || []).length ? `<span class="muted"> · 📷 ${w.photos.length}</span>` : ''}
+      ${w.polygon ? '' : `<span class="badge red">${t('нет контура')}</span>`}
+      <span class="muted phcount">${(w.photos || []).length ? ` · 📷 ${w.photos.length}` : ''}</span>
       <div class="muted">${w.tenant_name ? esc(w.tenant_name) : t('свободен')}</div>
-    </div>`;
+    </div>${w.id === selected ? '<div class="whdetails" id="details"></div>' : ''}`;
+}
+
+// клік у списку: картка розкривається під складом; повторний клік — згортає
+function pick(id) {
+  if (selected === id) {
+    selected = null;
+    Object.values(layers).forEach(l => l.setStyle({weight: 2}));
+    showDots(null);
+    renderList();
+    return;
+  }
+  select(id, true, true);
 }
 
 function esc(s) { return (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-function select(id, zoom = true) {
+function select(id, zoom = true, fromList = false) {
   selected = id;
   const w = whs.find(x => x.id === id); if (!w) return;
   Object.entries(layers).forEach(([k, l]) => l.setStyle({weight: +k === id ? 4 : 2}));
   if (zoom && layers[id]) map.fitBounds(layers[id].getBounds(), {maxZoom: map.getZoom() + 1, padding: [60, 60]});
   showDots(w);
+  renderList();
   const p = w.price;
   document.getElementById('details').innerHTML = `
     <div class="card">
@@ -120,8 +132,24 @@ function select(id, zoom = true) {
     </div>`;
   const gal = document.getElementById('wh-gallery');
   Gallery.render(gal, w.id, w.photos || []);
-  gal.addEventListener('photoschange', e => { w.photos = e.detail.photos; renderList(); });
-  renderList();
+  gal.addEventListener('photoschange', e => {          // лічильник фото в рядку списку, без перемальовування картки
+    w.photos = e.detail.photos;
+    const it = document.querySelector(`.whitem[data-id="${w.id}"] .phcount`);
+    if (it) it.textContent = w.photos.length ? ` · 📷 ${w.photos.length}` : '';
+  });
+  // клік по контуру на мапі — прокрутити список до складу; клік у списку — нічого не прокручуємо
+  if (fromList) revealCard(); else document.querySelector('.whitem.sel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+}
+// картка під складом унизу списку — прокрутити рівно настільки, щоб її було видно (склад лишається вгорі видимим)
+function revealCard() {
+  const it = document.querySelector('.whitem.sel'), d = document.getElementById('details');
+  if (!it || !d) return;
+  const side = document.querySelector('.side');
+  const box = side.scrollHeight > side.clientHeight ? side.getBoundingClientRect() : {top: 60, bottom: innerHeight};
+  const over = d.getBoundingClientRect().bottom + 10 - box.bottom;
+  if (over <= 0) return;
+  const dy = Math.min(over, it.getBoundingClientRect().top - box.top - 10);
+  if (dy > 0) (side.scrollHeight > side.clientHeight ? side : window).scrollBy({top: dy, behavior: 'smooth'});
 }
 
 // ---- кнопка «⋯» на контурі вибраного складу: віконце з деталями ----

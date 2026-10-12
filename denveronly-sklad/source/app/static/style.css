@@ -316,3 +316,9 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .sheet input.rno { padding: 4px 4px; }
 .sheet input.rno::placeholder { color: var(--muted); opacity: .75; }
 .sheet input.rno:not(:placeholder-shown) { font-weight: 600; }
+/* «немає контуру» — червоним; картка складу розкривається під ним у списку */
+.badge.red { background: color-mix(in srgb, #e5484d 16%, transparent); color: #d93d42; }
+:root[data-theme="dark"] .badge.red { color: #ff7a7e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge.red { color: #ff7a7e; } }
+.whitem.sel { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.whdetails .card { margin: 0 0 10px; border-top-left-radius: 0; border-top-right-radius: 0; border-color: var(--accent); border-top: 0; }
