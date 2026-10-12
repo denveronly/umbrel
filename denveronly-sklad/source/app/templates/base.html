@@ -6,6 +6,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ _("Склады") }}{% endblock %} · {{ _("Складская база") }}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<meta name="csrf" content="{{ csrf_token() }}">
+<script>
+// токен захисту від CSRF — у кожну POST-форму і кожен fetch на наш сайт
+(() => {
+  const tok = document.querySelector('meta[name=csrf]').content;
+  const add = f => { if (f.method && f.method.toLowerCase() === 'post' && !f.querySelector('input[name=_csrf]')) {
+    const i = document.createElement('input'); i.type = 'hidden'; i.name = '_csrf'; i.value = tok; f.appendChild(i); } };
+  document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('form').forEach(add));
+  document.addEventListener('submit', e => add(e.target), true);
+  const of = window.fetch;
+  window.fetch = (url, opt = {}) => {
+    const same = typeof url === 'string' && (url.startsWith('/') || url.startsWith(location.origin));
+    if (same && opt.method && opt.method.toUpperCase() !== 'GET') opt.headers = Object.assign({'X-CSRF-Token': tok}, opt.headers || {});
+    return of(url, opt);
+  };
+})();
+</script>
 <script>window.I18N = {{ js_i18n()|tojson }}; function t(s) { return window.I18N[s] || s; }</script>
 <script src="{{ url_for('static', filename='photos.js') }}" defer></script>
 {% block head %}{% endblock %}

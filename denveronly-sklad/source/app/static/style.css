@@ -280,3 +280,6 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .sheet tr.addrow td { border-bottom: 0; padding: 3px 8px; }
 .sheet tr.addrow:hover td { background: transparent !important; }
 .sheet tr.free input.cost { opacity: .5; }
+.sheet .newwh { display: flex; gap: 4px; }
+.sheet .newwh input { flex: 1; min-width: 0; }
+.sheet .newwh select { width: 42%; padding: 3px 4px; font-size: 12.5px; margin: 1px 0; }

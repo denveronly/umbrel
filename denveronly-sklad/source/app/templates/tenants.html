@@ -32,7 +32,8 @@
   <span class="spacer"></span>
   <form method="get"><input name="q" value="{{ q }}" placeholder="{{ _("Поиск: имя, телефон, договор, склад…") }}" style="width:260px"></form>
   {% if view == 'sheet' %}<a class="btn ghost" href="{{ url_for('sheet.xlsx', q=q or None) }}">⤓ Excel</a>{% endif %}
-  <a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Арендатор") }}</a></div>
+  {% if view == 'sheet' %}<button type="button" class="btn" onclick="addRow()">+ {{ _("Арендатор") }}</button>
+  {% else %}<a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Арендатор") }}</a>{% endif %}</div>
 
 {% if view == 'sheet' %}
 {% macro cell(key, val, cls='') %}<input class="{{ cls }}" data-key="{{ key }}" value="{{ val }}" inputmode="decimal" autocomplete="off">{% endmacro %}
@@ -92,7 +93,8 @@
 <template id="newrow"><tr class="newrow tstart">
   <td class="n">＋</td>
   <td class="who"><input class="tin" data-f="tenant" list="tenant_names" placeholder="{{ _("Арендатор (новый или из списка)") }}" autocomplete="off">
-    <input class="tin" data-f="wh" list="free_whs" placeholder="{{ _("Склад: свободный из списка или новый") }}" autocomplete="off"></td>
+    <div class="newwh"><input class="tin" data-f="wh" list="free_whs" placeholder="{{ _("Склад (можно позже)") }}" autocomplete="off">
+    <select data-f="cat" title="{{ _("Подкатегория") }}"><option value="">{{ _("без подкатегории") }}</option>{% for c in cats %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div></td>
   <td><input class="area" data-f="area" inputmode="decimal"></td><td><input class="adj" data-f="adj" inputmode="decimal"></td>
   <td class="c-bank_vat"><input class="cost" data-f="bank_vat" inputmode="decimal"></td><td class="c-bank"><input class="cost" data-f="bank" inputmode="decimal"></td>
   <td class="c-cash"><input class="cost" data-f="cash" inputmode="decimal"></td><td><input class="m2" data-f="m2" inputmode="decimal"></td>
@@ -162,6 +164,7 @@
 <script>
 (() => {
 const changed = {};                  // 'w|12|area' -> значення
+let saved = false;                   // після збереження сторінка перезавантажується без питання
 const pnum = v => { v = String(v || '').replace(/[\s  ]/g, '').replace(',', '.'); return v === '' ? NaN : Number(v); };
 const fmt = (x, d) => isNaN(x) ? '' : x.toLocaleString('uk-UA', {minimumFractionDigits: d, maximumFractionDigits: d}).replace(/ | /g, ' ');
 const COSTS = ['bank_vat', 'bank', 'cash'];
@@ -219,31 +222,39 @@ function wire(inp) {
 }
 document.querySelectorAll('#sheet input').forEach(wire);
 
+// «+ Орендар» вгорі — новий рядок на початку першої групи; «+ рядок» — у кінці своєї групи
 window.addRow = btn => {
   const tr = document.getElementById('newrow').content.firstElementChild.cloneNode(true);
-  btn.closest('tr').before(tr);
+  let body;
+  if (btn) { btn.closest('tr').before(tr); body = btn.closest('tbody'); }
+  else {
+    body = document.querySelector('#sheet tbody[data-cat]');
+    if (!body) { location.href = {{ url_for('tenant_edit')|tojson }}; return; }
+    body.querySelector('tr.grp').after(tr);
+  }
+  tr.querySelector('select[data-f=cat]').value = body.dataset.cat || '';
   tr.querySelectorAll('input').forEach(wire);
+  tr.scrollIntoView({block: 'center'});
   tr.querySelector('input').focus();
   refresh();
 };
 window.saveSheet = async () => {
   const fresh = [];
   for (const tr of document.querySelectorAll('tr.newrow')) {
-    const it = {cat: tr.closest('tbody').dataset.cat};
+    const it = {cat: tr.querySelector('select[data-f=cat]').value};
     tr.querySelectorAll('input').forEach(i => { if (i.value.trim()) it[i.dataset.f] = i.value.trim(); });
-    if (Object.keys(it).length === 1) continue;            // порожній рядок — пропускаємо
-    if (!it.wh) { alert(t('Укажите название склада в новой строке')); return; }
+    if (!it.tenant && !it.wh) continue;                     // порожній рядок — пропускаємо
     fresh.push(it);
   }
   const btn = document.getElementById('savebtn'); btn.disabled = true;
   const r = await fetch({{ url_for('sheet.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({cells: changed, new: fresh})});
-  if (r.ok) { for (const k in changed) delete changed[k]; location.reload(); return; }
+  if (r.ok) { saved = true; location.reload(); return; }
   btn.disabled = false;
   let msg = await r.text(); try { msg = JSON.parse(msg).errors.join('\n'); } catch (e) {}
   alert(t('Ошибка сохранения') + ':\n' + msg.slice(0, 400));
 };
-window.addEventListener('beforeunload', e => { if (Object.keys(changed).length || [...document.querySelectorAll('tr.newrow input')].some(i => i.value.trim())) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (saved) return; if (Object.keys(changed).length || [...document.querySelectorAll('tr.newrow input')].some(i => i.value.trim())) { e.preventDefault(); e.returnValue = ''; } });
 })();
 </script>
 {% endif %}{% endblock %}

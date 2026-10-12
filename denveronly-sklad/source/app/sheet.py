@@ -123,7 +123,10 @@ def _tenant_by_name(name, pt):
     for t in db.execute("SELECT * FROM tenants WHERE active=1").fetchall():
         if t["name"].strip().lower() == name.lower():
             return t["id"], False
-    tid = db.execute("INSERT INTO tenants(name, payment_type) VALUES (?,?)", (name, pt or "bank")).lastrowid
+    # якщо компанія-отримувач одна — одразу її, інакше вибирають у картці
+    cos = db.execute("SELECT id FROM companies WHERE active=1").fetchall()
+    tid = db.execute("INSERT INTO tenants(name, payment_type, company_id) VALUES (?,?,?)",
+                     (name, pt or "bank", cos[0]["id"] if len(cos) == 1 else None)).lastrowid
     log("Арендатор создан из таблицы", name, commit=False)
     return tid, True
 
@@ -187,8 +190,11 @@ def save():
     for it in data.get("new") or []:
         try:
             tname, wname = (it.get("tenant") or "").strip(), (it.get("wh") or "").strip()
-            if not wname:
-                raise ValueError(_("Укажите название склада в новой строке"))
+            if not wname:                       # лише орендар — склад закріпимо пізніше
+                if tname:
+                    tid, new = _tenant_by_name(tname, next((k for k in COST_COLS if it.get(k)), None))
+                    ev.append(("＋ " if new else "= ") + tname)
+                continue
             cat = int(it["cat"]) if str(it.get("cat") or "").isdigit() else None
             w = next((r for r in db.execute("SELECT * FROM warehouses").fetchall()
                       if r["name"].strip().lower() == wname.lower()), None)

@@ -68,23 +68,45 @@ def init_app(app):
             if request.path.startswith("/api/"):
                 abort(401)
             return redirect(url_for("auth.login", next=request.full_path.rstrip("?")))
-        # защита от CSRF: POST принимаем только со своего же сайта.
-        # Sec-Fetch-Site ставит сам браузер и он не меняется прокси (Umbrel app_proxy, nginx);
-        # для старых браузеров без него сверяем Origin с Host / X-Forwarded-Host.
+        # защита от CSRF: POST принимаем только со своих же страниц.
         if request.method == "POST":
-            sfs = request.headers.get("Sec-Fetch-Site")
-            if sfs:
-                if sfs == "cross-site":
-                    abort(403)
-            else:
-                origin = request.headers.get("Origin") or request.headers.get("Referer")
-                hosts = {request.host, request.headers.get("X-Forwarded-Host", "").split(",")[0].strip()}
-                if origin and urlparse(origin).netloc not in hosts:
-                    abort(403)
+            reason = csrf_problem()
+            if reason:
+                log("Запрос отклонён (защита CSRF)", f"{request.method} {request.path}: {reason}")
+                abort(403, _("Запрос отклонён защитой от подделки. Обновите страницу (F5) и повторите."))
 
     @app.context_processor
     def user_ctx():
-        return {"current_user": g.get("user"), "ROLES": ROLES}
+        return {"current_user": g.get("user"), "ROLES": ROLES, "csrf_token": csrf_token}
+
+
+def csrf_token():
+    """Токен сесії: шаблон кладе його в <meta>, а скрипт у base.html — у кожну форму й fetch."""
+    if "csrf" not in session:
+        session["csrf"] = secrets.token_urlsafe(24)
+    return session["csrf"]
+
+
+def csrf_problem():
+    """None, якщо POST прийшов з нашої сторінки, інакше — причина відмови (пишеться в журнал).
+
+    1) Токен з форми / заголовка X-CSRF-Token збігається з токеном сесії — точно наша сторінка.
+       Це головна перевірка: працює за будь-яким проксі (Umbrel app_proxy міняє Host) і по http,
+       де браузер не надсилає Sec-Fetch-Site.
+    2) Сторінки, відкриті до оновлення (без токена): Sec-Fetch-Site від браузера, або Origin = Host.
+    """
+    sent = request.headers.get("X-CSRF-Token") or request.form.get("_csrf")
+    if sent:
+        return None if secrets.compare_digest(sent, session.get("csrf", "")) else "токен не совпал (страница устарела?)"
+    sfs = request.headers.get("Sec-Fetch-Site")
+    if sfs:
+        return "Sec-Fetch-Site: cross-site" if sfs == "cross-site" else None
+    origin = request.headers.get("Origin") or request.headers.get("Referer")
+    if not origin:
+        return None
+    hosts = {request.host, request.headers.get("X-Forwarded-Host", "").split(",")[0].strip()}
+    o = urlparse(origin).netloc
+    return None if o in hosts else f"Origin {o} ≠ Host {', '.join(h for h in hosts if h)}"
 
 
 def admin_required(f):
@@ -97,7 +119,10 @@ def admin_required(f):
 
 
 def _login(user):
+    csrf = session.get("csrf")
     session.clear()
+    if csrf:                       # токен сторінки входу лишається дійсним
+        session["csrf"] = csrf
     session.permanent = True
     session["uid"] = user["id"]
     session["pv"] = user["password_hash"][-12:]
