@@ -30,10 +30,23 @@
     <a class="{{ 'on' if view == 'cards' }}" href="?view=cards{{ '&q=' ~ q|urlencode if q }}">☰ {{ _("Карточки") }}</a>
   </div>
   <span class="spacer"></span>
-  <form method="get"><input name="q" value="{{ q }}" placeholder="{{ _("Поиск: имя, телефон, договор, склад…") }}" style="width:260px"></form>
-  {% if view == 'sheet' %}<a class="btn ghost" href="{{ url_for('sheet.xlsx', q=q or None) }}">⤓ Excel</a>{% endif %}
+  <form method="get">{% if cat %}<input type="hidden" name="cat" value="{{ cat }}">{% endif %}<input name="q" value="{{ q }}" placeholder="{{ _("Поиск: имя, телефон, договор, склад…") }}" style="width:260px"></form>
+  {% if view == 'sheet' %}<a class="btn ghost" href="{{ url_for('sheet.xlsx', q=q or None, cat=cat or None) }}">⤓ Excel</a>{% endif %}
   {% if view == 'sheet' %}<button type="button" class="btn" onclick="addRow()">+ {{ _("Арендатор") }}</button>
   {% else %}<a class="btn" href="{{ url_for('tenant_edit') }}">+ {{ _("Арендатор") }}</a>{% endif %}</div>
+  {% if view == 'sheet' %}
+  <div class="segmented viewsw cattabs">
+    <a class="{{ 'on' if not cat }}" href="{{ url_for('tenants', q=q or None) }}">{{ _("Все") }}</a>
+    {% for c in cats %}<a class="{{ 'on' if cat == c.id|string }}" href="{{ url_for('tenants', cat=c.id, q=q or None) }}">{{ c.name }} <small>{{ c.n }}</small></a>{% endfor %}
+    <a href="#" onclick="return newCat()" title="{{ _("Добавить подкатегорию") }}">＋</a>
+    <a href="{{ url_for('tenants', cats=1) }}#cats" title="{{ _("Переименовать, порядок, удалить") }}">⚙</a>
+  </div>
+  <form method="post" action="{{ url_for('sheet.manage') }}" id="newcatform" hidden>
+    <input type="hidden" name="action" value="add"><input type="hidden" name="name">
+    <input type="hidden" name="sort" value="{{ (cats|map(attribute='sort')|max or 0) + 10 }}">
+    <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+  </form>
+  {% endif %}
 
 {% if view == 'sheet' %}
 {% macro cell(key, val, cls='') %}<input class="{{ cls }}" data-key="{{ key }}" value="{{ val }}" inputmode="decimal" autocomplete="off">{% endmacro %}
@@ -222,6 +235,11 @@ function wire(inp) {
 }
 document.querySelectorAll('#sheet input').forEach(wire);
 
+window.newCat = () => {
+  const name = (prompt(t('Название новой подкатегории (например, Навесы, Открытые площадки)')) || '').trim();
+  if (name) { const f = document.getElementById('newcatform'); f.querySelector('input[name=name]').value = name; f.submit(); }
+  return false;
+};
 // «+ Орендар» вгорі — новий рядок на початку першої групи; «+ рядок» — у кінці своєї групи
 window.addRow = btn => {
   const tr = document.getElementById('newrow').content.firstElementChild.cloneNode(true);

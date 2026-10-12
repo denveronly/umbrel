@@ -17,7 +17,7 @@ COST_COLS = ("bank_vat", "bank", "cash")          # порядок колоно�
 SUMS = ("area", "adj", "bank_vat", "bank", "cash")
 
 
-def build(q=""):
+def build(q="", cat=None):
     """Групи таблиці: [{"cat": row|None, "name", "rows": [...], "tot": {...}}] і загальні підсумки."""
     db = get_db()
     s = settings()
@@ -66,6 +66,8 @@ def build(q=""):
         rows.sort(key=lambda r: (r["t"] is None, (r["t"]["name"].lower() if r["t"] else ""),
                                  (r["w"]["name"].lower() if r["w"] else "")))
         if not rows and (g["cat"] is None or ql):
+            continue
+        if cat not in (None, "") and str(g["id"]) != str(cat):       # вкладка підкатегорії
             continue
         g["rows"] = rows
         g["tot"] = _totals(rows)
@@ -262,6 +264,9 @@ def manage():
             log("Склады распределены по подкатегориям", str(n), commit=False)
         flash(_("Сохранено") + f": {n}")
     db.commit()
+    nxt = request.form.get("next") or ""
+    if nxt.startswith("/") and not nxt.startswith("//"):
+        return redirect(nxt)
     return redirect(url_for("tenants", cats=1) + "#cats")
 
 
@@ -273,7 +278,7 @@ def xlsx():
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
-    groups, grand = build(request.args.get("q", ""))
+    groups, grand = build(request.args.get("q", ""), request.args.get("cat"))
     wb = Workbook()
     ws = wb.active
     ws.title = _("Арендаторы")[:31]

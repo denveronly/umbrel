@@ -86,7 +86,8 @@ def fnum(name, default=None):
 def index():
     s = settings()
     return render_template("map.html", plan=s.get("plan_image"),
-                           plan_w=s.get("plan_w"), plan_h=s.get("plan_h"))
+                           plan_w=s.get("plan_w"), plan_h=s.get("plan_h"),
+                           cats=[dict(c) for c in categories()])
 
 
 @app.route("/api/warehouses")
@@ -95,7 +96,7 @@ def api_warehouses():
     s = settings()
     out = []
     for w in db.execute("SELECT w.*, t.name AS tenant_name, t.payment_type FROM warehouses w "
-                        "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name"):
+                        "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name COLLATE NOCASE"):
         d = dict(w)
         d["polygon"] = json.loads(w["polygon"]) if w["polygon"] else None
         d["price"] = calc.rent_price(w, w["payment_type"], s)
@@ -111,6 +112,34 @@ def api_polygon(wid):
     db.execute("UPDATE warehouses SET polygon=? WHERE id=?", (json.dumps(poly) if poly else None, wid))
     db.commit()
     return jsonify(ok=True)
+
+
+@app.route("/api/warehouses/<int:wid>/category", methods=["POST"])
+def api_category(wid):
+    """Підкатегорія складу з мапи: наявна (category_id) або нова (new_name — створюється)."""
+    db = get_db()
+    d = request.get_json(force=True) or {}
+    w = db.execute("SELECT name FROM warehouses WHERE id=?", (wid,)).fetchone()
+    if not w:
+        abort(404)
+    cid = d.get("category_id")
+    name = (d.get("new_name") or "").strip()
+    if name:
+        row = db.execute("SELECT id FROM warehouse_categories WHERE lower(trim(name))=lower(?)", (name,)).fetchone()
+        cid = row["id"] if row else db.execute(
+            "INSERT INTO warehouse_categories(name, sort) VALUES (?, (SELECT COALESCE(MAX(sort), 0) + 10 "
+            "FROM warehouse_categories))", (name,)).lastrowid
+        if not row:
+            log("Подкатегория добавлена", name, commit=False)
+    elif cid not in (None, ""):
+        cid = int(cid)
+        if not db.execute("SELECT 1 FROM warehouse_categories WHERE id=?", (cid,)).fetchone():
+            abort(400)
+    else:
+        cid = None
+    db.execute("UPDATE warehouses SET category_id=? WHERE id=?", (cid, wid))
+    db.commit()
+    return jsonify(ok=True, category_id=cid, categories=[dict(c) for c in categories()])
 
 
 @app.route("/uploads/<path:name>")
@@ -305,11 +334,12 @@ def tenants():
     gone = [it for it in items if not it["t"]["active"]]
     view = request.args.get("view") or request.cookies.get("tenants_view") or "sheet"
     view = view if view in ("sheet", "cards") else "sheet"
-    groups, grand = sheet.build(q) if view == "sheet" else ([], {})
+    cat = request.args.get("cat", "")
+    groups, grand = sheet.build(q, cat) if view == "sheet" else ([], {})
     all_whs = db.execute("SELECT w.id, w.name, w.area, w.category_id, t.name AS tenant FROM warehouses w "
                          "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY w.name COLLATE NOCASE").fetchall()
     resp = app.make_response(render_template("tenants.html", items=active, gone=gone, q=q, view=view, groups=groups,
-                                             grand=grand, cats=categories(), all_whs=all_whs,
+                                             grand=grand, cats=categories(), all_whs=all_whs, cat=cat,
                                              tenant_names=[r["name"] for r in db.execute(
                                                  "SELECT name FROM tenants WHERE active=1 ORDER BY name COLLATE NOCASE")]))
     if request.args.get("view"):

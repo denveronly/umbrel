@@ -8,7 +8,12 @@
 <div class="mapwrap">
   <div style="position:relative">
     <div id="map"></div>
-    <div class="edithint" id="hint">{{ _("Кликайте по углам склада · «Готово» — сохранить · Esc — отмена") }}</div>
+    <div class="drawbar" id="drawbar">
+      <span><b id="draw-name"></b> · {{ _("кликайте по углам склада") }} · {{ _("точек") }}: <b id="draw-n">0</b></span>
+      <button type="button" class="sm ghost" id="draw-undo" onclick="undoPoint()" title="Backspace">↶ {{ _("Последняя точка") }}</button>
+      <button type="button" class="sm danger" onclick="cancelDraw()" title="Esc">✕ {{ _("Отменить") }}</button>
+      <button type="button" class="sm" id="draw-save" onclick="finishDraw()" title="Enter">✓ {{ _("Сохранить") }}</button>
+    </div>
   </div>
   <aside class="side">
     {% if not plan %}
@@ -31,6 +36,7 @@
 const PLAN = {{ (url_for('uploads', name=plan) if plan else None)|tojson }};
 const W = {{ (plan_w or 1000)|int }}, H = {{ (plan_h or 700)|int }};
 const PT = {{ PAYMENT_TYPES|tojson }};
+let CATS = {{ cats|tojson }};
 const fmt = (x, d=2) => (x ?? 0).toLocaleString('uk-UA', {minimumFractionDigits: d, maximumFractionDigits: d});
 
 const map = L.map('map', {crs: L.CRS.Simple, minZoom: -4, maxZoom: 3, zoomSnap: 0.25, doubleClickZoom: false});
@@ -62,15 +68,24 @@ async function load() {
   if (selected) select(selected, false);
 }
 
+// склади згруповані за підкатегоріями (порядок як у таблиці орендарів), «Без підкатегорії» — в кінці
 function renderList() {
-  document.getElementById('list').innerHTML = whs.map(w => `
+  const groups = [...CATS.map(c => ({id: c.id, name: c.name})), {id: null, name: t('Без подкатегории')}]
+    .map(g => ({...g, items: whs.filter(w => (CATS.some(c => c.id === w.category_id) ? w.category_id : null) === g.id)}))
+    .filter(g => g.items.length || g.id !== null);
+  document.getElementById('list').innerHTML = whs.length ? groups.map(g => `
+    <div class="catgroup"><span>${esc(g.name)}</span><span class="muted">${g.items.length ? fmt(g.items.reduce((a, w) => a + w.area, 0), 0) + ' ' + t('м²') : t('пусто')}</span></div>
+    ${g.items.map(itemHtml).join('')}`).join('') : `<p class="muted">${t('Складов пока нет.')}</p>`;
+}
+function itemHtml(w) {
+  return `
     <div class="whitem ${w.id === selected ? 'sel' : ''}" onclick="select(${w.id})">
       <span class="dot" style="background:${colorOf(w)}"></span><b>${esc(w.name)}</b>
       <span class="muted"> · ${fmt(w.area, 0)} ${t('м²')}</span>
       ${w.polygon ? '' : `<span class="badge off">${t('нет контура')}</span>`}
       ${(w.photos || []).length ? `<span class="muted"> · 📷 ${w.photos.length}</span>` : ''}
       <div class="muted">${w.tenant_name ? esc(w.tenant_name) : t('свободен')}</div>
-    </div>`).join('') || `<p class="muted">${t('Складов пока нет.')}</p>`;
+    </div>`;
 }
 
 function esc(s) { return (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -86,6 +101,12 @@ function select(id, zoom = true) {
       <div class="row"><h2 style="margin:0">${esc(w.name)}</h2><span class="spacer"></span>
         <a class="btn ghost sm" href="/warehouses/${w.id}">${t('Открыть')}</a></div>
       <p class="muted" style="margin:6px 0 10px">${fmt(w.area, 1)} ${t('м²')} · ${w.tenant_name ? t('арендатор') + ': <b>' + esc(w.tenant_name) + '</b> (' + PT[w.payment_type] + ')' : t('свободен')}</p>
+      <label class="catsel">${t('Подкатегория')}
+        <select onchange="setCat(${w.id}, this)">
+          <option value="">— ${t('без подкатегории')} —</option>
+          ${CATS.map(c => `<option value="${c.id}" ${c.id === w.category_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+          <option value="__new">＋ ${t('Новая подкатегория')}…</option>
+        </select></label>
       <div class="prices one">
         <div class="price"><small>${w.payment_type ? PT[w.payment_type] : t('свободен — цена для предложения')}</small><b>${fmt(p.total)}</b><small>${fmt(p.rate)} ${t('грн/м²')}${p.vat ? ' · ' + t('в т.ч. ПДВ') + ' ' + fmt(p.vat) : ''}</small></div>
       </div>
@@ -102,18 +123,49 @@ function select(id, zoom = true) {
   renderList();
 }
 
-// ---- рисование контура ----
+async function setCat(id, sel) {
+  let body = {category_id: sel.value || null};
+  if (sel.value === '__new') {
+    const name = (prompt(t('Название новой подкатегории (например, Навесы, Открытые площадки)')) || '').trim();
+    if (!name) { const w = whs.find(x => x.id === id); sel.value = w.category_id ?? ''; return; }
+    body = {new_name: name};
+  }
+  const r = await fetch(`/api/warehouses/${id}/category`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) { alert(t('Ошибка сохранения')); return; }
+  CATS = (await r.json()).categories;
+  await load();
+}
+
+// ---- малювання контуру: панель зверху з кнопками «Зберегти» / «Скасувати» ----
+function drawUi() {
+  const bar = document.getElementById('drawbar');
+  bar.style.display = drawing ? 'flex' : 'none';
+  if (!drawing) return;
+  document.getElementById('draw-n').textContent = drawing.pts.length;
+  document.getElementById('draw-save').disabled = drawing.pts.length < 3;
+  document.getElementById('draw-undo').disabled = !drawing.pts.length;
+}
 function startDraw(id) {
   cancelDraw();
   drawing = {id, pts: [], line: L.polyline([], {color: '#e0662f', weight: 2, dashArray: '5'}).addTo(map), marks: []};
-  document.getElementById('hint').style.display = 'block';
-  document.getElementById('hint').innerHTML = t('Кликайте по углам склада') + ' · <a href="#" style="color:inherit;font-weight:700" onclick="finishDraw();return false">' + t('Готово') + '</a> · Esc — ' + t('отмена');
+  document.getElementById('draw-name').textContent = (whs.find(x => x.id === id) || {}).name || '';
+  if (layers[id]) layers[id].setStyle({opacity: .25, fillOpacity: .08});
   map.getContainer().style.cursor = 'crosshair';
+  drawUi();
+}
+function undoPoint() {
+  if (!drawing || !drawing.pts.length) return;
+  drawing.pts.pop(); map.removeLayer(drawing.marks.pop());
+  drawing.line.setLatLngs(drawing.pts.length ? [...drawing.pts, drawing.pts[0]] : []);
+  drawUi();
 }
 function cancelDraw() {
   if (!drawing) return;
   map.removeLayer(drawing.line); drawing.marks.forEach(m => map.removeLayer(m));
-  drawing = null; document.getElementById('hint').style.display = 'none'; map.getContainer().style.cursor = '';
+  const w = whs.find(x => x.id === drawing.id);
+  if (layers[drawing.id] && w) layers[drawing.id].setStyle({opacity: 1, fillOpacity: w.tenant_id ? .45 : .2});
+  drawing = null; map.getContainer().style.cursor = '';
+  drawUi();
 }
 async function finishDraw() {
   if (!drawing || drawing.pts.length < 3) { alert(t('Нужно минимум 3 точки')); return; }
@@ -131,9 +183,15 @@ map.on('click', e => {
   drawing.pts.push(e.latlng);
   drawing.line.setLatLngs([...drawing.pts, drawing.pts[0]]);
   drawing.marks.push(L.circleMarker(e.latlng, {radius: 4, color: '#e0662f'}).addTo(map));
+  drawUi();
 });
 map.on('dblclick', () => drawing && finishDraw());
-document.addEventListener('keydown', e => { if (e.key === 'Escape') cancelDraw(); if (e.key === 'Enter') finishDraw(); });
+document.addEventListener('keydown', e => {
+  if (!drawing || e.target.matches('input, textarea, select')) return;
+  if (e.key === 'Escape') cancelDraw();
+  if (e.key === 'Enter') finishDraw();
+  if (e.key === 'Backspace') { e.preventDefault(); undoPoint(); }
+});
 
 window.addEventListener("themechange", load);
 load();
