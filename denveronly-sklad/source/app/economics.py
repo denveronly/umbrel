@@ -89,41 +89,70 @@ def rate_on(d):
 
 # ---------------- підсумки ----------------
 
-def month_totals(period, today_period):
-    """Суми за місяць за формами оплати: з актів; для поточного/майбутнього місяця — ще й розрахунок без акта."""
+def month_totals(period, today_period, detail=False):
+    """Суми за місяць за формами оплати.
+
+    Затверджений акт — його зафіксовані цифри. Чернетка акта за поточний/майбутній місяць — перерахунок
+    з актуальних даних (як на сторінці «Акти»: ціни, склади, форма оплати могли змінитись після формування);
+    за минулі місяці — як збережено. Для поточного/майбутнього місяця орендарі без акта — розрахунок («оцінка»).
+    detail=True — ще й розшифровка по кожному орендарю (res["items"]).
+    """
     db = get_db()
     res = {k: 0.0 for k in FORMS}
     res.update(vat=0.0, total=0.0, acts=0, estimated=0, rent=0.0, util=0.0)
+    items = []
     seen = set()
-    for a in db.execute("SELECT tenant_id, payment_type, total, data FROM acts WHERE period=?", (period,)).fetchall():
+    future = period >= today_period
+    active = {t["id"]: t for t in db.execute("SELECT id, name, payment_type FROM tenants WHERE active=1").fetchall()}
+    for a in db.execute("SELECT a.id, a.number, a.status, a.tenant_id, a.payment_type, a.data FROM acts a "
+                        "WHERE a.period=?", (period,)).fetchall():
         d = json.loads(a["data"])
-        _add(res, a["payment_type"], d["lines"], d["totals"])
+        pt, lines, totals, src = a["payment_type"], d["lines"], d["totals"], "final"
+        if a["status"] != "final":
+            src = "draft"
+            if future and a["tenant_id"] in active:
+                lines, totals, _w = calc.build_act(a["tenant_id"], period)
+                pt, src = active[a["tenant_id"]]["payment_type"], "draft_recalc"
+        it = _add(res, pt, lines, totals)
+        it.update(tenant_id=a["tenant_id"], name=(d.get("tenant") or {}).get("name") or "?", src=src,
+                  act_id=a["id"], number=a["number"])
+        items.append(it)
         res["acts"] += 1
         seen.add(a["tenant_id"])
-    if period >= today_period:
-        for t in db.execute("SELECT id, payment_type FROM tenants WHERE active=1").fetchall():
+    if future:
+        for t in active.values():
             if t["id"] in seen:
                 continue
             lines, totals, _w = calc.build_act(t["id"], period)
             if totals["total"]:
-                _add(res, t["payment_type"], lines, totals)
+                it = _add(res, t["payment_type"], lines, totals)
+                it.update(tenant_id=t["id"], name=t["name"], src="estimate", act_id=None, number=None)
+                items.append(it)
                 res["estimated"] += 1
     for k in list(res):
         if isinstance(res[k], float):
             res[k] = calc.r2(res[k])
+    if detail:
+        order = {"cash": 0, "bank": 1, "bank_vat": 2}
+        res["items"] = sorted(items, key=lambda i: (order.get(i["pt"], 9), i["name"].lower()))
     return res
 
 
 def _add(res, pt, lines, totals):
+    """Додати суму одного акта до підсумків місяця; повертає рядок розшифровки."""
     res[pt] = res.get(pt, 0) + totals["total"]
     res["vat"] += totals.get("vat") or 0
     res["total"] += totals["total"]
     k = (1 + float(totals["vat_rate"]) / 100) if totals.get("vat_rate") else 1
+    rent = util = 0
     for l in lines:
         if l.get("group") == "rent":
-            res["rent"] += l["sum"] * k
+            rent += l["sum"] * k
         else:
-            res["util"] += l["sum"] * k
+            util += l["sum"] * k
+    res["rent"] += rent
+    res["util"] += util
+    return {"pt": pt, "rent": calc.r2(rent), "util": calc.r2(util), "total": totals["total"]}
 
 
 def last_months(end_period, n):
@@ -175,6 +204,7 @@ def economics():
                      "usd": calc.r2(t["total"] / rate) if rate else None})
     now_rate, now_rate_date = rate_on(today)
     sel = next((r for r in rows if r["period"] == cur), rows[-1])
+    sel["items"] = month_totals(sel["period"], cur, detail=True)["items"]
     sums = {k: calc.r2(sum(r[k] for r in rows)) for k in (*FORMS, "vat", "total", "rent", "util")}
     sums["usd"] = calc.r2(sum(r["usd"] or 0 for r in rows))
     chart = {"labels": [r["label"] for r in rows], "periods": periods,

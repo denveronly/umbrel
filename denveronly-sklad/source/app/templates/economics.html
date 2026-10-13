@@ -65,7 +65,7 @@ td.est { color: var(--muted); }
 </div>
 {% endif %}
 
-<p class="muted">{{ _("Суммы за месяц акта: аренда за этот месяц") }}{% if util_shift %} {{ _("и коммунальные за предыдущий") }}{% endif %}. {{ _("Берутся из сформированных актов; для текущего месяца по контактам без акта — расчёт (помечен «оценка»).") }}</p>
+<p class="muted">{{ _("Суммы за месяц акта: аренда за этот месяц") }}{% if util_shift %} {{ _("и коммунальные за предыдущий") }}{% endif %}. {{ _("Утверждённые акты — как зафиксированы; черновики и арендаторы без акта в текущем месяце — расчёт по актуальным данным (помечен «оценка»).") }}</p>
 
 <!-- поточний місяць -->
 <h2>{{ sel.label }}{% if sel.estimated %} <span class="badge warnb">{{ _("оценка") }}</span>{% endif %}</h2>
@@ -76,6 +76,28 @@ td.est { color: var(--muted); }
   <div class="kpi total"><small class="muted">{{ _("Всего, грн") }}</small><b>{{ money(sel.total) }}</b>
     <small class="muted">{% if sel.usd %}≈ ${{ money(sel.usd) }} {{ _("по курсу") }} {{ '%.2f'|format(sel.rate) }}{% else %}USD —{% endif %}</small></div>
 </div>
+
+<!-- розшифровка місяця по орендарях: звідки кожна сума -->
+<details class="card ecodetail">
+  <summary><b>{{ _("Из чего сложилось") }}</b> <span class="muted">— {{ sel['items']|length }} {{ _("арендаторов") }}, {{ _("по каждому: форма оплаты, источник суммы, аренда и коммунальные") }}</span></summary>
+  {% set SRC = {'final': _('утверждённый акт'), 'draft': _('черновик акта'), 'draft_recalc': _('черновик акта, пересчитан'), 'estimate': _('расчёт (акта нет)')} %}
+  <div class="tablewrap" style="margin-top:10px"><table class="ecotbl">
+    <thead><tr><th>{{ _("Арендатор") }}</th><th>{{ _("Форма оплаты") }}</th><th>{{ _("Откуда сумма") }}</th>
+      <th class="n">{{ _("Аренда") }}</th><th class="n">{{ _("Коммунальные") }}</th><th class="n">{{ _("Итого") }}</th></tr></thead>
+    {% for pt in ('cash', 'bank', 'bank_vat') %}{% set its = sel['items']|selectattr('pt', 'equalto', pt)|list %}{% if its %}
+    <tbody>
+      <tr class="ptrow"><td colspan="3"><span class="sw" style="background:var(--series-{{ {'bank': 1, 'bank_vat': 2, 'cash': 3}[pt] }})"></span> {{ PAYMENT_TYPES[pt] }} <span class="muted">({{ its|length }})</span></td>
+        <td class="n">{{ money(its|sum(attribute='rent')) }}</td><td class="n">{{ money(its|sum(attribute='util')) }}</td><td class="n"><b>{{ money(its|sum(attribute='total')) }}</b></td></tr>
+      {% for it in its %}
+      <tr><td><a href="{{ url_for('tenant_edit', tid=it.tenant_id) }}">{{ it.name }}</a></td><td class="muted">{{ PAYMENT_TYPES[it.pt] }}</td>
+        <td>{% if it.act_id %}<a href="{{ url_for('act_view', aid=it.act_id) }}">{{ SRC[it.src] }} №{{ it.number }}</a>{% else %}<span class="muted">{{ SRC[it.src] }}</span>{% endif %}
+          {% if it.src == 'draft' %}<span class="badge warnb" title="{{ _("Черновик за прошлый месяц — сумма как при формировании") }}">!</span>{% endif %}</td>
+        <td class="n">{{ money(it.rent) }}</td><td class="n">{{ money(it.util) if it.util else '' }}</td><td class="n">{{ money(it.total) }}</td></tr>
+      {% endfor %}
+    </tbody>{% endif %}{% endfor %}
+  </table></div>
+  <p class="muted">{{ _("Сумма месяца = аренда за этот месяц + коммунальные из акта, поэтому может быть больше, чем «Разом» в таблице арендаторов (там только аренда). Утверждённые акты — как зафиксированы; черновики текущего месяца пересчитываются по актуальным ценам и складам.") }}</p>
+</details>
 
 <!-- графік 1: надходження за формами оплати -->
 <div class="card chartcard">

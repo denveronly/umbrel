@@ -342,3 +342,8 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .sheet td input, .sheet td select { position: relative; z-index: 0; }
 .sheet thead th { z-index: 5; }
 .sheet tfoot td { z-index: 4; }
+/* економіка: розшифровка місяця */
+.ecodetail > summary { cursor: pointer; }
+.ecotbl td { font-size: 13.5px; }
+.ecotbl tr.ptrow td { background: var(--bg); font-weight: 700; }
+.ecotbl .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
