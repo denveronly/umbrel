@@ -11,7 +11,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from audit import log
 from i18n import _
-from db import DATA_DIR, get_db
+from db import DATA_DIR, get_main_db
 
 bp = Blueprint("auth", __name__)
 
@@ -39,7 +39,7 @@ def load_secret_key():
 
 
 def users_exist():
-    return get_db().execute("SELECT 1 FROM users LIMIT 1").fetchone() is not None
+    return get_main_db().execute("SELECT 1 FROM users LIMIT 1").fetchone() is not None
 
 
 def init_app(app):
@@ -54,7 +54,7 @@ def init_app(app):
         g.user = None
         uid = session.get("uid")
         if uid:
-            u = get_db().execute("SELECT * FROM users WHERE id=? AND active=1", (uid,)).fetchone()
+            u = get_main_db().execute("SELECT * FROM users WHERE id=? AND active=1", (uid,)).fetchone()
             # выход со всех устройств при смене пароля: сверяем «версию» хеша
             if u and session.get("pv") == u["password_hash"][-12:]:
                 g.user = u
@@ -126,7 +126,7 @@ def _login(user):
     session.permanent = True
     session["uid"] = user["id"]
     session["pv"] = user["password_hash"][-12:]
-    db = get_db()
+    db = get_main_db()
     db.execute("UPDATE users SET last_login=datetime('now','localtime') WHERE id=?", (user["id"],))
     db.commit()
 
@@ -155,7 +155,7 @@ def setup():
         pw, pw2 = request.form.get("password", ""), request.form.get("password2", "")
         error = (None if username else _("Укажите логин")) or _check_password(pw, pw2)
         if not error:
-            db = get_db()
+            db = get_main_db()
             db.execute("INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?, 'admin')",
                        (username, request.form.get("full_name", "").strip(), generate_password_hash(pw)))
             db.commit()
@@ -183,7 +183,7 @@ def login():
         if fails >= MAX_FAILS:
             error = _("Слишком много неудачных попыток. Подождите 5 минут.")
         else:
-            u = get_db().execute("SELECT * FROM users WHERE username=?",
+            u = get_main_db().execute("SELECT * FROM users WHERE username=?",
                                  (request.form.get("username", "").strip(),)).fetchone()
             if u and u["active"] and check_password_hash(u["password_hash"], request.form.get("password", "")):
                 _FAILS.pop(ip, None)
@@ -217,7 +217,7 @@ def account():
         else:
             error = _check_password(request.form.get("password", ""), request.form.get("password2", ""))
         if not error:
-            db = get_db()
+            db = get_main_db()
             db.execute("UPDATE users SET password_hash=?, full_name=? WHERE id=?",
                        (generate_password_hash(request.form["password"]),
                         request.form.get("full_name", "").strip(), u["id"]))
@@ -232,14 +232,14 @@ def account():
 # ---------------- пользователи (только админ) ----------------
 
 def _admins_left(exclude_id):
-    return get_db().execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1 AND id<>?",
+    return get_main_db().execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1 AND id<>?",
                             (exclude_id,)).fetchone()[0]
 
 
 @bp.route("/users", methods=["GET", "POST"])
 @admin_required
 def users():
-    db = get_db()
+    db = get_main_db()
     error = None
     if request.method == "POST":
         action = request.form.get("action")

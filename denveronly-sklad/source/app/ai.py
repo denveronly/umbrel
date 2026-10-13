@@ -20,7 +20,7 @@ from flask import (Blueprint, abort, current_app, flash, g, jsonify, redirect, r
 import auth
 import calc
 from audit import log
-from db import PAYMENT_TYPES, SERVICE_MODES, get_db, price_for, settings
+from db import PAYMENT_TYPES, SERVICE_MODES, current_site, get_db, price_for, settings
 from i18n import _
 
 bp = Blueprint("ai", __name__)
@@ -697,9 +697,10 @@ def history(sid):
     return clean
 
 
-def run_job(app, job_id, sid, user_row):
+def run_job(app, job_id, sid, user_row, site):
     with app.app_context():
         g.user = user_row
+        g.site = site                       # фоновий потік працює з об'єктом, з якого надіслано запит
         db = get_db()
         s = settings()
         key, model = s.get("ai_api_key"), s.get("ai_model") or DEFAULT_MODEL
@@ -836,7 +837,7 @@ def send():
                (json.dumps([{"type": "text", "text": full, "display": display}], ensure_ascii=False), sid))
     db.execute("INSERT INTO ai_jobs(id, session_id, status) VALUES (?,?, 'running')", (job_id, sid))
     db.commit()
-    threading.Thread(target=run_job, args=(current_app._get_current_object(), job_id, sid, g.user), daemon=True).start()
+    threading.Thread(target=run_job, args=(current_app._get_current_object(), job_id, sid, g.user, current_site()), daemon=True).start()
     return redirect(url_for("ai.chat", sid=sid))
 
 
@@ -860,7 +861,8 @@ def undo(job_id):
     import os
 
     import backup as bk
-    path = os.path.join(bk.BACKUP_DIR, j["backup"])
+    from db import backup_dir
+    path = os.path.join(backup_dir(), j["backup"])
     sid = j["session_id"]
     # чат ШІ зберігаємо: відновлення бази не повинно стерти історію розмови
     keep = [dict(r) for r in db.execute("SELECT * FROM ai_sessions").fetchall()]
@@ -871,7 +873,7 @@ def undo(job_id):
     g.pop("db", None)
     bk.restore_from_zip(path)
     from db import init_db
-    init_db()
+    init_db(current_site())
     db = get_db()
     db.executescript(SCHEMA)
     for t, rows in (("ai_sessions", keep), ("ai_messages", keep_m), ("ai_jobs", keep_j)):

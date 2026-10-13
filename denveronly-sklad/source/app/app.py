@@ -11,7 +11,7 @@ import auth
 import calc
 import documents
 from db import (DATA_DIR, PAYMENT_TYPES, SERVICE_MODES, categories, close_db, companies, get_db, init_db,
-                price_for, services, set_setting, settings)
+                price_for, services, set_setting, settings, uploads_dir)
 import audit
 import i18n
 import backup
@@ -25,7 +25,6 @@ from i18n import _
 
 app = Flask(__name__)
 app.teardown_appcontext(close_db)
-UPLOADS = os.path.join(DATA_DIR, "uploads")
 init_db()
 auth.init_app(app)
 i18n.init_app(app)
@@ -44,6 +43,30 @@ def plain(x):
     if x is None or x == "":
         return ""
     return f"{float(x):.4f}".rstrip("0").rstrip(".")
+
+
+# розділи, на які можна повернутись після перемикання об'єкта (картки конкретних записів — ні: в іншого об'єкта свої id)
+SITE_SECTIONS = ("/", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
+                 "/logs", "/settings", "/companies", "/users")
+
+
+@app.route("/site/<sid>")
+def switch_site(sid):
+    from db import SITE_COOKIE, SITES
+    if sid not in SITES:
+        abort(404)
+    nxt = request.args.get("next") or "/"
+    sec = "/" + nxt.split("?")[0].strip("/").split("/")[0]
+    sec = sec if sec in SITE_SECTIONS else "/"
+    resp = redirect(sec + ("?view=" + request.args["view"] if sec == "/tenants" and request.args.get("view") else ""))
+    resp.set_cookie(SITE_COOKIE, sid, max_age=31536000, samesite="Lax")
+    return resp
+
+
+@app.context_processor
+def site_ctx():
+    from db import SITES, current_site
+    return {"SITES": SITES, "cur_site": current_site(), "site_name": _(SITES[current_site()]["name"])}
 
 
 @app.context_processor
@@ -144,7 +167,7 @@ def api_category(wid):
 
 @app.route("/uploads/<path:name>")
 def uploads(name):
-    return send_from_directory(UPLOADS, name)
+    return send_from_directory(uploads_dir(), name)
 
 
 # ---------------- склады ----------------
@@ -794,7 +817,8 @@ def settings_page():
             from PIL import Image
             ext = os.path.splitext(f.filename)[1].lower() or ".png"
             name = f"plan{ext}"
-            path = os.path.join(UPLOADS, name)
+            os.makedirs(uploads_dir(), exist_ok=True)
+            path = os.path.join(uploads_dir(), name)
             f.save(path)
             with Image.open(path) as im:
                 w, h = im.size

@@ -6,7 +6,7 @@ from flask import (Blueprint, abort, flash, g, jsonify, redirect, request, send_
 
 from audit import log
 from i18n import _
-from db import PHOTOS_DIR, get_db
+from db import get_db, photos_dir
 
 bp = Blueprint("photos", __name__)
 MAX_SIDE, THUMB_SIDE = 2000, 480
@@ -34,7 +34,7 @@ def _save(wid, f):
     ext = os.path.splitext(f.filename or "")[1].lower()
     if ext and ext not in ALLOWED:
         raise ValueError(f"{f.filename}: " + _("не изображение"))
-    folder = os.path.join(PHOTOS_DIR, str(wid))
+    folder = os.path.join(photos_dir(), str(wid))
     os.makedirs(folder, exist_ok=True)
     name = uuid.uuid4().hex
     try:
@@ -97,16 +97,16 @@ def _row(pid):
 @bp.route("/photos/<int:pid>")
 def full(pid):
     r = _row(pid)
-    return send_from_directory(PHOTOS_DIR, r["filename"], max_age=86400 * 30)
+    return send_from_directory(photos_dir(), r["filename"], max_age=86400 * 30)
 
 
 @bp.route("/photos/<int:pid>/thumb")
 def thumb(pid):
     r = _row(pid)
     t = r["filename"][:-4] + "_t.jpg"
-    if not os.path.exists(os.path.join(PHOTOS_DIR, t)):
+    if not os.path.exists(os.path.join(photos_dir(), t)):
         t = r["filename"]
-    return send_from_directory(PHOTOS_DIR, t, max_age=86400 * 30)
+    return send_from_directory(photos_dir(), t, max_age=86400 * 30)
 
 
 @bp.route("/photos/<int:pid>/delete", methods=["POST"])
@@ -134,7 +134,7 @@ def caption(pid):
 
 def remove_files(filename):
     for fn in (filename, filename[:-4] + "_t.jpg"):
-        p = os.path.join(PHOTOS_DIR, fn)
+        p = os.path.join(photos_dir(), fn)
         if os.path.exists(p):
             os.remove(p)
 

@@ -1,12 +1,83 @@
 import os
 import sqlite3
+from contextlib import contextmanager
 
-from flask import g
+from flask import g, has_request_context, request
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
-DB_PATH = os.path.join(DATA_DIR, "sklad.db")
-BACKUP_DIR = os.path.join(DATA_DIR, "backups")
-PHOTOS_DIR = os.path.join(DATA_DIR, "photos")
+
+# ---------------- об'єкти (База, Офіс) ----------------
+# Кожен об'єкт — окрема база SQLite зі своїми фото, планом і бекапами: дані не перетинаються.
+# «База» живе в корені /data (як до появи об'єктів), решта — в /data/sites/<id>/.
+# Користувачі для входу — спільні, в базі «База» (MAIN_SITE).
+SITES = {
+    "base": {"name": "База", "icon": "warehouse", "dir": ""},
+    "office": {"name": "Офис", "icon": "house", "dir": os.path.join("sites", "office")},
+}
+MAIN_SITE = "base"
+SITE_COOKIE = "site"
+
+
+def site_dir(site=None):
+    return os.path.join(DATA_DIR, SITES[site or current_site()]["dir"])
+
+
+def db_path(site=None):
+    return os.path.join(site_dir(site), "sklad.db")
+
+
+def photos_dir(site=None):
+    return os.path.join(site_dir(site), "photos")
+
+
+def uploads_dir(site=None):
+    return os.path.join(site_dir(site), "uploads")
+
+
+def backup_dir(site=None):
+    return os.path.join(site_dir(site), "backups")
+
+
+def current_site():
+    """Об'єкт запиту. Сторінка передає свій об'єкт (поле _site у формі, заголовок X-Site у fetch) — тож
+    збереження з вкладки «База» піде в «Базу», навіть якщо в іншій вкладці вже перемкнули на «Офіс».
+    Інакше — cookie вибору об'єкта; за замовчуванням «База»."""
+    if "site" in g:
+        return g.site
+    s = None
+    if has_request_context():
+        s = request.headers.get("X-Site")
+        if s not in SITES and request.method == "POST" and request.mimetype in (
+                "application/x-www-form-urlencoded", "multipart/form-data"):
+            s = request.form.get("_site")
+        if s not in SITES:
+            s = request.cookies.get(SITE_COOKIE)
+    g.site = s if s in SITES else MAIN_SITE
+    return g.site
+
+
+@contextmanager
+def using_site(site):
+    """Тимчасово працювати з іншим об'єктом (автобекап усіх об'єктів, створення об'єкта)."""
+    prev_site, prev_db = g.get("site"), g.pop("db", None)
+    g.site = site
+    try:
+        yield
+    finally:
+        db = g.pop("db", None)
+        if db is not None:
+            db.close()
+        g.site = prev_site
+        if prev_site is None:
+            g.pop("site", None)
+        if prev_db is not None:
+            g.db = prev_db
+
+
+# сумісність зі старим кодом: шляхи «Бази»
+DB_PATH = db_path(MAIN_SITE)
+BACKUP_DIR = backup_dir(MAIN_SITE)
+PHOTOS_DIR = photos_dir(MAIN_SITE)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
@@ -289,18 +360,34 @@ PAYMENT_TYPES = {
 }
 
 
+def _connect(path):
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys = ON")
+    return con
+
+
 def get_db():
+    """База даних поточного об'єкта."""
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
+        g.db = _connect(db_path())
     return g.db
 
 
+def get_main_db():
+    """База «Бази» — там спільні користувачі (вхід однаковий для всіх об'єктів)."""
+    if current_site() == MAIN_SITE:
+        return get_db()
+    if "main_db" not in g:
+        g.main_db = _connect(db_path(MAIN_SITE))
+    return g.main_db
+
+
 def close_db(_e=None):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
+    for k in ("db", "main_db"):
+        db = g.pop(k, None)
+        if db is not None:
+            db.close()
 
 
 # колонки, які з'явились після першої версії
@@ -323,7 +410,7 @@ OLD_RESOURCES = {"electricity": "Електроенергія", "water": "Вод
 OLD_UNITS = {"electricity": "кВт·год", "water": "м³", "heating": "Гкал"}
 
 
-def _migrate(con):
+def _migrate(con, site=MAIN_SITE):
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for table, cols in MIGRATIONS.items():
         have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
@@ -360,7 +447,7 @@ def _migrate(con):
         con.execute("UPDATE warehouses SET price_m2=? WHERE id=?", (round(price, 4), wid))
 
     # підкатегорії складів (з 1.5.0): один раз створюємо Ангари й Навіси і розкладаємо склади за назвою
-    if not con.execute("SELECT 1 FROM settings WHERE key='categories_seeded'").fetchone():
+    if not con.execute("SELECT 1 FROM settings WHERE key='categories_seeded'").fetchone() and site == MAIN_SITE:
         if not con.execute("SELECT 1 FROM warehouse_categories").fetchone():
             for name, sort, prefixes in DEFAULT_CATEGORIES:
                 cid = con.execute("INSERT INTO warehouse_categories(name, sort) VALUES (?,?)", (name, sort)).lastrowid
@@ -391,19 +478,49 @@ def _migrate(con):
                             (sid, frm, price))
 
 
-def init_db():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(os.path.join(DATA_DIR, "uploads"), exist_ok=True)
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    os.makedirs(PHOTOS_DIR, exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+# що копіюється в новий об'єкт з «Бази» при першому запуску: компанії-отримувачі та загальні налаштування
+SEED_SKIP_SETTINGS = {"plan_image", "plan_w", "plan_h", "last_auto_backup", "fx_last_try", "fx_last_error",
+                      "categories_seeded"}
+
+
+def init_db(site=None):
+    """Створити/оновити бази. Без аргументу — всі об'єкти («База» першою: з неї засіваються інші)."""
+    for s in ([site] if site else [MAIN_SITE] + [k for k in SITES if k != MAIN_SITE]):
+        _init_site(s)
+
+
+def _init_site(site):
+    for d in (site_dir(site), uploads_dir(site), backup_dir(site), photos_dir(site)):
+        os.makedirs(d, exist_ok=True)
+    path = db_path(site)
+    new = not os.path.exists(path)
+    con = sqlite3.connect(path)
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
+    if new and site != MAIN_SITE:
+        _seed_from_main(con)
     for k, v in DEFAULT_SETTINGS.items():
         con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (k, v))
-    _migrate(con)
+    _migrate(con, site)
     con.commit()
     con.close()
+
+
+def _seed_from_main(con):
+    """Новий об'єкт: ті самі компанії-отримувачі (з тими ж id) і налаштування, що в «Базі»; підкатегорій немає."""
+    main = sqlite3.connect(db_path(MAIN_SITE))
+    try:
+        cols = [r[1] for r in main.execute("PRAGMA table_info(companies)")]
+        have = {r[1] for r in con.execute("PRAGMA table_info(companies)")}
+        cols = [c for c in cols if c in have]
+        for row in main.execute(f"SELECT {', '.join(cols)} FROM companies"):
+            con.execute(f"INSERT OR IGNORE INTO companies({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", row)
+        for k, v in main.execute("SELECT key, value FROM settings"):
+            if k not in SEED_SKIP_SETTINGS:
+                con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?,?)", (k, v))
+    finally:
+        main.close()
+    con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('categories_seeded', '1')")
 
 
 def settings():

@@ -13,10 +13,10 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request, 
 import auth
 from audit import log
 from i18n import _
-from db import BACKUP_DIR, DATA_DIR, DB_PATH, PHOTOS_DIR, get_db, set_setting, settings
+from db import (DATA_DIR, SITES, backup_dir, current_site, db_path, get_db, init_db, photos_dir, set_setting, settings,
+                uploads_dir, using_site)
 
 bp = Blueprint("logs", __name__)
-UPLOADS = os.path.join(DATA_DIR, "uploads")
 NAME_RE = re.compile(r"^sklad_\d{4}-\d{2}-\d{2}_\d{6}_(manual|auto|pre-restore|pre-ai|upload)\.zip$")
 KINDS = {"manual": "вручную", "auto": "авто", "pre-restore": "перед восстановлением", "pre-ai": "перед ИИ", "upload": "загружен"}
 
@@ -30,25 +30,25 @@ TABLES = [("warehouses", "Склады"), ("tenants", "Контакты"), ("ten
 
 def create_backup(kind="manual"):
     """ZIP с консистентной копией базы (sqlite backup API) и загруженными файлами (план)."""
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    os.makedirs(backup_dir(), exist_ok=True)
     name = f"sklad_{datetime.now():%Y-%m-%d_%H%M%S}_{kind}.zip"
-    path = os.path.join(BACKUP_DIR, name)
+    path = os.path.join(backup_dir(), name)
     with tempfile.TemporaryDirectory() as tmp:
         snap = os.path.join(tmp, "sklad.db")
-        src, dst = sqlite3.connect(DB_PATH), sqlite3.connect(snap)
+        src, dst = sqlite3.connect(db_path()), sqlite3.connect(snap)
         src.backup(dst)
         src.close()
         dst.close()
         with zipfile.ZipFile(path + ".part", "w", zipfile.ZIP_DEFLATED) as z:
             z.write(snap, "sklad.db")
-            if os.path.isdir(UPLOADS):
-                for f in os.listdir(UPLOADS):
-                    z.write(os.path.join(UPLOADS, f), f"uploads/{f}")
+            if os.path.isdir(uploads_dir()):
+                for f in os.listdir(uploads_dir()):
+                    z.write(os.path.join(uploads_dir(), f), f"uploads/{f}")
             # фото об'єктів (вже стиснені JPEG — без повторного стиснення)
-            for root, _dirs, files in os.walk(PHOTOS_DIR):
+            for root, _dirs, files in os.walk(photos_dir()):
                 for f in files:
                     p = os.path.join(root, f)
-                    z.write(p, "photos/" + os.path.relpath(p, PHOTOS_DIR).replace(os.sep, "/"),
+                    z.write(p, "photos/" + os.path.relpath(p, photos_dir()).replace(os.sep, "/"),
                             compress_type=zipfile.ZIP_STORED)
     os.replace(path + ".part", path)
     return name
@@ -56,10 +56,10 @@ def create_backup(kind="manual"):
 
 def list_backups():
     out = []
-    if os.path.isdir(BACKUP_DIR):
-        for f in sorted(os.listdir(BACKUP_DIR), reverse=True):
+    if os.path.isdir(backup_dir()):
+        for f in sorted(os.listdir(backup_dir()), reverse=True):
             if NAME_RE.match(f):
-                p = os.path.join(BACKUP_DIR, f)
+                p = os.path.join(backup_dir(), f)
                 kind = NAME_RE.match(f).group(1)
                 out.append({"name": f, "size": os.path.getsize(p), "kind": KINDS[kind], "kind_code": kind,
                             "time": datetime.strptime(f[6:23], "%Y-%m-%d_%H%M%S")})
@@ -70,13 +70,13 @@ def prune(keep):
     """Оставляем последние N автоматических копий; ручные не трогаем."""
     autos = [b for b in list_backups() if b["kind_code"] in ("auto", "pre-restore", "pre-ai")]
     for b in autos[keep:]:
-        os.remove(os.path.join(BACKUP_DIR, b["name"]))
+        os.remove(os.path.join(backup_dir(), b["name"]))
 
 
 def _safe_path(name):
     if not NAME_RE.match(name or ""):
         abort(404)
-    p = os.path.join(BACKUP_DIR, name)
+    p = os.path.join(backup_dir(), name)
     if not os.path.exists(p):
         abort(404)
     return p
@@ -102,23 +102,30 @@ def restore_from_zip(path):
             tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not {"warehouses", "tenants", "users"} <= tables:
                 raise ValueError("Это не база этого приложения")
-            dst = sqlite3.connect(DB_PATH)
+            dst = sqlite3.connect(db_path())
             con.backup(dst)
             dst.close()
         finally:
             con.close()
         src_up = os.path.join(tmp, "uploads")
         if os.path.isdir(src_up):
-            os.makedirs(UPLOADS, exist_ok=True)
+            os.makedirs(uploads_dir(), exist_ok=True)
             for f in os.listdir(src_up):
-                shutil.copy2(os.path.join(src_up, f), os.path.join(UPLOADS, f))
+                shutil.copy2(os.path.join(src_up, f), os.path.join(uploads_dir(), f))
         src_ph = os.path.join(tmp, "photos")
         if os.path.isdir(src_ph):                    # фото — точно як у бэкапі
-            shutil.rmtree(PHOTOS_DIR, ignore_errors=True)
-            shutil.copytree(src_ph, PHOTOS_DIR)
+            shutil.rmtree(photos_dir(), ignore_errors=True)
+            shutil.copytree(src_ph, photos_dir())
 
 
 def maybe_auto_backup():
+    """Автобекап раз на добу — для кожного об'єкта окремо (у його папку backups)."""
+    for site in SITES:
+        with using_site(site):
+            _auto_backup_site()
+
+
+def _auto_backup_site():
     s = settings()
     if s.get("auto_backup") != "1":
         return
@@ -139,11 +146,11 @@ def maybe_auto_backup():
 
 def db_stats():
     db = get_db()
-    st = {"size": os.path.getsize(DB_PATH),
-          "wal": os.path.getsize(DB_PATH + "-wal") if os.path.exists(DB_PATH + "-wal") else 0,
-          "uploads": sum(os.path.getsize(os.path.join(UPLOADS, f)) for f in os.listdir(UPLOADS))
-          if os.path.isdir(UPLOADS) else 0,
-          "photos": sum(os.path.getsize(os.path.join(r, f)) for r, _d, fs in os.walk(PHOTOS_DIR) for f in fs),
+    st = {"size": os.path.getsize(db_path()),
+          "wal": os.path.getsize(db_path() + "-wal") if os.path.exists(db_path() + "-wal") else 0,
+          "uploads": sum(os.path.getsize(os.path.join(uploads_dir(), f)) for f in os.listdir(uploads_dir()))
+          if os.path.isdir(uploads_dir()) else 0,
+          "photos": sum(os.path.getsize(os.path.join(r, f)) for r, _d, fs in os.walk(photos_dir()) for f in fs),
           "sqlite": sqlite3.sqlite_version,
           "tables": [(label, db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]) for t, label in TABLES]}
     r = db.execute("SELECT MIN(period), MAX(period) FROM readings").fetchone()
@@ -209,7 +216,7 @@ def database():
                 if not f or not f.filename:
                     abort(400)
                 src_name = f"sklad_{datetime.now():%Y-%m-%d_%H%M%S}_upload.zip"
-                path = os.path.join(BACKUP_DIR, src_name)
+                path = os.path.join(backup_dir(), src_name)
                 f.save(path)
                 if not zipfile.is_zipfile(path):
                     os.remove(path)
@@ -224,8 +231,7 @@ def database():
             except Exception as e:
                 flash(_("Восстановление не выполнено") + f": {_(str(e))}")
                 return redirect(url_for("logs.database"))
-            from db import init_db
-            init_db()  # досоздаём новые таблицы/колонки, если бэкап старой версии
+            init_db(current_site())  # досоздаём новые таблицы/колонки, если бэкап старой версии
             log("База восстановлена из бэкапа", f"{src_name} (текущая сохранена как {pre})")
             flash(_("База восстановлена из {a}. Предыдущее состояние сохранено: {b}").format(a=src_name, b=pre))
         elif action == "check":
@@ -233,12 +239,12 @@ def database():
             log("Проверка целостности базы", res)
             flash(_("Проверка целостности: всё в порядке") if res == "ok" else _("Проблема") + f": {res}")
         elif action == "vacuum":
-            before = os.path.getsize(DB_PATH)
+            before = os.path.getsize(db_path())
             db.commit()
             db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             db.execute("VACUUM")
             log("Оптимизация базы (VACUUM)")
-            flash(_("База оптимизирована") + f": {before // 1024} КБ → {os.path.getsize(DB_PATH) // 1024} КБ")
+            flash(_("База оптимизирована") + f": {before // 1024} КБ → {os.path.getsize(db_path()) // 1024} КБ")
         elif action == "clear_log":
             days = max(30, request.form.get("days", 365, type=int))
             n = db.execute("DELETE FROM audit WHERE ts < datetime('now', 'localtime', ?)", (f"-{days} days",)).rowcount
