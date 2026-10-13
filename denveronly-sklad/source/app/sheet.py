@@ -14,8 +14,8 @@ from i18n import _
 
 bp = Blueprint("sheet", __name__)
 NO_CAT = None
-COST_COLS = ("bank_vat", "bank", "cash")          # порядок колонок: з ПДВ, без ПДВ, готівка
-SUMS = ("area", "adj", "bank_vat", "bank", "cash")
+COST_COLS = ("cash", "bank", "bank_vat")          # порядок колонок: готівка, без ПДВ, з ПДВ
+SUMS = ("area", "adj", "cash", "bank", "bank_vat")
 
 
 def no_key(no):
@@ -310,13 +310,15 @@ def xlsx():
     wb = Workbook()
     ws = wb.active
     ws.title = _("Арендаторы")[:31]
-    head = ["№", _("Арендатор"), _("Склад"), _("Площадь, м²"), _("Прилегающая, м²"), _("С ПДВ"), _("Без ПДВ"),
-            _("Наличка"), _("Цена за м²"), _("Вид деятельности"), _("Договор"), _("до даты"), _("Контактное лицо"),
+    head = ["№", _("Арендатор"), _("Склад"), _("Площадь, м²"), _("Прилегающая, м²"), _("Наличка"), _("Без ПДВ"),
+            _("С ПДВ"), _("Цена за м²"), _("Вид деятельности"), _("Договор"), _("до даты"), _("Контактное лицо"),
             _("Компания")]
     widths = [6, 32, 18, 11, 12, 14, 14, 14, 11, 24, 18, 14, 28, 20]
     money_cols = (6, 7, 8, 9)
     thin, thick = Side(style="thin", color="999999"), Side(style="medium", color="000000")
     blue = PatternFill("solid", fgColor="C9DAF8")
+    tint = {6: PatternFill("solid", fgColor="E2F3E9"), 7: PatternFill("solid", fgColor="FCF1D6"),   # готівка, без ПДВ
+            8: PatternFill("solid", fgColor="F5E0E5")}                                             # з ПДВ
     wrap = Alignment(wrap_text=True, vertical="bottom")
     money = '#,##0.00'
     ws.append(head)
@@ -324,12 +326,14 @@ def xlsx():
         ws.column_dimensions[get_column_letter(i)].width = w
         c = ws.cell(row=1, column=i)
         c.font = Font(bold=True)
+        if i in tint:
+            c.fill = tint[i]
         c.alignment = Alignment(wrap_text=True, vertical="bottom")
         c.border = Border(bottom=thick)
     ws.freeze_panes = "C2"
 
     def total_row(label, tot, fill=None, size=12):
-        ws.append([None, label, None, tot["area"], tot["adj"] or None, tot["bank_vat"], tot["bank"], tot["cash"],
+        ws.append([None, label, None, tot["area"], tot["adj"] or None, tot["cash"], tot["bank"], tot["bank_vat"],
                    tot["m2"]] + [None] * 5)
         r = ws.max_row
         for i in range(1, len(head) + 1):
@@ -349,7 +353,7 @@ def xlsx():
             contract = " ".join(p for p in [f"№ {t['contract_no']}" if t and t["contract_no"] else "",
                                             (t["contract_date"] or "") if t else ""] if p)
             ws.append([x["no"], t["name"] if t else _("свободен"), w["name"] if w else "", x["area"] if w else None,
-                       x["adj"] or None, x["bank_vat"] or None, x["bank"] or None, x["cash"] or None, x["m2"],
+                       x["adj"] or None, x["cash"] or None, x["bank"] or None, x["bank_vat"] or None, x["m2"],
                        (t["activity"] or t["note"] or "") if t else "", contract,
                        (t["contract_end"] if t else "") or "", cts, (t["company_name"] if t else "") or ""])
             r = ws.max_row
@@ -359,6 +363,8 @@ def xlsx():
                 c.border = Border(top=thick if x["first"] else thin, bottom=thin, left=thin, right=thin)
                 if not t:
                     c.font = Font(color="888888", italic=True)
+                if i in tint:
+                    c.fill = tint[i]
             for i in money_cols:
                 ws.cell(row=r, column=i).number_format = money
     total_row(_("Итого"), grand)

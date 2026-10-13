@@ -278,8 +278,11 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .sheet input.tin { text-align: left; border-color: var(--line); background: var(--bg); margin: 1px 0; }
 .sheet td.who { vertical-align: middle; }
 .sheet td.who .muted { margin-top: 1px; }
-.sheet td.c-bank_vat, .sheet th.c-bank_vat { background: color-mix(in srgb, #3b74d8 5%, transparent); }
-.sheet td.c-cash, .sheet th.c-cash { background: color-mix(in srgb, #eda100 7%, transparent); }
+/* колонки оплати: готівка — зеленувата, без ПДВ — жовта, з ПДВ — бордова */
+.sheet { --c-cash: #2fa36b; --c-bank: #eda100; --c-vat: #b3364f; }
+.sheet tbody tr:not(.grp) td.c-cash { background: color-mix(in srgb, var(--c-cash) 10%, transparent); }
+.sheet tbody tr:not(.grp) td.c-bank { background: color-mix(in srgb, var(--c-bank) 9%, transparent); }
+.sheet tbody tr:not(.grp) td.c-bank_vat { background: color-mix(in srgb, var(--c-vat) 10%, transparent); }
 .sheet tr.newrow td { background: var(--accent-soft); }
 .sheet tr.addrow td { border-bottom: 0; padding: 3px 8px; }
 .sheet tr.addrow:hover td { background: transparent !important; }
@@ -329,5 +332,13 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 /* таблиця гортається разом зі сторінкою (без власної прокрутки, через яку шапка ховалась під меню):
    шапка прилипає під меню, «Разом» — над панеллю «Зберегти». На вузькому екрані гортається вбік уся сторінка. */
 .sheetwrap { min-width: 960px; }
-.sheet thead th.c-bank_vat { background: color-mix(in srgb, #3b74d8 5%, var(--card)); }
-.sheet thead th.c-cash { background: color-mix(in srgb, #eda100 7%, var(--card)); }
+.sheet thead th.c-cash { background: color-mix(in srgb, var(--c-cash) 14%, var(--card)); box-shadow: inset 0 3px 0 var(--c-cash); }
+.sheet thead th.c-bank { background: color-mix(in srgb, var(--c-bank) 13%, var(--card)); box-shadow: inset 0 3px 0 var(--c-bank); }
+.sheet thead th.c-bank_vat { background: color-mix(in srgb, var(--c-vat) 14%, var(--card)); box-shadow: inset 0 3px 0 var(--c-vat); }
+.sheet tfoot td.c-cash { background: color-mix(in srgb, var(--c-cash) 12%, var(--card)); }
+.sheet tfoot td.c-bank { background: color-mix(in srgb, var(--c-bank) 11%, var(--card)); }
+.sheet tfoot td.c-bank_vat { background: color-mix(in srgb, var(--c-vat) 12%, var(--card)); }
+/* Safari: поля вводу малюються поверх прилиплої шапки — опускаємо їх під неї */
+.sheet td input, .sheet td select { position: relative; z-index: 0; }
+.sheet thead th { z-index: 5; }
+.sheet tfoot td { z-index: 4; }

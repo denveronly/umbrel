@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.7.5"
+version: "1.7.6"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,9 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Орендарі: шапка таблиці з назвами колонок більше не з'їжджає під меню при прокрутці донизу — таблиця
-  гортається разом зі сторінкою, шапка прилипає під меню, рядок «Разом» — над кнопкою «Зберегти».
-  З 1.7.4: підписи складів на мапі вміщуються у свій контур.
+  Орендарі: колонки оплати в порядку Готівка → Без ПДВ → З ПДВ, кожна своїм кольором (зеленувата, жовта,
+  бордова) — і в таблиці, і у вигрузці Excel. Виправлено просвічування сум крізь шапку таблиці в Safari.
 dependencies: []
 path: ""
 defaultUsername: ""

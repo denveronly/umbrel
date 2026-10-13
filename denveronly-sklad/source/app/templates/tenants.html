@@ -58,9 +58,9 @@
   <thead><tr>
     <th>№</th><th>{{ _("Арендатор") }}<small>{{ _("нажмите на название — карточка: IBAN, директор, контакты, договор") }}</small></th>
     <th class="n">{{ _("Площадь") }}<small>{{ _("м²") }}</small></th><th class="n">{{ _("Прилегающая") }}<small>{{ _("м²") }}</small></th>
-    <th class="n c-bank_vat">{{ _("С ПДВ") }}<small>{{ _("грн/мес") }}</small></th>
-    <th class="n c-bank">{{ _("Без ПДВ") }}<small>{{ _("грн/мес") }}</small></th>
     <th class="n c-cash">{{ _("Наличка") }}<small>{{ _("грн/мес") }}</small></th>
+    <th class="n c-bank">{{ _("Без ПДВ") }}<small>{{ _("грн/мес") }}</small></th>
+    <th class="n c-bank_vat">{{ _("С ПДВ") }}<small>{{ _("грн/мес") }}</small></th>
     <th class="n">{{ _("Цена за м²") }}<small>{{ _("грн/мес") }}</small></th>
   </tr></thead>
   {% for g in groups %}
@@ -68,9 +68,9 @@
     <tr class="grp">
       <td colspan="2" class="gname">{{ g.name }} <small>{{ _("сдано") }} {{ num(g.tot.rented) }} {{ _("из") }} {{ num(g.tot.area) }} {{ _("м²") }}</small></td>
       <td class="n">{{ num(g.tot.area) }}</td><td class="n">{{ num(g.tot.adj) if g.tot.adj else '' }}</td>
-      <td class="n gsum">{{ money(g.tot.bank_vat) if g.tot.bank_vat else '' }}</td>
-      <td class="n gsum">{{ money(g.tot.bank) if g.tot.bank else '' }}</td>
-      <td class="n gsum">{{ money(g.tot.cash) if g.tot.cash else '' }}</td>
+      <td class="n gsum c-cash">{{ money(g.tot.cash) if g.tot.cash else '' }}</td>
+      <td class="n gsum c-bank">{{ money(g.tot.bank) if g.tot.bank else '' }}</td>
+      <td class="n gsum c-bank_vat">{{ money(g.tot.bank_vat) if g.tot.bank_vat else '' }}</td>
       <td class="n" title="{{ _("средняя цена сданных м²") }}">{{ money(g.tot.m2) if g.tot.m2 else '' }}</td>
     </tr>
     {% for r in g.rows %}{% set t = r.t %}{% set w = r.w %}
@@ -84,7 +84,7 @@
       {% if w %}
       <td>{{ cell('w|%d|area'|format(w.id), num(r.area), 'area') }}</td>
       <td>{{ cell('w|%d|adj'|format(w.id), num(r.adj) if r.adj else '', 'adj') }}</td>
-      {% for k in ('bank_vat', 'bank', 'cash') %}<td class="c-{{ k }}">{{ cell('w|%d|%s'|format(w.id, k), money(r[k]) if r[k] else '', 'cost') }}</td>{% endfor %}
+      {% for k in ('cash', 'bank', 'bank_vat') %}<td class="c-{{ k }}">{{ cell('w|%d|%s'|format(w.id, k), money(r[k]) if r[k] else '', 'cost') }}</td>{% endfor %}
       <td>{{ cell('w|%d|m2'|format(w.id), money(r.m2) if r.m2 else '', 'm2') }}</td>
       {% else %}<td colspan="6" class="muted"><a href="{{ url_for('tenant_edit', tid=t.id) }}#prices">{{ _("закрепить склад") }}</a></td>{% endif %}
     </tr>
@@ -98,7 +98,7 @@
   <tfoot><tr>
     <td colspan="2">{{ _("Итого") }} <small class="muted">{{ _("сдано") }} {{ num(grand.rented) }} {{ _("из") }} {{ num(grand.area) }} {{ _("м²") }}</small></td>
     <td class="n">{{ num(grand.area) }}</td><td class="n">{{ num(grand.adj) if grand.adj else '' }}</td>
-    <td class="n">{{ money(grand.bank_vat) }}</td><td class="n">{{ money(grand.bank) }}</td><td class="n">{{ money(grand.cash) }}</td>
+    <td class="n c-cash">{{ money(grand.cash) }}</td><td class="n c-bank">{{ money(grand.bank) }}</td><td class="n c-bank_vat">{{ money(grand.bank_vat) }}</td>
     <td class="n" title="{{ _("средняя цена сданных м²") }}">{{ money(grand.m2) if grand.m2 else '' }}</td>
   </tr></tfoot>
   {% endif %}
@@ -109,8 +109,8 @@
     <div class="newwh"><input class="tin" data-f="wh" list="free_whs" placeholder="{{ _("Склад (можно позже)") }}" autocomplete="off">
     <select data-f="cat" title="{{ _("Подкатегория") }}"><option value="">{{ _("без подкатегории") }}</option>{% for c in cats %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div></td>
   <td><input class="area" data-f="area" inputmode="decimal"></td><td><input class="adj" data-f="adj" inputmode="decimal"></td>
-  <td class="c-bank_vat"><input class="cost" data-f="bank_vat" inputmode="decimal"></td><td class="c-bank"><input class="cost" data-f="bank" inputmode="decimal"></td>
-  <td class="c-cash"><input class="cost" data-f="cash" inputmode="decimal"></td><td><input class="m2" data-f="m2" inputmode="decimal"></td>
+  <td class="c-cash"><input class="cost" data-f="cash" inputmode="decimal"></td><td class="c-bank"><input class="cost" data-f="bank" inputmode="decimal"></td>
+  <td class="c-bank_vat"><input class="cost" data-f="bank_vat" inputmode="decimal"></td><td><input class="m2" data-f="m2" inputmode="decimal"></td>
 </tr></template>
 <div class="savebar"><span class="muted" id="dirtyinfo">{{ _("Клетки редактируются прямо в таблице: Enter или ↑↓ — соседняя строка. Сумму вписывайте в колонку формы оплаты — цена за м² пересчитается сама.") }}</span><span class="spacer"></span>
   <button type="button" class="ghost" id="undobtn" onclick="location.reload()" hidden>{{ _("Отменить") }}</button>
@@ -188,7 +188,7 @@ const changed = {};                  // 'w|12|area' -> значення
 let saved = false;                   // після збереження сторінка перезавантажується без питання
 const pnum = v => { v = String(v || '').replace(/[\s  ]/g, '').replace(',', '.'); return v === '' ? NaN : Number(v); };
 const fmt = (x, d) => isNaN(x) ? '' : x.toLocaleString('uk-UA', {minimumFractionDigits: d, maximumFractionDigits: d}).replace(/ | /g, ' ');
-const COSTS = ['bank_vat', 'bank', 'cash'];
+const COSTS = ['cash', 'bank', 'bank_vat'];
 const PT_NAMES = {{ PAYMENT_TYPES|tojson }};
 
 function mark(inp) {
