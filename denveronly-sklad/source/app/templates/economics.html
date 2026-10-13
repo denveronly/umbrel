@@ -3,16 +3,24 @@
 {% block head %}
 <style>
 .viz-root {
+  --pay-cash: #2e9e66; --pay-bank: #d99400; --pay-vat: #b3364f;
   --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --line-1: #2a78d6;
   --grid: #e7e5df; --axis: #8a8d93; --surface: var(--card);
 }
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .viz-root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --line-1: #3987e5; --grid: #2e3238; --axis: #8d9198; }
+  :root:where(:not([data-theme="light"])) .viz-root { --pay-cash: #36b37a; --pay-bank: #e0a31a; --pay-vat: #cc4d65; --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --line-1: #3987e5; --grid: #2e3238; --axis: #8d9198; }
 }
-:root[data-theme="dark"] .viz-root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --line-1: #3987e5; --grid: #2e3238; --axis: #8d9198; }
+:root[data-theme="dark"] .viz-root { --pay-cash: #36b37a; --pay-bank: #e0a31a; --pay-vat: #cc4d65; --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --line-1: #3987e5; --grid: #2e3238; --axis: #8d9198; }
 .econ-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .fxbox { display: flex; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
 .fxbox b { font-size: 20px; font-variant-numeric: tabular-nums; }
+/* картки й колонки форм оплати — підфарбовані, як у таблиці орендарів */
+.kpi.pay-cash { background: color-mix(in srgb, var(--pay-cash) 9%, var(--card)); border-color: color-mix(in srgb, var(--pay-cash) 35%, var(--line)); }
+.kpi.pay-bank { background: color-mix(in srgb, var(--pay-bank) 9%, var(--card)); border-color: color-mix(in srgb, var(--pay-bank) 35%, var(--line)); }
+.kpi.pay-vat { background: color-mix(in srgb, var(--pay-vat) 9%, var(--card)); border-color: color-mix(in srgb, var(--pay-vat) 35%, var(--line)); }
+td.pc-cash, th.pc-cash { background: color-mix(in srgb, var(--pay-cash) 9%, transparent); }
+td.pc-bank, th.pc-bank { background: color-mix(in srgb, var(--pay-bank) 9%, transparent); }
+td.pc-vat, th.pc-vat { background: color-mix(in srgb, var(--pay-vat) 9%, transparent); }
 .kpi .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
 .kpi.total { border-color: var(--accent); }
 .chartcard h2 { margin: 0 0 2px; }
@@ -70,9 +78,9 @@ td.est { color: var(--muted); }
 <!-- поточний місяць -->
 <h2>{{ sel.label }}{% if sel.estimated %} <span class="badge warnb">{{ _("оценка") }}</span>{% endif %}</h2>
 <div class="kpis">
-  <div class="kpi"><small class="muted"><span class="sw" style="background:var(--series-1)"></span>{{ PAYMENT_TYPES.bank }}</small><b>{{ money(sel.bank) }}</b></div>
-  <div class="kpi"><small class="muted"><span class="sw" style="background:var(--series-2)"></span>{{ PAYMENT_TYPES.bank_vat }}</small><b>{{ money(sel.bank_vat) }}</b><small class="muted">{{ _("в т.ч. ПДВ") }} {{ money(sel.vat) }}</small></div>
-  <div class="kpi"><small class="muted"><span class="sw" style="background:var(--series-3)"></span>{{ PAYMENT_TYPES.cash }}</small><b>{{ money(sel.cash) }}</b></div>
+  <div class="kpi pay-cash"><small class="muted"><span class="sw" style="background:var(--pay-cash)"></span>{{ PAYMENT_TYPES.cash }}</small><b>{{ money(sel.cash) }}</b></div>
+  <div class="kpi pay-bank"><small class="muted"><span class="sw" style="background:var(--pay-bank)"></span>{{ PAYMENT_TYPES.bank }}</small><b>{{ money(sel.bank) }}</b></div>
+  <div class="kpi pay-vat"><small class="muted"><span class="sw" style="background:var(--pay-vat)"></span>{{ PAYMENT_TYPES.bank_vat }}</small><b>{{ money(sel.bank_vat) }}</b><small class="muted">{{ _("в т.ч. ПДВ") }} {{ money(sel.vat) }}</small></div>
   <div class="kpi total"><small class="muted">{{ _("Всего, грн") }}</small><b>{{ money(sel.total) }}</b>
     <small class="muted">{% if sel.usd %}≈ ${{ money(sel.usd) }} {{ _("по курсу") }} {{ '%.2f'|format(sel.rate) }}{% else %}USD —{% endif %}</small></div>
 </div>
@@ -86,7 +94,7 @@ td.est { color: var(--muted); }
       <th class="n">{{ _("Аренда") }}</th><th class="n">{{ _("Коммунальные") }}</th><th class="n">{{ _("Итого") }}</th></tr></thead>
     {% for pt in ('cash', 'bank', 'bank_vat') %}{% set its = sel['items']|selectattr('pt', 'equalto', pt)|list %}{% if its %}
     <tbody>
-      <tr class="ptrow"><td colspan="3"><span class="sw" style="background:var(--series-{{ {'bank': 1, 'bank_vat': 2, 'cash': 3}[pt] }})"></span> {{ PAYMENT_TYPES[pt] }} <span class="muted">({{ its|length }})</span></td>
+      <tr class="ptrow"><td colspan="3"><span class="sw" style="background:var(--pay-{{ {'bank': 'bank', 'bank_vat': 'vat', 'cash': 'cash'}[pt] }})"></span> {{ PAYMENT_TYPES[pt] }} <span class="muted">({{ its|length }})</span></td>
         <td class="n">{{ money(its|sum(attribute='rent')) }}</td><td class="n">{{ money(its|sum(attribute='util')) }}</td><td class="n"><b>{{ money(its|sum(attribute='total')) }}</b></td></tr>
       {% for it in its %}
       <tr><td><a href="{{ url_for('tenant_edit', tid=it.tenant_id) }}">{{ it.name }}</a></td><td class="muted">{{ PAYMENT_TYPES[it.pt] }}</td>
@@ -103,9 +111,9 @@ td.est { color: var(--muted); }
 <div class="card chartcard">
   <h2>{{ _("Начисления по формам оплаты, грн") }}</h2>
   <div class="legend">
-    <span style="--c:var(--series-1)">{{ PAYMENT_TYPES.bank }}</span>
-    <span style="--c:var(--series-2)">{{ PAYMENT_TYPES.bank_vat }}</span>
-    <span style="--c:var(--series-3)">{{ PAYMENT_TYPES.cash }}</span>
+    <span style="--c:var(--pay-cash)">{{ PAYMENT_TYPES.cash }}</span>
+    <span style="--c:var(--pay-bank)">{{ PAYMENT_TYPES.bank }}</span>
+    <span style="--c:var(--pay-vat)">{{ PAYMENT_TYPES.bank_vat }}</span>
   </div>
   <div class="chart" id="ch-stack"></div>
 </div>
@@ -127,15 +135,15 @@ td.est { color: var(--muted); }
 <h2>{{ _("По месяцам") }}</h2>
 <div class="tablewrap"><table>
   <thead><tr><th>{{ _("Месяц") }}</th>
-    <th class="n">{{ PAYMENT_TYPES.bank }}</th><th class="n">{{ PAYMENT_TYPES.bank_vat }}</th><th class="n">{{ _("в т.ч. ПДВ") }}</th>
-    <th class="n">{{ PAYMENT_TYPES.cash }}</th><th class="n">{{ _("Аренда") }}</th><th class="n">{{ _("Коммунальные") }}</th>
+    <th class="n pc-cash">{{ PAYMENT_TYPES.cash }}</th><th class="n pc-bank">{{ PAYMENT_TYPES.bank }}</th>
+    <th class="n pc-vat">{{ PAYMENT_TYPES.bank_vat }}</th><th class="n">{{ _("в т.ч. ПДВ") }}</th><th class="n">{{ _("Аренда") }}</th><th class="n">{{ _("Коммунальные") }}</th>
     <th class="n">{{ _("Всего, грн") }}</th><th class="n">{{ _("Курс") }}</th><th class="n">USD</th><th>{{ _("Источник") }}</th></tr></thead>
   <tbody>
   {% for r in rows|reverse %}
     <tr>
       <td><a href="{{ url_for('acts', period=r.period) }}">{{ r.label }}</a></td>
-      <td class="n">{{ money(r.bank) }}</td><td class="n">{{ money(r.bank_vat) }}</td><td class="n muted">{{ money(r.vat) }}</td>
-      <td class="n">{{ money(r.cash) }}</td><td class="n">{{ money(r.rent) }}</td><td class="n">{{ money(r.util) }}</td>
+      <td class="n pc-cash">{{ money(r.cash) }}</td><td class="n pc-bank">{{ money(r.bank) }}</td>
+      <td class="n pc-vat">{{ money(r.bank_vat) }}</td><td class="n muted">{{ money(r.vat) }}</td><td class="n">{{ money(r.rent) }}</td><td class="n">{{ money(r.util) }}</td>
       <td class="n"><b>{{ money(r.total) }}</b></td>
       <td class="n muted">{{ '%.4f'|format(r.rate) if r.rate else '—' }}</td>
       <td class="n">{{ money(r.usd) if r.usd is not none else '—' }}</td>
@@ -144,8 +152,8 @@ td.est { color: var(--muted); }
   {% endfor %}
   </tbody>
   <tfoot><tr><td>{{ _("Итого за период") }}</td>
-    <td class="n">{{ money(sums.bank) }}</td><td class="n">{{ money(sums.bank_vat) }}</td><td class="n">{{ money(sums.vat) }}</td>
-    <td class="n">{{ money(sums.cash) }}</td><td class="n">{{ money(sums.rent) }}</td><td class="n">{{ money(sums.util) }}</td>
+    <td class="n pc-cash">{{ money(sums.cash) }}</td><td class="n pc-bank">{{ money(sums.bank) }}</td>
+    <td class="n pc-vat">{{ money(sums.bank_vat) }}</td><td class="n">{{ money(sums.vat) }}</td><td class="n">{{ money(sums.rent) }}</td><td class="n">{{ money(sums.util) }}</td>
     <td class="n">{{ money(sums.total) }}</td><td></td><td class="n">{{ money(sums.usd) }}</td><td></td></tr></tfoot>
 </table></div>
 </div>
@@ -156,7 +164,7 @@ td.est { color: var(--muted); }
   const D = {{ chart|tojson }};
   const NAMES = {bank: {{ PAYMENT_TYPES.bank|tojson }}, bank_vat: {{ PAYMENT_TYPES.bank_vat|tojson }}, cash: {{ PAYMENT_TYPES.cash|tojson }}};
   const L = {total: {{ _("Всего")|tojson }}, est: {{ _("оценка")|tojson }}, rate: {{ _("Курс")|tojson }}};
-  const KEYS = ['bank', 'bank_vat', 'cash'], VAR = {bank: '--series-1', bank_vat: '--series-2', cash: '--series-3'};
+  const KEYS = ['cash', 'bank', 'bank_vat'], VAR = {cash: '--pay-cash', bank: '--pay-bank', bank_vat: '--pay-vat'};
   const css = v => getComputedStyle(document.querySelector('.viz-root')).getPropertyValue(v).trim();
   const fmt = (x, d = 0) => x == null ? '—' : x.toLocaleString('uk-UA', {minimumFractionDigits: d, maximumFractionDigits: d});
   const short = x => Math.abs(x) >= 1e6 ? fmt(x / 1e6, 1) + ' ' + {{ _("млн")|tojson }} : Math.abs(x) >= 1e4 ? fmt(x / 1e3, 0) + ' ' + {{ _("тыс")|tojson }} : fmt(x);
