@@ -176,6 +176,14 @@
 {% block scripts %}{% if view == 'sheet' %}
 <script>
 (() => {
+// висота верхнього меню і панелі «Зберегти» — для прилиплої шапки й підсумку таблиці
+const root = document.documentElement;
+const measure = () => {
+  root.style.setProperty('--navh', (document.querySelector('header.top')?.offsetHeight || 0) + 'px');
+  root.style.setProperty('--sbh', (document.querySelector('.savebar')?.offsetHeight || 0) + 'px');
+};
+measure(); addEventListener('resize', measure);
+if (window.ResizeObserver) document.querySelectorAll('header.top, .savebar').forEach(e => new ResizeObserver(measure).observe(e));
 const changed = {};                  // 'w|12|area' -> значення
 let saved = false;                   // після збереження сторінка перезавантажується без питання
 const pnum = v => { v = String(v || '').replace(/[\s  ]/g, '').replace(',', '.'); return v === '' ? NaN : Number(v); };
