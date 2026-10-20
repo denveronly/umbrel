@@ -1,0 +1,46 @@
+name: Build Withings → Garmin image
+
+# Builds the denveronly-withings-sync image for amd64 and arm64 and publishes it to GHCR.
+# The version comes from denveronly-withings-sync/source/VERSION. After a new version,
+# update the image tag in denveronly-withings-sync/docker-compose.yml and version in umbrel-app.yml.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "denveronly-withings-sync/source/**"
+      - ".github/workflows/withings-sync-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: v
+        run: echo "version=$(tr -d '[:space:]' < denveronly-withings-sync/source/VERSION)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: denveronly-withings-sync/source
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/denveronly/withings-sync:${{ steps.v.outputs.version }}
+            ghcr.io/denveronly/withings-sync:latest
+          cache-from: type=gha,scope=withings-sync
+          cache-to: type=gha,mode=max,scope=withings-sync

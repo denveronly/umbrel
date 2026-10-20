@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Withings → Garmin</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1c1f24; --muted:#6b7280; --line:#e3e6ea;
+          --accent:#2563eb; --ok:#15803d; --okbg:#e8f6ec; --err:#b91c1c; --errbg:#fdecec; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111317; --card:#1b1e24; --text:#e8eaed; --muted:#9aa1ab; --line:#2c3038;
+            --accent:#60a5fa; --ok:#4ade80; --okbg:#14291b; --err:#f87171; --errbg:#2e1616; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:18px; margin-bottom:16px; }
+  .card h2 { font-size:16px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+  .badge { font-size:12px; font-weight:600; padding:2px 8px; border-radius:99px; }
+  .on { background:var(--okbg); color:var(--ok); }
+  .off { background:var(--errbg); color:var(--err); }
+  p { margin:6px 0; }
+  .muted { color:var(--muted); font-size:13px; }
+  ol { margin:6px 0 10px; padding-left:20px; }
+  form { margin:8px 0 0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date] {
+    flex:1 1 200px; min-width:0; padding:9px 11px; border:1px solid var(--line); border-radius:8px;
+    background:var(--bg); color:var(--text); font:inherit; }
+  input[type=number] { flex:0 0 100px; }
+  button, .btn { padding:9px 14px; border:0; border-radius:8px; background:var(--accent); color:#fff;
+    font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:500; }
+  label.check { display:flex; gap:6px; align-items:center; margin:8px 0; }
+  .flash { padding:10px 14px; border-radius:8px; margin-bottom:12px; }
+  .flash.ok { background:var(--okbg); color:var(--ok); }
+  .flash.error { background:var(--errbg); color:var(--err); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:10px; }
+  .stats div { border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .stats b { display:block; font-size:12px; color:var(--muted); font-weight:500; }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px;
+        max-height:420px; overflow:auto; font-size:12px; white-space:pre-wrap; word-break:break-word; margin:8px 0 0; }
+  details summary { cursor:pointer; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Withings → Garmin Connect</h1>
+  <p class="sub">Copies weight and body composition from your Withings account into Garmin Connect.</p>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <section class="card">
+    <h2>1. Withings
+      {% if withings_ok %}<span class="badge on">connected</span>{% else %}<span class="badge off">not connected</span>{% endif %}
+    </h2>
+    {% if withings_ok %}
+      <form method="post" action="{{ url_for('withings_disconnect') }}">
+        <button class="ghost" onclick="return confirm('Disconnect Withings?')">Disconnect</button>
+      </form>
+    {% else %}
+      <ol>
+        <li><a href="{{ auth_url }}" target="_blank" rel="noopener">Open Withings authorization</a> and allow access.</li>
+        <li>Copy the code shown on the page you land on{% if own_app %} (or the whole address from the address bar){% endif %}.</li>
+        <li>Paste it here right away — it expires in about 30 seconds.</li>
+      </ol>
+      <form method="post" action="{{ url_for('withings_code') }}" class="row">
+        <input type="text" name="code" placeholder="Withings code" autocomplete="off" required>
+        <button>Connect</button>
+      </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>2. Garmin Connect
+      {% if garmin_ok %}<span class="badge on">connected</span>{% else %}<span class="badge off">not connected</span>{% endif %}
+    </h2>
+    {% if garmin_ok %}
+      <p>Signed in as <b>{{ s.garmin_username }}</b>.
+        {% if not s.garmin_password %}<span class="muted">Password not stored — if Garmin ever logs the app out, sign in here again.</span>{% endif %}</p>
+      <form method="post" action="{{ url_for('garmin_disconnect') }}">
+        <button class="ghost" onclick="return confirm('Disconnect Garmin?')">Disconnect</button>
+      </form>
+    {% elif mfa_waiting %}
+      <p>Enter the verification code Garmin sent for <b>{{ mfa_user }}</b>.</p>
+      <form method="post" action="{{ url_for('garmin_mfa') }}" class="row">
+        <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" required>
+        <button>Verify</button>
+      </form>
+    {% else %}
+      <form method="post" action="{{ url_for('garmin_login') }}">
+        <div class="row">
+          <input type="email" name="username" placeholder="Garmin email" value="{{ s.garmin_username }}" required>
+          <input type="password" name="password" placeholder="Password" required>
+        </div>
+        <label class="check"><input type="checkbox" name="remember" checked>
+          Store password for automatic re-login if Garmin's session expires</label>
+        <button>Sign in</button>
+      </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>3. Sync</h2>
+    <div class="stats">
+      <div><b>Status</b>{% if running %}running…{% elif st.last_run_ts %}{{ 'OK' if st.last_ok else 'failed' }}{% else %}—{% endif %}</div>
+      <div><b>Last run</b>{{ last_run }}</div>
+      <div><b>Last success</b>{{ last_ok }}</div>
+      <div><b>Next run</b>{{ next_run }}</div>
+    </div>
+    {% if st.last_message and not st.last_ok %}<p class="muted">{{ st.last_message }}</p>{% endif %}
+    <form method="post" action="{{ url_for('sync_now') }}" class="row">
+      <button {% if not (withings_ok and garmin_ok) or running %}disabled{% endif %}>Sync now</button>
+    </form>
+    <form method="post" action="{{ url_for('sync_now') }}" class="row">
+      <input type="date" name="fromdate" max="{{ today }}" required>
+      <button class="ghost" {% if not (withings_ok and garmin_ok) or running %}disabled{% endif %}>Re-sync from date</button>
+    </form>
+    <p class="muted">Scheduled runs only pick up new measurements. Use "Re-sync from date" once to copy your history.</p>
+  </section>
+
+  <section class="card">
+    <h2>Settings</h2>
+    <form method="post" action="{{ url_for('settings') }}">
+      <label class="check"><input type="checkbox" name="enabled" {% if s.enabled %}checked{% endif %}> Automatic sync</label>
+      <div class="row">Every <input type="number" name="interval_min" min="{{ min_interval }}" value="{{ s.interval_min }}"> minutes</div>
+      <label class="check"><input type="checkbox" name="blood_pressure" {% if s.blood_pressure %}checked{% endif %}> Also sync blood pressure</label>
+      <details>
+        <summary>Own Withings developer app (optional)</summary>
+        <p class="muted">By default the shared withings-sync app credentials are used. Fill these only if you registered your own app at developer.withings.com; then reconnect Withings.</p>
+        <div class="row" style="margin-top:8px">
+          <input type="text" name="withings_client_id" placeholder="Client ID" value="{{ s.withings_client_id }}">
+          <input type="password" name="withings_secret" placeholder="{{ 'Secret (saved)' if s.withings_secret else 'Consumer secret' }}">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <input type="text" name="withings_callback" placeholder="Callback URL" value="{{ s.withings_callback }}">
+        </div>
+      </details>
+      <p style="margin-top:12px"><button>Save</button></p>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Log</h2>
+    {% if logtext %}
+      <pre id="log">{{ logtext }}</pre>
+      <form method="post" action="{{ url_for('clear_log') }}"><button class="ghost">Clear log</button></form>
+    {% else %}
+      <p class="muted">No runs yet.</p>
+    {% endif %}
+  </section>
+</main>
+<script>
+  var l = document.getElementById('log'); if (l) l.scrollTop = l.scrollHeight;
+  {% if running %}setTimeout(function(){ location.reload(); }, 8000);{% endif %}
+</script>
+</body>
+</html>

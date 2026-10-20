@@ -1,0 +1,31 @@
+manifestVersion: 1
+id: denveronly-withings-sync
+name: Withings → Garmin
+tagline: Sync Withings scale weight and body composition into Garmin Connect
+icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-withings-sync/assets/icon.png
+category: automation
+version: "1.0.0"
+port: 60086
+description: >-
+  Garmin Connect does not import weight from Withings or Apple Health. This app copies
+  your Withings measurements (weight, body fat, muscle and bone mass, water; optionally
+  blood pressure) into Garmin Connect on a schedule.
+
+
+  Connect Withings and Garmin once in the web page (Garmin two-factor codes are supported),
+  then it syncs automatically. Use "Re-sync from date" once to copy your history.
+
+
+  Built around the open-source withings-sync tool by Jarek Hartman and contributors.
+developer: denveronly
+website: https://github.com/jaroslawhartman/withings-sync
+submitter: denveronly
+submission: https://github.com/denveronly/umbrel
+repo: https://github.com/denveronly/umbrel/tree/main/denveronly-withings-sync/source
+support: https://github.com/denveronly/umbrel/issues
+gallery: []
+releaseNotes: ""
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""

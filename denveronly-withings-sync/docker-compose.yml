@@ -1,0 +1,19 @@
+services:
+
+  app_proxy:
+    environment:
+      # Format: <app-id>_<service-name>_1
+      APP_HOST: denveronly-withings-sync_app_1
+      APP_PORT: 8080
+      # Umbrel login stays on: the page holds your Garmin/Withings sign-ins
+
+  app:
+    # Image is built by GitHub Actions from ./source (workflow .github/workflows/withings-sync-image.yml)
+    image: ghcr.io/denveronly/withings-sync:1.0.0
+    restart: on-failure
+    stop_grace_period: 30s
+    volumes:
+      # settings, Withings/Garmin tokens, sync log
+      - ${APP_DATA_DIR}/data:/data
+    environment:
+      TZ: Europe/Kyiv

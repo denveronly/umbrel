@@ -1,0 +1,5 @@
+withings-sync==6.1.0
+garminconnect==0.3.19
+flask==3.1.2
+gunicorn==23.0.0
+requests>=2.33.0
