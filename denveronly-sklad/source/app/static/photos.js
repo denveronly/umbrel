@@ -1,6 +1,7 @@
 // Галерея фото объекта: миниатюры, загрузка (несколько файлов / камера телефона), удаление, просмотр на весь экран.
 (function () {
   const t = window.t || (s => s);
+  const DL = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>';
   const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
   function render(el, wid, photos, opts = {}) {
@@ -10,6 +11,7 @@
     const thumbs = el._photos.map((p, i) => `
       <figure class="ph" data-i="${i}">
         <img src="${p.thumb}" alt="${esc(p.caption)}" loading="lazy">
+        <a class="phdl" href="${p.download}" download title="${t('Скачать фото')}" aria-label="${t('Скачать фото')}">${DL}</a>
         ${opts.readonly ? '' : `<button type="button" class="phdel" title="${t('Удалить фото')}" data-id="${p.id}">×</button>`}
         ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
       </figure>`).join('');
@@ -68,10 +70,12 @@
       box = document.createElement('div');
       box.className = 'lightbox';
       box.innerHTML = `<button class="lbx lbclose" title="${t('Закрыть')}">×</button>
+        <a class="lbx lbdl" download title="${t('Скачать фото')}">${DL}<span>${t('Скачать')}</span></a>
         <button class="lbx lbprev" title="${t('Назад')}">‹</button><img alt=""><button class="lbx lbnext" title="${t('Вперёд')}">›</button>
         <div class="lbcap"></div>`;
       document.body.appendChild(box);
       box.querySelector('.lbclose').onclick = close;
+      box.querySelector('.lbdl').onclick = e => e.stopPropagation();
       box.querySelector('.lbprev').onclick = e => { e.stopPropagation(); go(-1); };
       box.querySelector('.lbnext').onclick = e => { e.stopPropagation(); go(1); };
       box.addEventListener('click', e => { if (e.target === box) close(); });
@@ -89,6 +93,7 @@
   function show() {
     const p = list[idx];
     box.querySelector('img').src = p.url;
+    box.querySelector('.lbdl').href = p.download || p.url;
     box.querySelector('.lbcap').textContent = (p.caption ? p.caption + ' · ' : '') + `${idx + 1} / ${list.length}` + (p.created_at ? ' · ' + p.created_at.slice(0, 16) : '');
     box.querySelectorAll('.lbprev,.lbnext').forEach(b => b.style.display = list.length > 1 ? '' : 'none');
   }

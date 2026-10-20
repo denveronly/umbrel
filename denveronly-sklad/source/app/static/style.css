@@ -188,8 +188,16 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
                  background: linear-gradient(transparent, rgba(0,0,0,.6)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .phdel { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; padding: 0; border-radius: 50%;
          background: rgba(0,0,0,.55); border: 0; color: #fff; font-size: 16px; line-height: 24px; opacity: 0; transition: opacity .15s; }
-.ph:hover .phdel { opacity: 1; }
-@media (hover: none) { .phdel { opacity: .85; } }
+.phdl { position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,.55);
+        color: #fff; font-size: 13px; line-height: 24px; text-align: center; text-decoration: none; opacity: 0; transition: opacity .15s; }
+.phdl:hover { background: var(--accent); color: #fff; }
+.ph:hover .phdel, .ph:hover .phdl, .phdl:focus-visible { opacity: 1; }
+@media (hover: none) { .phdel, .phdl { opacity: .85; } }
+.phdl svg { vertical-align: -2px; }
+.whdesc { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.5; margin: 0; }
+.whdesc.empty { color: var(--muted); font-style: italic; }
+.descbox textarea { width: 100%; min-height: 140px; resize: vertical; font: inherit; font-size: 13.5px; line-height: 1.5; }
+textarea.desc { min-height: 150px; resize: vertical; line-height: 1.5; }
 .phadd { aspect-ratio: 4 / 3; border: 1.5px dashed var(--line); border-radius: 8px; display: flex; flex-direction: column;
          align-items: center; justify-content: center; gap: 2px; cursor: pointer; color: var(--accent); text-align: center; font-size: 12px; }
 .phadd:hover { border-color: var(--accent); background: var(--accent-soft); }
@@ -209,6 +217,10 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 .lbprev { left: 14px; top: 50%; transform: translateY(-50%); }
 .lbnext { right: 14px; top: 50%; transform: translateY(-50%); }
 .lbcap { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #ddd; font-size: 13px; }
+.lbdl { top: 14px; right: 72px; width: auto; padding: 0 16px; font-size: 15px; display: flex; align-items: center; gap: 8px;
+        border-radius: 24px; text-decoration: none; }
+.lbdl svg { font-size: 20px; }
+.lbdl:hover { color: #fff; }
 .langbtn { font-size: 12px; font-weight: 700; letter-spacing: .03em; padding: 5px 8px; }
 .themecorner { display: flex; gap: 6px; }
 

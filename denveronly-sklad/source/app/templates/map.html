@@ -124,6 +124,9 @@ function select(id, zoom = true, fromList = false) {
       <div class="prices one">
         <div class="price"><small>${w.payment_type ? PT[w.payment_type] : t('свободен — цена для предложения')}</small><b>${fmt(p.total)}</b><small>${fmt(p.rate)} ${t('грн/м²')}${p.vat ? ' · ' + t('в т.ч. ПДВ') + ' ' + fmt(p.vat) : ''}</small></div>
       </div>
+      <div class="row" style="margin-top:12px"><h3 class="phh" style="margin:0">${t('Описание')}</h3><span class="spacer"></span>
+        <button type="button" class="sm ghost" id="desc-edit" onclick="editDesc(${w.id})">✎ ${t('Изменить')}</button></div>
+      <div id="desc-view"><p class="whdesc ${w.description ? '' : 'empty'}">${w.description ? esc(w.description) : t('Описания пока нет')}</p></div>
       <h3 class="phh">${t('Фото')}</h3>
       <div id="wh-gallery"></div>
       <div class="row" style="margin-top:10px">
@@ -140,6 +143,25 @@ function select(id, zoom = true, fromList = false) {
   });
   // клік по контуру на мапі — прокрутити список до складу; клік у списку — нічого не прокручуємо
   if (fromList) revealCard(); else document.querySelector('.whitem.sel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+}
+// опис об'єкта: перегляд / редагування прямо в картці (можна вставити будь-який текст)
+function editDesc(id) {
+  const w = whs.find(x => x.id === id), v = document.getElementById('desc-view');
+  document.getElementById('desc-edit').hidden = true;
+  v.innerHTML = `<div class="descbox"><textarea id="desc-ta" placeholder="${t('Вставьте или напишите любой текст: состояние, ворота, высота, пол, электричество, условия…')}"></textarea>
+    <div class="row" style="margin-top:6px"><button type="button" class="sm" id="desc-save">${t('Сохранить')}</button>
+    <button type="button" class="sm ghost" id="desc-cancel">${t('Отмена')}</button><span class="muted" id="desc-st"></span></div></div>`;
+  const ta = document.getElementById('desc-ta');
+  ta.value = w.description || ''; ta.focus();
+  const done = () => { document.getElementById('desc-edit').hidden = false;
+    v.innerHTML = `<p class="whdesc ${w.description ? '' : 'empty'}">${w.description ? esc(w.description) : t('Описания пока нет')}</p>`; };
+  document.getElementById('desc-cancel').onclick = done;
+  document.getElementById('desc-save').onclick = async () => {
+    const r = await fetch(`/api/warehouses/${id}/description`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({description: ta.value})});
+    if (!r.ok) { document.getElementById('desc-st').textContent = t('Ошибка сохранения'); return; }
+    w.description = (await r.json()).description; done();
+  };
 }
 // картка під складом унизу списку — прокрутити рівно настільки, щоб її було видно (склад лишається вгорі видимим)
 function revealCard() {
@@ -175,6 +197,7 @@ function popupHtml(w) {
       ${row(t('В месяц'), `<b>${fmt(p.total)}</b> ${t('грн')}${p.vat ? ` <span class="muted">(${t('в т.ч. ПДВ')} ${fmt(p.vat)})</span>` : ''}`)}
       ${row(t('Цена за м²'), fmt(p.rate) + ' ' + t('грн'))}
       ${(w.photos || []).length ? row(t('Фото'), (w.photos || []).length) : ''}
+      ${w.description ? row(t('Описание'), esc(w.description.length > 160 ? w.description.slice(0, 160) + '…' : w.description).replace(/\n/g, '<br>')) : ''}
       ${w.note ? row(t('Заметка'), esc(w.note)) : ''}
     </table>
     <div class="whpop-btns">

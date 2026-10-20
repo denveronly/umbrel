@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
     row_no TEXT,                                 -- № у таблиці орендарів, вписаний вручну (1, 2.1, 2.2…); сортування
     polygon TEXT,
     color TEXT,
+    description TEXT,                            -- опис об'єкта (довільний текст)
     note TEXT
 );
 
@@ -393,7 +394,7 @@ def close_db(_e=None):
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
-                   "row_no": "TEXT"},
+                   "row_no": "TEXT", "description": "TEXT"},
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",

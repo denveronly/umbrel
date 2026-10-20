@@ -26,7 +26,8 @@ def photos_for(wid):
 
 def photo_dict(r):
     return {"id": r["id"], "caption": r["caption"] or "", "created_at": r["created_at"],
-            "url": url_for("photos.full", pid=r["id"]), "thumb": url_for("photos.thumb", pid=r["id"])}
+            "url": url_for("photos.full", pid=r["id"]), "thumb": url_for("photos.thumb", pid=r["id"]),
+            "download": url_for("photos.download", pid=r["id"])}
 
 
 def _save(wid, f):
@@ -98,6 +99,20 @@ def _row(pid):
 def full(pid):
     r = _row(pid)
     return send_from_directory(photos_dir(), r["filename"], max_age=86400 * 30)
+
+
+@bp.route("/photos/<int:pid>/download")
+def download(pid):
+    """Скачати фото файлом: «<склад>_<N>.jpg»."""
+    import re as _re
+    r = _row(pid)
+    db = get_db()
+    wh = db.execute("SELECT name FROM warehouses WHERE id=?", (r["warehouse_id"],)).fetchone()
+    ids = [x["id"] for x in db.execute("SELECT id FROM warehouse_photos WHERE warehouse_id=? ORDER BY id",
+                                       (r["warehouse_id"],))]
+    base = _re.sub(r'[\\/:*?"<>|\s]+', "_", (wh["name"] if wh else "foto")).strip("_") or "foto"
+    name = f"{base}_{ids.index(pid) + 1 if pid in ids else pid}.jpg"
+    return send_from_directory(photos_dir(), r["filename"], as_attachment=True, download_name=name)
 
 
 @bp.route("/photos/<int:pid>/thumb")

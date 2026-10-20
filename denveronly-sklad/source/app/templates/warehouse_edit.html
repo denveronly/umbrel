@@ -26,6 +26,7 @@
     <span class="row"><input type="color" name="color" style="width:60px;padding:2px" value="{{ wh.color if wh and wh.color else '#2f7fc1' }}">
     <label class="check"><input type="checkbox" name="use_color" value="1" {{ 'checked' if wh and wh.color }}> {{ _("свой цвет") }}</label></span>
     <span class="muted">{{ _("без галочки: зелёный — сдан, серый — свободен") }}</span></label>
+  <label class="full">{{ _("Описание объекта") }}<textarea name="description" class="desc" rows="7" placeholder="{{ _("Вставьте или напишите любой текст: состояние, ворота, высота, пол, электричество, условия…") }}">{{ wh.description if wh and wh.description else '' }}</textarea></label>
   <label class="full">{{ _("Заметка") }}<textarea name="note" rows="2">{{ wh.note if wh else '' }}</textarea></label>
   <div class="full row">
     <button>{{ _("Сохранить") }}</button>

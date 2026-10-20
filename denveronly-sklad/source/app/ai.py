@@ -109,6 +109,7 @@ TOOLS = [
          "tenant": {"type": "string", "description": "назва орендаря, до якого прив'язати (має існувати)"},
          "category": {"type": "string", "description": "підкатегорія (Ангари, Навіси…); якщо такої немає — створюється"},
          "adjacent_area": {"type": "number", "description": "прилегла територія, м² (довідково)"},
+         "description": {"type": "string", "description": "опис об'єкта (довільний текст)"},
          "note": {"type": "string"}}, "required": ["name"]}}}, "required": ["items"]}},
     {"name": "upsert_tenants", "description": "Створити або оновити орендарів (за назвою).",
      "input_schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {
@@ -399,6 +400,8 @@ def run_tool(name, args):
                 vals["area"] = float(it["area"])
             if it.get("note"):
                 vals["note"] = it["note"]
+            if it.get("description"):
+                vals["description"] = it["description"].strip()
             if it.get("tenant"):
                 vals["tenant_id"] = _need("tenants", it["tenant"], "Орендаря")["id"]
             if it.get("adjacent_area") is not None:

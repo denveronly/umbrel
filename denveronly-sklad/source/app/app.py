@@ -137,6 +137,26 @@ def api_polygon(wid):
     return jsonify(ok=True)
 
 
+def clean_text(v):
+    """Вставлений текст: прибрати \r, зайві порожні рядки по краях; порожньо -> None."""
+    v = (v or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    return v[:20000] or None
+
+
+@app.route("/api/warehouses/<int:wid>/description", methods=["POST"])
+def api_description(wid):
+    """Опис об'єкта з картки на мапі."""
+    db = get_db()
+    wh = db.execute("SELECT name FROM warehouses WHERE id=?", (wid,)).fetchone()
+    if not wh:
+        abort(404)
+    text = clean_text((request.get_json(force=True) or {}).get("description"))
+    db.execute("UPDATE warehouses SET description=? WHERE id=?", (text, wid))
+    log("Описание склада изменено", wh["name"], commit=False)
+    db.commit()
+    return jsonify(ok=True, description=text)
+
+
 @app.route("/api/warehouses/<int:wid>/category", methods=["POST"])
 def api_category(wid):
     """Підкатегорія складу з мапи: наявна (category_id) або нова (new_name — створюється)."""
@@ -231,13 +251,13 @@ def warehouse_edit(wid=None):
         vals = (request.form["name"].strip(), fnum("area", 0), request.form.get("tenant_id") or None,
                 request.form.get("color") if request.form.get("use_color") else None,
                 request.form.get("note", "").strip(), request.form.get("category_id", type=int),
-                fnum("adjacent_area"))
+                fnum("adjacent_area"), clean_text(request.form.get("description")))
         if wh:
             db.execute("UPDATE warehouses SET name=?, area=?, tenant_id=?, color=?, note=?, category_id=?, "
-                       "adjacent_area=? WHERE id=?", vals + (wid,))
+                       "adjacent_area=?, description=? WHERE id=?", vals + (wid,))
         else:
-            wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area) "
-                             "VALUES (?,?,?,?,?,?,?)", vals).lastrowid
+            wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area, "
+                             "description) VALUES (?,?,?,?,?,?,?,?)", vals).lastrowid
         set_price(wid, form_price())
         db.commit()
         flash(_("Сохранено"))
