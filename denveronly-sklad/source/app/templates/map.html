@@ -124,11 +124,11 @@ function select(id, zoom = true, fromList = false) {
       <div class="prices one">
         <div class="price"><small>${w.payment_type ? PT[w.payment_type] : t('свободен — цена для предложения')}</small><b>${fmt(p.total)}</b><small>${fmt(p.rate)} ${t('грн/м²')}${p.vat ? ' · ' + t('в т.ч. ПДВ') + ' ' + fmt(p.vat) : ''}</small></div>
       </div>
-      <div class="row" style="margin-top:12px"><h3 class="phh" style="margin:0">${t('Описание')}</h3><span class="spacer"></span>
+      <h3 class="phh">${t('Фото и описание')}</h3>
+      <div id="wh-gallery"></div>
+      <div class="row" style="margin-top:8px"><span class="muted">${t('Описание')}</span><span class="spacer"></span>
         <button type="button" class="sm ghost" id="desc-edit" onclick="editDesc(${w.id})">✎ ${t('Изменить')}</button></div>
       <div id="desc-view"><p class="whdesc ${w.description ? '' : 'empty'}">${w.description ? esc(w.description) : t('Описания пока нет')}</p></div>
-      <h3 class="phh">${t('Фото')}</h3>
-      <div id="wh-gallery"></div>
       <div class="row" style="margin-top:10px">
         <button class="sm" onclick="startDraw(${w.id})">${w.polygon ? t('Перерисовать контур') : t('Нарисовать контур')}</button>
         ${w.polygon ? `<button class="sm danger" onclick="savePoly(${w.id}, null)">${t('Убрать')}</button>` : ''}

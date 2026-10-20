@@ -197,7 +197,9 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 .whdesc { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.5; margin: 0; }
 .whdesc.empty { color: var(--muted); font-style: italic; }
 .descbox textarea { width: 100%; min-height: 140px; resize: vertical; font: inherit; font-size: 13.5px; line-height: 1.5; }
-textarea.desc { min-height: 150px; resize: vertical; line-height: 1.5; }
+textarea.desc { min-height: 150px; resize: vertical; line-height: 1.5; width: 100%; }
+.descform { margin-top: 14px; display: grid; gap: 8px; justify-items: start; }
+.descform label { width: 100%; }
 .phadd { aspect-ratio: 4 / 3; border: 1.5px dashed var(--line); border-radius: 8px; display: flex; flex-direction: column;
          align-items: center; justify-content: center; gap: 2px; cursor: pointer; color: var(--accent); text-align: center; font-size: 12px; }
 .phadd:hover { border-color: var(--accent); background: var(--accent-soft); }

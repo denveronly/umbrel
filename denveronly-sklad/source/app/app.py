@@ -150,10 +150,14 @@ def api_description(wid):
     wh = db.execute("SELECT name FROM warehouses WHERE id=?", (wid,)).fetchone()
     if not wh:
         abort(404)
-    text = clean_text((request.get_json(force=True) or {}).get("description"))
+    form = not request.is_json                       # форма в блоці «Фото й опис» картки складу
+    text = clean_text(request.form.get("description") if form else (request.get_json() or {}).get("description"))
     db.execute("UPDATE warehouses SET description=? WHERE id=?", (text, wid))
     log("Описание склада изменено", wh["name"], commit=False)
     db.commit()
+    if form:
+        flash(_("Описание сохранено"))
+        return redirect(url_for("warehouse_edit", wid=wid) + "#photos")
     return jsonify(ok=True, description=text)
 
 
@@ -251,13 +255,13 @@ def warehouse_edit(wid=None):
         vals = (request.form["name"].strip(), fnum("area", 0), request.form.get("tenant_id") or None,
                 request.form.get("color") if request.form.get("use_color") else None,
                 request.form.get("note", "").strip(), request.form.get("category_id", type=int),
-                fnum("adjacent_area"), clean_text(request.form.get("description")))
+                fnum("adjacent_area"))
         if wh:
             db.execute("UPDATE warehouses SET name=?, area=?, tenant_id=?, color=?, note=?, category_id=?, "
-                       "adjacent_area=?, description=? WHERE id=?", vals + (wid,))
+                       "adjacent_area=? WHERE id=?", vals + (wid,))
         else:
-            wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area, "
-                             "description) VALUES (?,?,?,?,?,?,?,?)", vals).lastrowid
+            wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area) "
+                             "VALUES (?,?,?,?,?,?,?)", vals).lastrowid
         set_price(wid, form_price())
         db.commit()
         flash(_("Сохранено"))
