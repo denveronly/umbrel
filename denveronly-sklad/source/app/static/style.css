@@ -400,3 +400,12 @@ details.tedit form label { color: var(--ink); }
 .tfmeta .muted { white-space: nowrap; }
 .tfname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .tfbtns { display: flex; gap: 4px; flex: none; }
+/* поле дати дд.мм.рррр */
+.dmy { position: relative; display: flex; align-items: stretch; width: 100%; }
+.dmy > input[type=text] { flex: 1; min-width: 0; padding-right: 40px; font-variant-numeric: tabular-nums; }
+.dmy > input.bad { border-color: var(--warn); background: var(--warn-soft); }
+.dmy-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 32px; height: 30px; padding: 0;
+  display: flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--muted); }
+.dmy-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.dmy-nat { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.row > .dmy { width: 150px; flex: none; }

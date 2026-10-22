@@ -135,8 +135,8 @@
 (() => {
   const sel = document.querySelector('select[name=tenant_id]'), since = document.getElementById('tenant_since');
   if (!sel || !since) return;
-  const orig = sel.value, origSince = since.value;
-  sel.addEventListener('change', () => { since.value = sel.value === orig ? origSince : (sel.value ? {{ today|tojson }} : ''); });
+  const orig = sel.value, origSince = {{ ((wh.tenant_since if wh else '') or '')|tojson }};
+  sel.addEventListener('change', () => dmySet(since, sel.value === orig ? origSince : (sel.value ? {{ today|tojson }} : '')));
 })();
 // ціна за м² <-> сума за місяць
 (() => {

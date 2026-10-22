@@ -27,6 +27,7 @@
 </script>
 <script>window.I18N = {{ js_i18n()|tojson }}; function t(s) { return window.I18N[s] || s; }</script>
 <script src="{{ url_for('static', filename='photos.js') }}" defer></script>
+<script src="{{ url_for('static', filename='dates.js') }}" defer></script>
 {% block head %}{% endblock %}
 </head>
 <body>

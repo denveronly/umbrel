@@ -422,7 +422,28 @@ def close_db(_e=None):
             db.close()
 
 
+def to_iso(s):
+    """'01.03.2024' / '1.3.24' / '2024-03-01' -> '2024-03-01'; нерозпізнане -> None."""
+    import re
+    from datetime import date as _d
+    s = (s or "").strip()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", s[:10]) if len(s) >= 10 else None
+    if m:
+        y, mo, d = map(int, m.groups())
+    else:
+        m = re.fullmatch(r"(\d{1,2})[./\-](\d{1,2})[./\-](\d{2}|\d{4})", s)
+        if not m:
+            return None
+        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        y += 2000 if y < 100 else 0
+    try:
+        return _d(y, mo, d).isoformat()
+    except ValueError:
+        return None
+
+
 TENANCY_TRIGGERS = """
+DROP TRIGGER IF EXISTS wh_tenant_change;
 CREATE TRIGGER IF NOT EXISTS wh_tenant_change AFTER UPDATE OF tenant_id ON warehouses
 WHEN OLD.tenant_id IS NOT NEW.tenant_id
 BEGIN
@@ -430,7 +451,9 @@ BEGIN
                                   price_m2, area, rent, started, ended)
     SELECT OLD.id, OLD.tenant_id, t.name, t.contract_no, t.contract_date, t.payment_type, OLD.price_m2, OLD.area,
            ROUND(COALESCE(OLD.price_m2, 0) * COALESCE(OLD.area, 0), 2),
-           COALESCE(OLD.tenant_since, t.contract_date), date('now', 'localtime')
+           COALESCE(OLD.tenant_since, CASE WHEN t.contract_date GLOB '[0-9][0-9].[0-9][0-9].[0-9][0-9][0-9][0-9]'
+               THEN substr(t.contract_date, 7, 4) || '-' || substr(t.contract_date, 4, 2) || '-' || substr(t.contract_date, 1, 2)
+               ELSE t.contract_date END), date('now', 'localtime')
     FROM (SELECT 1) LEFT JOIN tenants t ON t.id = OLD.tenant_id
     WHERE OLD.tenant_id IS NOT NULL;
     UPDATE warehouses SET tenant_since = CASE WHEN NEW.tenant_id IS NULL THEN NULL ELSE date('now', 'localtime') END
@@ -474,9 +497,14 @@ def _migrate(con, site=MAIN_SITE):
     # історія оренди: тригери на зміну орендаря складу (ловлять усі шляхи — картка складу, орендаря, виїзд, ШІ)
     con.executescript(TENANCY_TRIGGERS)
     for wid, tsince, cdate in con.execute("SELECT w.id, w.tenant_since, t.contract_date FROM warehouses w "
-                                          "JOIN tenants t ON t.id=w.tenant_id WHERE w.tenant_since IS NULL").fetchall():
-        if cdate:
-            con.execute("UPDATE warehouses SET tenant_since=? WHERE id=?", (cdate, wid))
+                                          "JOIN tenants t ON t.id=w.tenant_id").fetchall():
+        iso = to_iso(tsince) if tsince else to_iso(cdate)   # дата договору вписується вручну (01.03.2024)
+        if iso and iso != tsince:
+            con.execute("UPDATE warehouses SET tenant_since=? WHERE id=?", (iso, wid))
+    for hid, st in con.execute("SELECT id, started FROM warehouse_tenancy WHERE started IS NOT NULL").fetchall():
+        iso = to_iso(st)
+        if iso and iso != st:
+            con.execute("UPDATE warehouse_tenancy SET started=? WHERE id=?", (iso, hid))
 
     # реквізити з налаштувань першої версії -> компанія
     st = dict(con.execute("SELECT key, value FROM settings").fetchall())

@@ -42,18 +42,19 @@ sheet.init_app(app)
 @app.template_filter("dmy")
 def dmy(x):
     """2026-10-22 -> 22.10.2026."""
-    x = (x or "")[:10]
-    return f"{x[8:10]}.{x[5:7]}.{x[:4]}" if len(x) == 10 and x[4] == "-" else x
+    from db import to_iso
+    iso = to_iso(x)
+    return f"{iso[8:10]}.{iso[5:7]}.{iso[:4]}" if iso else (x or "")
 
 
 @app.template_filter("span")
 def span(a, b=None):
     """Тривалість оренди між датами: «2 р. 3 міс.» / «5 міс.» / «12 дн.»."""
-    try:
-        d1 = date.fromisoformat((a or "")[:10])
-        d2 = date.fromisoformat((b or "")[:10]) if b else date.today()
-    except ValueError:
+    from db import to_iso
+    i1, i2 = to_iso(a), (to_iso(b) if b else date.today().isoformat())
+    if not i1 or not i2:
         return ""
+    d1, d2 = date.fromisoformat(i1), date.fromisoformat(i2)
     if d2 < d1:
         return ""
     m = (d2.year - d1.year) * 12 + d2.month - d1.month - (1 if d2.day < d1.day else 0)
@@ -291,7 +292,8 @@ def warehouse_edit(wid=None):
         else:
             wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area) "
                              "VALUES (?,?,?,?,?,?,?)", vals).lastrowid
-        since = (request.form.get("tenant_since") or "").strip()
+        from db import to_iso
+        since = to_iso(request.form.get("tenant_since")) or ""
         if since and vals[2]:                            # «Орендує з» — вручну (тригер ставить сьогоднішню дату)
             db.execute("UPDATE warehouses SET tenant_since=? WHERE id=?", (since, wid))
         set_price(wid, form_price())
@@ -325,6 +327,7 @@ def tenancy_edit(hid):
     h = db.execute("SELECT * FROM warehouse_tenancy WHERE id=?", (hid,)).fetchone()
     if not h:
         abort(404)
+    from db import to_iso
     if request.form.get("delete"):
         db.execute("DELETE FROM warehouse_tenancy WHERE id=?", (hid,))
         log("Запись истории аренды удалена", f"{h['tenant_name']}: {h['started'] or '…'} — {h['ended'] or '…'}", commit=False)
@@ -333,9 +336,9 @@ def tenancy_edit(hid):
         rent = fnum("rent")
         db.execute("UPDATE warehouse_tenancy SET started=?, ended=?, contract_no=?, contract_date=?, rent=?, "
                    "price_m2=CASE WHEN ? IS NOT NULL AND area > 0 THEN ROUND(? / area, 4) ELSE price_m2 END, note=? "
-                   "WHERE id=?", (request.form.get("started") or None, request.form.get("ended") or None,
+                   "WHERE id=?", (to_iso(request.form.get("started")), to_iso(request.form.get("ended")),
                                   request.form.get("contract_no", "").strip() or None,
-                                  request.form.get("contract_date") or None, rent if rent is not None else h["rent"],
+                                  to_iso(request.form.get("contract_date")) or request.form.get("contract_date") or None, rent if rent is not None else h["rent"],
                                   rent, rent, request.form.get("note", "").strip() or None, hid))
         log("Запись истории аренды изменена", h["tenant_name"] or "", commit=False)
         flash(_("Сохранено"))
