@@ -377,3 +377,26 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; w
 .sitemenu a.on { color: var(--accent); }
 .sitemenu a svg { color: var(--accent); }
 .sitemenu .check { margin-left: auto; }
+
+/* історія оренди */
+table.tenancy td { vertical-align: top; }
+table.tenancy tr.past td, table.tenancy tr.past td a { color: var(--muted); }
+table.tenancy tr.past td a { text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent); }
+table.tenancy td.acts { width: 1%; white-space: nowrap; text-align: right; }
+details.tedit summary { list-style: none; display: inline-block; }
+details.tedit summary::-webkit-details-marker { display: none; }
+details.tedit[open] { position: relative; }
+details.tedit form { position: absolute; right: 0; z-index: 20; width: min(560px, 86vw); text-align: left; margin-top: 6px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.15); }
+details.tedit form label { color: var(--ink); }
+.prevten { color: var(--muted); font-size: 12.5px; margin: -4px 0 10px; }
+/* документи орендаря */
+.tfgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.tf { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); min-width: 0; }
+.tfthumb { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; cursor: zoom-in; flex: none; }
+.tfpdf { width: 56px; height: 56px; border-radius: 6px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, #c0392b 14%, var(--card)); color: #c0392b; font-weight: 700; font-size: 13px; text-decoration: none; }
+.tfmeta { display: flex; flex-direction: column; min-width: 0; flex: 1; font-size: 13px; }
+.tfmeta .muted { white-space: nowrap; }
+.tfname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.tfbtns { display: flex; gap: 4px; flex: none; }

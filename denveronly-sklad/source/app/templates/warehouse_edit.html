@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_tenancy.html" import tenancy_table with context %}
 {% block title %}{{ wh.name if wh else _("Новый склад") }}{% endblock %}
 {% block content %}
 <p><a href="{{ url_for('warehouses') }}">← {{ _("Склады") }}</a></p>
@@ -22,6 +23,8 @@
     <select name="tenant_id"><option value="">— {{ _("свободен") }} —</option>
       {% for t in tenants %}<option value="{{ t.id }}" {{ 'selected' if wh and wh.tenant_id == t.id }}>{{ t.name }}</option>{% endfor %}
     </select></label>
+  <label>{{ _("Арендует с") }}<input type="date" name="tenant_since" id="tenant_since" value="{{ (wh.tenant_since if wh else '') or '' }}">
+    <span class="muted">{{ _("при смене арендатора прошлый уходит в историю аренды") }}</span></label>
   <label>{{ _("Цвет на карте") }}
     <span class="row"><input type="color" name="color" style="width:60px;padding:2px" value="{{ wh.color if wh and wh.color else '#2f7fc1' }}">
     <label class="check"><input type="checkbox" name="use_color" value="1" {{ 'checked' if wh and wh.color }}> {{ _("свой цвет") }}</label></span>
@@ -78,6 +81,14 @@
   {% endif %}
 </div>
 
+<div class="card" id="tenancy">
+  <h2 style="margin-top:0">{{ _("История аренды") }}</h2>
+  {% set cur = [{'tid': cur_tenant.id, 'name': cur_tenant.name, 'contract_no': cur_tenant.contract_no, 'contract_date': cur_tenant.contract_date,
+                 'rent': price.total, 'price_m2': wh.price_m2, 'pt': pt, 'since': wh.tenant_since}] if cur_tenant else [] %}
+  {% if cur or tenancy %}{{ tenancy_table(tenancy, 'tenant', cur, url_for('warehouse_edit', wid=wh.id) ~ '#tenancy') }}
+  {% else %}<p class="muted">{{ _("Склад пока никто не арендовал.") }}</p>{% endif %}
+</div>
+
 <div class="card" id="photos">
   <h2 style="margin-top:0">{{ _("Фото и описание объекта") }}</h2>
   <div data-gallery data-wid="{{ wh.id }}" data-photos='{{ photos_for(wh.id)|tojson }}'></div>
@@ -120,6 +131,13 @@
 {% endblock %}
 {% block scripts %}
 <script>
+// новий орендар — «орендує з» сьогодні (попередній іде в історію оренди)
+(() => {
+  const sel = document.querySelector('select[name=tenant_id]'), since = document.getElementById('tenant_since');
+  if (!sel || !since) return;
+  const orig = sel.value, origSince = since.value;
+  sel.addEventListener('change', () => { since.value = sel.value === orig ? origSince : (sel.value ? {{ today|tojson }} : ''); });
+})();
 // ціна за м² <-> сума за місяць
 (() => {
   const pnum = s => parseFloat(String(s).replace(',', '.').replace(/\s/g, ''));

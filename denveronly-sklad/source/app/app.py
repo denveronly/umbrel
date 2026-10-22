@@ -18,6 +18,7 @@ import backup
 import ai
 import economics
 import photos
+import tenant_files
 import lines
 import sheet
 from audit import log
@@ -31,10 +32,35 @@ i18n.init_app(app)
 backup.init_app(app)
 audit.init_app(app)
 photos.init_app(app)
+tenant_files.init_app(app)
 economics.init_app(app)
 ai.init_app(app)
 lines.init_app(app)
 sheet.init_app(app)
+
+
+@app.template_filter("dmy")
+def dmy(x):
+    """2026-10-22 -> 22.10.2026."""
+    x = (x or "")[:10]
+    return f"{x[8:10]}.{x[5:7]}.{x[:4]}" if len(x) == 10 and x[4] == "-" else x
+
+
+@app.template_filter("span")
+def span(a, b=None):
+    """Тривалість оренди між датами: «2 р. 3 міс.» / «5 міс.» / «12 дн.»."""
+    try:
+        d1 = date.fromisoformat((a or "")[:10])
+        d2 = date.fromisoformat((b or "")[:10]) if b else date.today()
+    except ValueError:
+        return ""
+    if d2 < d1:
+        return ""
+    m = (d2.year - d1.year) * 12 + d2.month - d1.month - (1 if d2.day < d1.day else 0)
+    if m <= 0:
+        return f"{(d2 - d1).days} {_('дн.')}" if d2 > d1 else ""
+    y, m = divmod(m, 12)
+    return " ".join(p for p in (f"{y} {_('г.')}" if y else "", f"{m} {_('мес.')}" if m else "") if p)
 
 
 @app.template_filter("plain")
@@ -124,6 +150,9 @@ def api_warehouses():
         d["polygon"] = json.loads(w["polygon"]) if w["polygon"] else None
         d["price"] = calc.rent_price(w, w["payment_type"], s)
         d["photos"] = photos.photos_for(w["id"])
+        prev = db.execute("SELECT tenant_name, rent, started, ended, contract_no, payment_type FROM warehouse_tenancy "
+                          "WHERE warehouse_id=? ORDER BY COALESCE(ended, '') DESC, id DESC LIMIT 1", (w["id"],)).fetchone()
+        d["prev"] = dict(prev) if prev else None
         out.append(d)
     return jsonify(out)
 
@@ -262,6 +291,9 @@ def warehouse_edit(wid=None):
         else:
             wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area) "
                              "VALUES (?,?,?,?,?,?,?)", vals).lastrowid
+        since = (request.form.get("tenant_since") or "").strip()
+        if since and vals[2]:                            # «Орендує з» — вручну (тригер ставить сьогоднішню дату)
+            db.execute("UPDATE warehouses SET tenant_since=? WHERE id=?", (since, wid))
         set_price(wid, form_price())
         db.commit()
         flash(_("Сохранено"))
@@ -277,9 +309,40 @@ def warehouse_edit(wid=None):
     history = db.execute("SELECT * FROM price_history WHERE warehouse_id=? ORDER BY id DESC LIMIT 30",
                          (wid,)).fetchall() if wid else []
     power_lines = db.execute("SELECT id, name FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
+    cur_tenant = db.execute("SELECT * FROM tenants WHERE id=?", (wh["tenant_id"],)).fetchone() \
+        if wh and wh["tenant_id"] else None
+    tenancy = db.execute("SELECT * FROM warehouse_tenancy WHERE warehouse_id=? ORDER BY COALESCE(ended, '') DESC, id DESC",
+                         (wid,)).fetchall() if wid else []
     return render_template("warehouse_edit.html", wh=wh, tenants=tenants, meters=meters, price=price, pt=pt,
                            history=history, meter_services=services(mode="meter"), power_lines=power_lines,
-                           cats=categories())
+                           cats=categories(), cur_tenant=cur_tenant, tenancy=tenancy, today=date.today().isoformat())
+
+
+@app.route("/tenancy/<int:hid>", methods=["POST"])
+def tenancy_edit(hid):
+    """Виправити запис історії оренди (дати, договір, сума) або видалити його."""
+    db = get_db()
+    h = db.execute("SELECT * FROM warehouse_tenancy WHERE id=?", (hid,)).fetchone()
+    if not h:
+        abort(404)
+    if request.form.get("delete"):
+        db.execute("DELETE FROM warehouse_tenancy WHERE id=?", (hid,))
+        log("Запись истории аренды удалена", f"{h['tenant_name']}: {h['started'] or '…'} — {h['ended'] or '…'}", commit=False)
+        flash(_("Запись удалена"))
+    else:
+        rent = fnum("rent")
+        db.execute("UPDATE warehouse_tenancy SET started=?, ended=?, contract_no=?, contract_date=?, rent=?, "
+                   "price_m2=CASE WHEN ? IS NOT NULL AND area > 0 THEN ROUND(? / area, 4) ELSE price_m2 END, note=? "
+                   "WHERE id=?", (request.form.get("started") or None, request.form.get("ended") or None,
+                                  request.form.get("contract_no", "").strip() or None,
+                                  request.form.get("contract_date") or None, rent if rent is not None else h["rent"],
+                                  rent, rent, request.form.get("note", "").strip() or None, hid))
+        log("Запись истории аренды изменена", h["tenant_name"] or "", commit=False)
+        flash(_("Сохранено"))
+    db.commit()
+    nxt = request.form.get("next") or ""
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//")
+                    else url_for("warehouse_edit", wid=h["warehouse_id"]) + "#tenancy")
 
 
 @app.route("/warehouses/<int:wid>/raise", methods=["POST"])
@@ -408,10 +471,12 @@ def tenant_edit(tid=None):
         abort(404)
     if request.method == "POST":
         if request.form.get("delete"):
+            db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))   # спершу — щоб історія оренди зберегла назву
             if db.execute("SELECT 1 FROM acts WHERE tenant_id=?", (tid,)).fetchone():
                 db.execute("UPDATE tenants SET active=0 WHERE id=?", (tid,))
                 flash(_("У контакта есть акты — он помечен неактивным"))
             else:
+                tenant_files.remove_tenant_files(tid)
                 db.execute("DELETE FROM tenants WHERE id=?", (tid,))
                 flash(_("Контакт удалён"))
             db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))
@@ -466,8 +531,11 @@ def tenant_edit(tid=None):
     meter_svcs = db.execute("SELECT DISTINCT s.name FROM meters m JOIN services s ON s.id=m.service_id "
                             "JOIN warehouses w ON w.id=m.warehouse_id WHERE w.tenant_id=? AND m.active=1",
                             (tid,)).fetchall() if tid else []
+    tenancy = db.execute("SELECT h.*, w.name AS wh_name FROM warehouse_tenancy h LEFT JOIN warehouses w "
+                         "ON w.id=h.warehouse_id WHERE h.tenant_id=? ORDER BY COALESCE(h.ended, '') DESC, h.id DESC",
+                         (tid,)).fetchall() if tid else []
     return render_template("tenant_edit.html", t=t, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
-                           subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs,
+                           subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs, tenancy=tenancy,
                            tot=tot, companies=companies(), vat=float(st["vat_rate"]), free_prices=free_prices)
 
 

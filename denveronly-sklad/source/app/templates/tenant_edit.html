@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_tenancy.html" import tenancy_table with context %}
 {% block title %}{{ t.name if t else _("Новый арендатор") }}{% endblock %}
 {% block content %}
 {% macro v(field) %}{{ (t[field] if t and t[field] is not none else '') }}{% endmacro %}
@@ -136,6 +137,50 @@
   </form>
   {% endif %}
 </div>
+
+{% if t %}
+<div class="card" id="tenancy">
+  <h2 style="margin-top:0">{{ _("История аренды") }}</h2>
+  {% set cur = [] %}{% for w, p in wh_items %}{% set _x = cur.append({'wid': w.id, 'name': w.name, 'contract_no': t.contract_no, 'contract_date': t.contract_date,
+      'rent': p.total, 'price_m2': w.price_m2, 'pt': t.payment_type, 'since': w.tenant_since}) %}{% endfor %}
+  {% if cur or tenancy %}{{ tenancy_table(tenancy, 'wh', cur, url_for('tenant_edit', tid=t.id) ~ '#tenancy') }}
+  {% else %}<p class="muted">{{ _("Арендатор пока ничего не арендовал.") }}</p>{% endif %}
+</div>
+{% endif %}
+
+{% if t %}{% set tf = tenant_files_for(t.id) %}{% set imgs = tf|selectattr('kind', 'equalto', 'image')|list %}
+<div class="card" id="files">
+  <div class="row"><h2 style="margin:0">{{ _("Документы и фото") }}</h2><span class="spacer"></span>
+    <form method="post" action="{{ url_for('tenant_files.upload', tid=t.id) }}" enctype="multipart/form-data" id="tf-form">
+      <label class="btn sm">＋ {{ _("Загрузить PDF или фото") }}
+        <input type="file" name="files" accept="application/pdf,.pdf,image/*" multiple hidden onchange="this.form.submit()"></label>
+    </form></div>
+  <p class="muted" style="margin:6px 0 10px">{{ _("Договоры, сканы паспорта и выписок, акты, фото — можно выбрать несколько файлов сразу.") }}</p>
+  {% if tf %}
+  <div class="tfgrid">
+    {% for f in tf %}
+    <div class="tf">
+      {% if f.kind == 'image' %}
+        <img class="tfthumb" src="{{ f.thumb }}" alt="" loading="lazy" onclick='Gallery.open({{ imgs|tojson }}, {{ imgs.index(f) }})'>
+      {% else %}
+        <a class="tfpdf" href="{{ f.url }}" target="_blank" rel="noopener"><span>PDF</span></a>
+      {% endif %}
+      <div class="tfmeta">
+        {% if f.kind == 'pdf' %}<a href="{{ f.url }}" target="_blank" rel="noopener" class="tfname">{{ f.caption }}</a>
+        {% else %}<span class="tfname">{{ f.caption }}</span>{% endif %}
+        <span class="muted">{{ f.created_at[:10]|dmy }}{% if f.size %} · {{ (f.size / 1024 / 1024)|round(1) if f.size > 1048576 else [(f.size / 1024)|round|int, 1]|max }} {{ _("МБ") if f.size > 1048576 else _("КБ") }}{% endif %}</span>
+      </div>
+      <div class="tfbtns">
+        <a class="btn sm ghost" href="{{ f.download }}" title="{{ _("Скачать") }}">⤓</a>
+        <form method="post" action="{{ url_for('tenant_files.edit', fid=f.id) }}" style="margin:0">
+          <button class="sm danger" name="delete" value="1" title="{{ _("Удалить") }}" onclick="return confirm({{ _("Удалить файл?")|tojson|forceescape }})">✕</button></form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">{{ _("Файлов пока нет.") }}</p>{% endif %}
+</div>
+{% endif %}
 
 <!-- фото объектов -->
 {% if wh_items %}

@@ -100,6 +100,7 @@ function pick(id) {
   select(id, true, true);
 }
 
+function dmy(s) { return s && s.length >= 10 ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : (s || ''); }
 function esc(s) { return (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function select(id, zoom = true, fromList = false) {
@@ -115,6 +116,8 @@ function select(id, zoom = true, fromList = false) {
       <div class="row"><h2 style="margin:0">${esc(w.name)}</h2><span class="spacer"></span>
         <a class="btn ghost sm" href="/warehouses/${w.id}">${t('Открыть')}</a></div>
       <p class="muted" style="margin:6px 0 10px">${fmt(w.area, 1)} ${t('м²')} · ${w.tenant_name ? t('арендатор') + ': <b>' + esc(w.tenant_name) + '</b> (' + PT[w.payment_type] + ')' : t('свободен')}</p>
+      ${w.prev ? `<p class="prevten">${t('Предыдущий арендатор')}: ${esc(w.prev.tenant_name || '—')} · ${fmt(w.prev.rent)} ${t('грн/мес')}
+        · ${dmy(w.prev.started) || '…'} — ${dmy(w.prev.ended) || '…'}${w.prev.contract_no ? ' · ' + t('договор') + ' № ' + esc(w.prev.contract_no) : ''}</p>` : ''}
       <label class="catsel">${t('Подкатегория')}
         <select onchange="setCat(${w.id}, this)">
           <option value="">— ${t('без подкатегории')} —</option>

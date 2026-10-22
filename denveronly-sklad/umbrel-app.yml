@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.9.1"
+version: "1.10.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Опис об'єкта перенесено в блок «Фото й опис» — у картці складу та в картці на мапі.
-  З 1.9.0: завантаження фото по одному, опис об'єкта довільним текстом.
+  Історія оренди: при зміні орендаря попередній зберігається з договором, ціною, сумою за місяць і періодом —
+  у картці складу та в картці орендаря (звільнені склади сірим). Поле «Орендує з».
+  Картка орендаря: завантаження PDF і фото (договори, скани) з переглядом і скачуванням.
 dependencies: []
 path: ""
 defaultUsername: ""

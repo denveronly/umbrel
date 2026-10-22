@@ -1,0 +1,41 @@
+{# Історія оренди. who='tenant' — у картці складу (показуємо орендаря), who='wh' — у картці орендаря (показуємо склад) #}
+{% macro tenancy_table(rows, who, current=None, next_url='') %}
+<div class="tablewrap"><table class="tenancy">
+  <thead><tr><th>{{ _("Арендатор") if who == 'tenant' else _("Склад") }}</th><th>{{ _("Договор") }}</th>
+    <th class="n">{{ _("Аренда в месяц") }}</th><th>{{ _("Период аренды") }}</th><th></th></tr></thead>
+  <tbody>
+  {% for c in current or [] %}
+    <tr class="cur">
+      <td>{% if who == 'tenant' %}<a href="{{ url_for('tenant_edit', tid=c.tid) }}"><b>{{ c.name }}</b></a>{% else %}<a href="{{ url_for('warehouse_edit', wid=c.wid) }}"><b>{{ c.name }}</b></a>{% endif %}
+        <span class="badge">{{ _("сейчас") }}</span></td>
+      <td>{% if c.contract_no %}№ {{ c.contract_no }}{% endif %}{% if c.contract_date %} <span class="muted">{{ _("от") }} {{ c.contract_date|dmy }}</span>{% endif %}{% if not c.contract_no and not c.contract_date %}<span class="muted">—</span>{% endif %}</td>
+      <td class="n"><b>{{ money(c.rent) }}</b> {{ _("грн") }}<br><span class="muted">{{ money(c.price_m2) }} {{ _("грн/м²") }}{% if c.pt %} · {{ PAYMENT_TYPES[c.pt] }}{% endif %}</span></td>
+      <td>{{ _("с") }} {{ c.since|dmy if c.since else '…' }}{% if c.since %}<br><span class="muted">{{ c.since|span }}</span>{% endif %}</td>
+      <td></td>
+    </tr>
+  {% endfor %}
+  {% for h in rows %}
+    <tr class="past">
+      <td>{% if who == 'tenant' %}{% if h.tenant_id %}<a href="{{ url_for('tenant_edit', tid=h.tenant_id) }}">{{ h.tenant_name or '—' }}</a>{% else %}{{ h.tenant_name or '—' }}{% endif %}
+          {% else %}<a href="{{ url_for('warehouse_edit', wid=h.warehouse_id) }}">{{ h.wh_name or '—' }}</a>{% endif %}
+        {% if h.note %}<div class="muted">{{ h.note }}</div>{% endif %}</td>
+      <td>{% if h.contract_no %}№ {{ h.contract_no }}{% endif %}{% if h.contract_date %} {{ _("от") }} {{ h.contract_date|dmy }}{% endif %}{% if not h.contract_no and not h.contract_date %}—{% endif %}</td>
+      <td class="n">{{ money(h.rent) }} {{ _("грн") }}<br>{{ money(h.price_m2) }} {{ _("грн/м²") }}{% if h.payment_type %} · {{ PAYMENT_TYPES[h.payment_type] }}{% endif %}</td>
+      <td>{{ h.started|dmy if h.started else '…' }} — {{ h.ended|dmy if h.ended else '…' }}{% if h.started and h.ended %}<br>{{ h.started|span(h.ended) }}{% endif %}</td>
+      <td class="acts"><details class="tedit"><summary class="btn sm ghost" title="{{ _("Исправить") }}">✎</summary>
+        <form method="post" action="{{ url_for('tenancy_edit', hid=h.id) }}" class="grid">
+          <input type="hidden" name="next" value="{{ next_url }}">
+          <label>{{ _("С") }}<input type="date" name="started" value="{{ h.started or '' }}"></label>
+          <label>{{ _("По") }}<input type="date" name="ended" value="{{ h.ended or '' }}"></label>
+          <label>{{ _("№ договора") }}<input name="contract_no" value="{{ h.contract_no or '' }}"></label>
+          <label>{{ _("Дата договора") }}<input type="date" name="contract_date" value="{{ h.contract_date or '' }}"></label>
+          <label>{{ _("Аренда в месяц, грн") }}<input name="rent" inputmode="decimal" value="{{ h.rent|plain }}"></label>
+          <label>{{ _("Заметка") }}<input name="note" value="{{ h.note or '' }}"></label>
+          <div class="full row"><button class="sm">{{ _("Сохранить") }}</button><span class="spacer"></span>
+            <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить запись из истории аренды?")|tojson|forceescape }})">{{ _("Удалить") }}</button></div>
+        </form></details></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endmacro %}

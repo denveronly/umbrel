@@ -293,6 +293,37 @@ CREATE TABLE IF NOT EXISTS line_readings (
 );
 
 -- історія зміни ціни складу
+-- документи й фото орендаря (PDF договорів, сканів, фото); файли — у photos/docs/<tenant_id>/
+CREATE TABLE IF NOT EXISTS tenant_files (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,                      -- docs/<tid>/<uuid>.pdf|.jpg
+    orig_name TEXT,
+    kind TEXT NOT NULL DEFAULT 'pdf',            -- pdf | image
+    size INTEGER,
+    title TEXT,
+    uploaded_by TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+-- історія оренди складу: хто орендував, за яким договором, ціна і період (пишеться тригером при зміні орендаря)
+CREATE TABLE IF NOT EXISTS warehouse_tenancy (
+    id INTEGER PRIMARY KEY,
+    warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+    tenant_id INTEGER,                           -- без FK: історія лишається, навіть якщо орендаря видалено
+    tenant_name TEXT,
+    contract_no TEXT,
+    contract_date TEXT,
+    payment_type TEXT,
+    price_m2 REAL,
+    area REAL,
+    rent REAL,                                   -- сума оренди за місяць
+    started TEXT,                                -- YYYY-MM-DD
+    ended TEXT,
+    note TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY,
     warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
@@ -391,10 +422,31 @@ def close_db(_e=None):
             db.close()
 
 
+TENANCY_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS wh_tenant_change AFTER UPDATE OF tenant_id ON warehouses
+WHEN OLD.tenant_id IS NOT NEW.tenant_id
+BEGIN
+    INSERT INTO warehouse_tenancy(warehouse_id, tenant_id, tenant_name, contract_no, contract_date, payment_type,
+                                  price_m2, area, rent, started, ended)
+    SELECT OLD.id, OLD.tenant_id, t.name, t.contract_no, t.contract_date, t.payment_type, OLD.price_m2, OLD.area,
+           ROUND(COALESCE(OLD.price_m2, 0) * COALESCE(OLD.area, 0), 2),
+           COALESCE(OLD.tenant_since, t.contract_date), date('now', 'localtime')
+    FROM (SELECT 1) LEFT JOIN tenants t ON t.id = OLD.tenant_id
+    WHERE OLD.tenant_id IS NOT NULL;
+    UPDATE warehouses SET tenant_since = CASE WHEN NEW.tenant_id IS NULL THEN NULL ELSE date('now', 'localtime') END
+    WHERE id = NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS wh_tenant_insert AFTER INSERT ON warehouses
+WHEN NEW.tenant_id IS NOT NULL AND NEW.tenant_since IS NULL
+BEGIN
+    UPDATE warehouses SET tenant_since = date('now', 'localtime') WHERE id = NEW.id;
+END;
+"""
+
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
-                   "row_no": "TEXT", "description": "TEXT"},
+                   "row_no": "TEXT", "description": "TEXT", "tenant_since": "TEXT"},
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
@@ -418,6 +470,13 @@ def _migrate(con, site=MAIN_SITE):
         for col, typ in cols.items():
             if col not in have:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+
+    # історія оренди: тригери на зміну орендаря складу (ловлять усі шляхи — картка складу, орендаря, виїзд, ШІ)
+    con.executescript(TENANCY_TRIGGERS)
+    for wid, tsince, cdate in con.execute("SELECT w.id, w.tenant_since, t.contract_date FROM warehouses w "
+                                          "JOIN tenants t ON t.id=w.tenant_id WHERE w.tenant_since IS NULL").fetchall():
+        if cdate:
+            con.execute("UPDATE warehouses SET tenant_since=? WHERE id=?", (cdate, wid))
 
     # реквізити з налаштувань першої версії -> компанія
     st = dict(con.execute("SELECT key, value FROM settings").fetchall())
