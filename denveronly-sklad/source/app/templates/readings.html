@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_price_history.html" import price_history_table with context %}
 {% block title %}{{ _("Показания") }}{% endblock %}
 {% block content %}
 <div class="row">
@@ -27,8 +28,26 @@
       <div class="muted">{{ _("грн") }} / {{ p.s.unit }}</div>
     </div>
   {% else %}
-    <p class="muted">{{ _("Услуг нет. Добавьте во вкладке") }} <a href="{{ url_for('services_page') }}">{{ _("Услуги") }}</a>.</p>
+    <p class="muted">{{ _("Услуг пока нет") }}.</p>
   {% endfor %}
+  <details class="addsvc" style="margin-top:10px"><summary class="btn sm ghost">＋ {{ _("Добавить услугу") }}</summary>
+    <div class="grid addsvc-grid">
+      <label>{{ _("Название (как в акте") }})<input name="name" form="addsvc" required placeholder="{{ _("Вивіз сміття") }}"></label>
+      <label>{{ _("Единица") }}<input name="unit" form="addsvc" placeholder="{{ _("вивіз / кВт·год / міс.") }}"></label>
+      <label>{{ _("Тип") }}<select name="mode" form="addsvc">{% for k, v in SERVICE_MODES.items() %}<option value="{{ k }}">{{ _(v) }}</option>{% endfor %}</select></label>
+      <label>{{ _("Цена за") }} {{ period_label(period) }}, {{ _("грн") }}<input name="first_price" form="addsvc" inputmode="decimal"></label>
+      <div class="full row">
+        <label class="check"><input type="checkbox" name="subscribe_all" value="1" form="addsvc"> {{ _("сразу подключить всем активным контактам (кроме «по счётчику") }}»)</label>
+        <span class="spacer"></span><button type="submit" form="addsvc" class="sm">+ {{ _("Добавить") }}</button></div>
+    </div>
+  </details>
+</div>
+
+<!-- історія цін -->
+<div class="card">
+  <div class="row"><h2 style="margin:0">{{ _("Цены по месяцам") }}</h2><span class="spacer"></span>
+    <a class="btn sm ghost" href="{{ url_for('services_page') }}#history">{{ _("Больше месяцев") }}</a></div>
+  {{ price_history_table(ph, period) }}
 </div>
 
 <!-- 2. счётчики -->
@@ -74,6 +93,11 @@
 {% endif %}
 
 <div class="savebar"><span class="muted">{{ period_label(period) }}</span><span class="spacer"></span><button>{{ _("Сохранить всё") }}</button></div>
+</form>
+<form id="addsvc" method="post" action="{{ url_for('services_page') }}" hidden>
+  <input type="hidden" name="active" value="1"><input type="hidden" name="sort" value="100">
+  <input type="hidden" name="first_period" value="{{ period }}">
+  <input type="hidden" name="next" value="{{ url_for('readings', period=period) }}">
 </form>
 <p><a href="{{ url_for('acts', period=acts_period) }}">{{ _("Эти показания попадут в акты за") }} {{ period_label(acts_period) }} — {{ _("посмотреть расчёт") }} →</a></p>
 {% endblock %}

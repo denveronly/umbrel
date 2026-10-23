@@ -1,0 +1,24 @@
+{# Ціни послуг по місяцях. ph = (rows, periods); cur — місяць, що підсвічується #}
+{% macro price_history_table(ph, cur=None) %}{% set rows, periods = ph %}
+{% if rows %}
+<div class="tablewrap phist"><table>
+  <thead><tr><th class="svc">{{ _("Услуга") }}</th>
+    {% for per in periods|reverse %}<th class="n {{ 'curm' if per == cur }}"><a href="{{ url_for('readings', period=per) }}" title="{{ _("Открыть показания и цены за этот месяц") }}">{{ period_label(per) }}</a></th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr class="{{ 'off' if not r.s.active }}">
+      <td class="svc"><b>{{ r.s.name }}</b><div class="muted">{{ _("грн") }} / {{ r.s.unit }}</div></td>
+      {% for c in r.cells|reverse %}
+        <td class="n {{ 'curm' if c.period == cur }} {{ 'own' if c.own else 'carry' }}"
+            title="{{ (_('цена этого месяца') if c.own else _('цена не вносилась — в акте будет последняя известная')) if c.price is not none else _('цены ещё не было') }}">
+          {% if c.price is not none %}{{ money(c.price) }}{% else %}—{% endif %}
+          {% if c.delta %}<span class="dl {{ 'up' if c.delta > 0 else 'down' }}">{{ '↑' if c.delta > 0 else '↓' }}</span>{% endif %}
+        </td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="muted" style="margin-top:6px">{{ _("Жирным — цена внесена за этот месяц; серым — не вносилась, берётся последняя известная. ↑↓ — изменение цены. Клик по месяцу открывает его показания и цены.") }}</p>
+{% else %}<p class="muted">{{ _("Услуг пока нет") }}.</p>{% endif %}
+{% endmacro %}

@@ -709,8 +709,38 @@ def readings():
 
     return render_template("readings.html", period=period, rows=rows, price_rows=price_rows,
                            acts_period=calc.next_period(period) if settings().get("util_shift", "1") == "1" else period,
-                           qty_svcs=qty_svcs, qty_rows=qty_rows,
+                           qty_svcs=qty_svcs, qty_rows=qty_rows, ph=price_history(period, 12),
                            prev_p=calc.prev_period(period), next_p=calc.next_period(period))
+
+
+def price_history(end, n=12):
+    """Ціни всіх послуг за n місяців до end включно: [{s, cells: [{period, price, own, delta}]}], periods (старіші зліва)."""
+    db = get_db()
+    periods = []
+    p = end
+    for _i in range(n):
+        periods.append(p)
+        p = calc.prev_period(p)
+    periods.reverse()
+    out = []
+    for sv in db.execute("SELECT * FROM services ORDER BY active DESC, sort, name").fetchall():
+        own = {r["period"]: r["price"] for r in db.execute("SELECT period, price FROM service_prices WHERE service_id=?",
+                                                              (sv["id"],))}
+        before = db.execute("SELECT price FROM service_prices WHERE service_id=? AND period<? ORDER BY period DESC LIMIT 1",
+                            (sv["id"], periods[0])).fetchone()
+        last = before["price"] if before else None
+        cells = []
+        for per in periods:
+            if per in own:
+                price = own[per]
+                delta = None if last is None or abs(price - last) < 1e-9 else (price - last)
+                cells.append({"period": per, "price": price, "own": True, "delta": delta})
+                last = price
+            else:
+                cells.append({"period": per, "price": last, "own": False, "delta": None})
+        if any(c["price"] is not None for c in cells) or sv["active"]:
+            out.append({"s": sv, "cells": cells})
+    return out, periods
 
 
 @app.route("/services", methods=["GET", "POST"])
@@ -742,12 +772,20 @@ def services_page():
                                "SELECT id, ? FROM tenants WHERE active=1", (sid,))
             log("Услуга сохранена", vals[0])
             flash(_("Услуга сохранена"))
+            # ціна одразу при додаванні (з вкладки «Показники»)
+            first_price, first_period = fnum("first_price"), request.form.get("first_period", "")
+            if first_price is not None and re.fullmatch(r"\d{4}-\d{2}", first_period):
+                db.execute("INSERT INTO service_prices(service_id, period, price) VALUES (?,?,?) "
+                           "ON CONFLICT(service_id, period) DO UPDATE SET price=excluded.price", (sid, first_period, first_price))
         db.commit()
-        return redirect(url_for("services_page"))
+        nxt = request.form.get("next") or ""
+        return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("services_page"))
     rows = db.execute("SELECT s.*, (SELECT COUNT(*) FROM meters m WHERE m.service_id=s.id) AS meters, "
                       "(SELECT COUNT(*) FROM tenant_services ts WHERE ts.service_id=s.id) AS subs "
                       "FROM services s ORDER BY s.active DESC, s.sort, s.name").fetchall()
-    return render_template("services.html", rows=rows)
+    months = request.args.get("months", 12, type=int)
+    months = months if months in (6, 12, 24, 36) else 12
+    return render_template("services.html", rows=rows, ph=price_history(this_month(), months), months=months)
 
 
 # ---------------- акты ----------------

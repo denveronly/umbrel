@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_price_history.html" import price_history_table with context %}
 {% block title %}{{ _("Услуги") }}{% endblock %}
 {% block content %}
 <h1>{{ _("Показания и цены") }}</h1>
@@ -42,6 +43,11 @@
   {% else %}<tr><td colspan="5" class="muted">{{ _("Услуг пока нет") }}.</td></tr>{% endfor %}
   </tbody>
 </table></div>
+
+<div class="row" id="history" style="margin-top:20px"><h2 style="margin:0">{{ _("Цены по месяцам") }}</h2><span class="spacer"></span>
+  <form method="get" class="row" style="gap:6px"><span class="muted">{{ _("Период") }}:</span>
+    <select name="months" onchange="this.form.submit()" style="width:auto">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select></form></div>
+<div class="card" style="margin-top:8px">{{ price_history_table(ph) }}</div>
 
 <h2>{{ _("Добавить услугу") }}</h2>
 <form method="post" class="card grid">
