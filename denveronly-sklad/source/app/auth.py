@@ -16,6 +16,8 @@ from db import DATA_DIR, get_main_db
 bp = Blueprint("auth", __name__)
 
 ROLES = {"admin": "Администратор", "user": "Оператор"}
+# додаткові права оператора (адміністратор має всі). Користувачами керує лише адміністратор.
+PERMS = {"economics": "Экономика", "logs": "Логи и бэкапы", "settings": "Настройки и компании", "ai": "ИИ-помощник"}
 MIN_PASSWORD = 8
 PUBLIC_ENDPOINTS = {"static", "auth.login", "auth.setup"}
 
@@ -77,7 +79,7 @@ def init_app(app):
 
     @app.context_processor
     def user_ctx():
-        return {"current_user": g.get("user"), "ROLES": ROLES, "csrf_token": csrf_token}
+        return {"current_user": g.get("user"), "ROLES": ROLES, "PERMS": PERMS, "can": can, "csrf_token": csrf_token}
 
 
 def csrf_token():
@@ -107,6 +109,35 @@ def csrf_problem():
     hosts = {request.host, request.headers.get("X-Forwarded-Host", "").split(",")[0].strip()}
     o = urlparse(origin).netloc
     return None if o in hosts else f"Origin {o} ≠ Host {', '.join(h for h in hosts if h)}"
+
+
+def can(perm, user=None):
+    """Чи має користувач право: адміністратор — завжди, оператор — якщо відмічено в його правах."""
+    u = user if user is not None else g.get("user")
+    if not u:
+        return False
+    if u["role"] == "admin":
+        return True
+    try:
+        perms = u["perms"] or ""
+    except (IndexError, KeyError):
+        perms = ""
+    return perm in {p.strip() for p in perms.split(",")}
+
+
+def perm_required(perm):
+    def deco(f):
+        @wraps(f)
+        def wrapper(*a, **kw):
+            if not can(perm):
+                abort(403, _("Нет доступа. Права выдаёт администратор в Настройки → Пользователи."))
+            return f(*a, **kw)
+        return wrapper
+    return deco
+
+
+def _form_perms():
+    return ",".join(p for p in PERMS if request.form.get("perm_" + p))
 
 
 def admin_required(f):
@@ -254,9 +285,11 @@ def users():
                 error = _("Такой логин уже есть")
             if not error:
                 role = request.form.get("role") if request.form.get("role") in ROLES else "user"
-                db.execute("INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?,?)",
-                           (username, request.form.get("full_name", "").strip(), generate_password_hash(pw), role))
-                log("Пользователь создан", f"{username} ({ROLES[role]})", commit=False)
+                perms = _form_perms()
+                db.execute("INSERT INTO users(username, full_name, password_hash, role, perms) VALUES (?,?,?,?,?)",
+                           (username, request.form.get("full_name", "").strip(), generate_password_hash(pw), role, perms))
+                log("Пользователь создан", f"{username} ({ROLES[role]}" + (f"; права: {perms}" if role != "admin" and perms else "") + ")",
+                    commit=False)
                 flash(_("Пользователь {u} создан").format(u=username))
 
         elif target and action == "reset":
@@ -277,6 +310,12 @@ def users():
                 db.execute("UPDATE users SET role=? WHERE id=?", (role, uid))
                 log("Роль изменена", f"{target['username']} → {ROLES[role]}", commit=False)
                 flash(_("Роль") + f" {target['username']}: " + _(ROLES[role]))
+
+        elif target and action == "perms":
+            perms = _form_perms()
+            db.execute("UPDATE users SET perms=? WHERE id=?", (perms, uid))
+            log("Права пользователя изменены", f"{target['username']}: {perms or '—'}", commit=False)
+            flash(_("Права сохранены") + f": {target['username']}")
 
         elif target and action == "toggle":
             if uid == g.user["id"]:

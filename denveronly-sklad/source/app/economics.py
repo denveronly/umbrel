@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
+import auth
 import calc
 from audit import log
 from db import get_db, settings
@@ -164,6 +165,7 @@ def last_months(end_period, n):
 
 
 @bp.route("/economics", methods=["GET", "POST"])
+@auth.perm_required("economics")
 def economics():
     db = get_db()
     today = date.today()

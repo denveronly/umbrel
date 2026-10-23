@@ -409,3 +409,5 @@ details.tedit form label { color: var(--ink); }
 .dmy-btn:hover { color: var(--accent); background: var(--accent-soft); }
 .dmy-nat { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
 .row > .dmy { width: 150px; flex: none; }
+.perms { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; }
+.perms .check { font-size: 13px; white-space: nowrap; }

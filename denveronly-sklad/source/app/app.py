@@ -599,7 +599,7 @@ COMPANY_FIELDS = ["name", "edrpou", "iban", "bank", "address", "signer", "signer
 
 
 @app.route("/companies", methods=["GET", "POST"])
-@auth.admin_required
+@auth.perm_required("settings")
 def companies_page():
     db = get_db()
     if request.method == "POST":
@@ -899,7 +899,7 @@ def acts_zip():
 # ---------------- настройки ----------------
 
 @app.route("/settings", methods=["GET", "POST"])
-@auth.admin_required
+@auth.perm_required("settings")
 def settings_page():
     db = get_db()
     if request.method == "POST":

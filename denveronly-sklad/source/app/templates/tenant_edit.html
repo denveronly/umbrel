@@ -31,7 +31,7 @@
     <select name="company_id"><option value="">— {{ _("не выбрана") }} —</option>
       {% for c in companies %}<option value="{{ c.id }}" {{ 'selected' if t and t.company_id == c.id }} {{ 'disabled' if not c.active and not (t and t.company_id == c.id) }}>{{ c.name }}{{ _(" (платник ПДВ)") if c.vat_payer }}{{ _(" — отключена") if not c.active }}</option>{% endfor %}
     </select>
-    {% if not companies %}<span class="muted">{{ _("Компаний нет") }} — {% if current_user.role == 'admin' %}<a href="{{ url_for('companies_page') }}">{{ _("добавить") }}</a>{% else %}{{ _("попросите администратора добавить") }}{% endif %}</span>{% endif %}
+    {% if not companies %}<span class="muted">{{ _("Компаний нет") }} — {% if can('settings') %}<a href="{{ url_for('companies_page') }}">{{ _("добавить") }}</a>{% else %}{{ _("попросите администратора добавить") }}{% endif %}</span>{% endif %}
   </label>
   <label>{{ _("Форма оплаты") }}
     <select name="payment_type">{% for k, val in PAYMENT_TYPES.items() %}<option value="{{ k }}" {{ 'selected' if t and t.payment_type == k }}>{{ val }}</option>{% endfor %}</select></label>

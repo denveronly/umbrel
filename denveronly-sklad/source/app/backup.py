@@ -163,7 +163,7 @@ def db_stats():
 
 
 @bp.route("/logs")
-@auth.admin_required
+@auth.perm_required("logs")
 def logs():
     db = get_db()
     q = request.args.get("q", "").strip()
@@ -187,7 +187,7 @@ def logs():
 
 
 @bp.route("/logs/db", methods=["GET", "POST"])
-@auth.admin_required
+@auth.perm_required("logs")
 def database():
     db = get_db()
     if request.method == "POST":
@@ -257,7 +257,7 @@ def database():
 
 
 @bp.route("/logs/backup/<name>")
-@auth.admin_required
+@auth.perm_required("logs")
 def download(name):
     log("Бэкап скачан", name)
     return send_file(_safe_path(name), as_attachment=True, download_name=name)

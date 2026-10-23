@@ -760,7 +760,7 @@ def ensure_schema():
 
 @bp.route("/ai")
 @bp.route("/ai/<int:sid>")
-@auth.admin_required
+@auth.perm_required("ai")
 def chat(sid=None):
     ensure_schema()
     db = get_db()
@@ -795,7 +795,7 @@ def view_messages(sid):
 
 
 @bp.route("/ai/send", methods=["POST"])
-@auth.admin_required
+@auth.perm_required("ai")
 def send():
     ensure_schema()
     db = get_db()
@@ -845,7 +845,7 @@ def send():
 
 
 @bp.route("/ai/job/<job_id>")
-@auth.admin_required
+@auth.perm_required("ai")
 def job_status(job_id):
     j = get_db().execute("SELECT * FROM ai_jobs WHERE id=?", (job_id,)).fetchone()
     if not j:
@@ -855,7 +855,7 @@ def job_status(job_id):
 
 
 @bp.route("/ai/job/<job_id>/undo", methods=["POST"])
-@auth.admin_required
+@auth.perm_required("ai")
 def undo(job_id):
     db = get_db()
     j = db.execute("SELECT * FROM ai_jobs WHERE id=?", (job_id,)).fetchone()
@@ -891,7 +891,7 @@ def undo(job_id):
     return redirect(url_for("ai.chat", sid=sid))
 
 
-@auth.admin_required
+@auth.perm_required("settings")
 def ai_settings_page():
     db = get_db()
     if request.method == "POST":

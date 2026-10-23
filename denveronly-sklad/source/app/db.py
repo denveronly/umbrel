@@ -468,6 +468,7 @@ END;
 
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
+    "users": {"perms": "TEXT NOT NULL DEFAULT 'economics'"},   # права оператора (через кому); раніше Економіку бачили всі
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
                    "row_no": "TEXT", "description": "TEXT", "tenant_since": "TEXT"},
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
