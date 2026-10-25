@@ -121,7 +121,8 @@ document.addEventListener('click', async e => {
   f.requestSubmit ? f.requestSubmit() : f.submit();
 });
 function switchLang() {
-  const next = document.documentElement.lang === 'uk' ? 'ru' : 'uk';
+  const order = ['uk', 'ru', 'en'], cur = document.documentElement.lang;
+  const next = order[(order.indexOf(cur) + 1) % order.length];
   document.cookie = 'lang=' + next + ';path=/;max-age=31536000;SameSite=Lax';
   location.reload();
 }

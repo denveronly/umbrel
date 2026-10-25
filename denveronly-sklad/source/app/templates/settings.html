@@ -3,6 +3,11 @@
 {% block content %}
 <h1>{{ _("Настройки") }}</h1>
 {% include "_settings_tabs.html" %}
+<div class="card row" style="gap:10px;flex-wrap:wrap">
+  <b>🌐 {{ _("Язык интерфейса") }}</b>
+  {% for code, nm in LANG_NAMES.items() %}<a class="btn sm {{ '' if code == lang else 'ghost' }}" href="{{ url_for('set_lang', code=code, next=request.path) }}">{{ nm }}</a>{% endfor %}
+  <span class="muted">{{ _("Для каждого пользователя и браузера отдельно. Акты и детализации всегда печатаются на украинском.") }}</span>
+</div>
 <form method="post" enctype="multipart/form-data">
 <div class="card grid" style="display:grid">
   <h2 class="full" style="margin:0">{{ _("Расчёты") }}</h2>

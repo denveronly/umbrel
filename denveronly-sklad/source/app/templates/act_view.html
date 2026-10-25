@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icons.html" import ico_pdf, ico_doc %}
 {% block title %}{{ _("Акт") }} {{ act.number }}{% endblock %}
 {% block content %}
 {% set d = act.data %}
@@ -8,10 +9,12 @@
   <span class="badge {{ 'off' if act.status == 'draft' }}">{{ _("утверждён") if act.status == 'final' else _("черновик") }}</span>
 </div>
 <div class="row noprint" style="margin-bottom:14px">
-  <a class="btn" href="{{ url_for('act_pdf', aid=act.id) }}" target="_blank">PDF</a>
-  <a class="btn" href="{{ url_for('act_docx', aid=act.id) }}">Word</a>
-  {% if lay.util %}<a class="btn ghost" href="{{ url_for('act_pdf', aid=act.id, part='detail') }}" target="_blank">{{ _("Детализация") }} PDF</a>
-  <a class="btn ghost" href="{{ url_for('act_docx', aid=act.id, part='detail') }}">{{ _("Детализация") }} Word</a>{% endif %}
+  <span class="muted">{{ _("Акт + дет.") }}</span>
+  <a class="btn ghost icob" href="{{ url_for('act_pdf', aid=act.id) }}" target="_blank" title="PDF">{{ ico_pdf() }}</a>
+  <a class="btn ghost icob" href="{{ url_for('act_docx', aid=act.id) }}" title="Word">{{ ico_doc() }}</a>
+  {% if lay.util %}<span class="muted">{{ _("Детализация") }}</span>
+  <a class="btn ghost icob" href="{{ url_for('act_pdf', aid=act.id, part='detail') }}" target="_blank" title="PDF">{{ ico_pdf() }}</a>
+  <a class="btn ghost icob" href="{{ url_for('act_docx', aid=act.id, part='detail') }}" title="Word">{{ ico_doc() }}</a>{% endif %}
   <button class="ghost" onclick="print()">{{ _("Печать") }}</button>
   <span class="spacer"></span>
   <form method="post" action="{{ url_for('act_status', aid=act.id) }}" class="row">

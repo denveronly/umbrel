@@ -7,6 +7,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 import auth
 import calc
+import i18n
 from audit import log
 from db import get_db, settings
 from i18n import _
@@ -203,7 +204,7 @@ def economics():
         y, m = map(int, p.split("-"))
         first = date(y, m, 1)
         rate, rate_date = rate_on(min(first, today))
-        rows.append({"period": p, "label": calc.period_label(p), **t, "rate": rate, "rate_date": rate_date,
+        rows.append({"period": p, "label": i18n.period_label_ui(p), **t, "rate": rate, "rate_date": rate_date,
                      "usd": calc.r2(t["total"] / rate) if rate else None})
     now_rate, now_rate_date = rate_on(today)
     sel = next((r for r in rows if r["period"] == cur), rows[-1])

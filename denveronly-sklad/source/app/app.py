@@ -100,6 +100,17 @@ def switch_site(sid):
     return resp
 
 
+@app.route("/lang/<code>")
+def set_lang(code):
+    """Мова інтерфейсу (cookie на рік); повертає на ту ж сторінку."""
+    if code not in i18n.LANGS:
+        abort(404)
+    nxt = request.args.get("next") or "/"
+    resp = redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/")
+    resp.set_cookie("lang", code, max_age=365 * 24 * 3600, samesite="Lax")
+    return resp
+
+
 @app.route("/favicon.ico")
 def favicon():
     return app.send_static_file("favicon.ico")
@@ -142,8 +153,8 @@ APP_VERSION = app_version()
 
 @app.context_processor
 def ctx():
-    return {"SERVICE_MODES": SERVICE_MODES, "PAYMENT_TYPES": PAYMENT_TYPES, "money": calc.fmt_money, "APP_VERSION": APP_VERSION,
-            "num": calc.fmt_num, "period_label": calc.period_label, "S": settings()}
+    return {"SERVICE_MODES": SERVICE_MODES, "PAYMENT_TYPES": {k: _(v) for k, v in PAYMENT_TYPES.items()}, "money": calc.fmt_money, "APP_VERSION": APP_VERSION,
+            "num": calc.fmt_num, "period_label": i18n.period_label_ui, "S": settings()}
 
 
 def current_period():

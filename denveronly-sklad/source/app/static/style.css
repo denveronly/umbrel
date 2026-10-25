@@ -489,3 +489,9 @@ main.embed { padding-top: 12px; }
 .dlgrid > span { font-size: 12px; text-align: right; white-space: nowrap; }
 .archbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
 details.actrow .btns form.dlgrid { display: grid; }
+/* іконки PDF / Word */
+.fico { display: block; }
+.icob { display: inline-flex; align-items: center; gap: 3px; padding: 4px 8px; }
+.icob small { font-size: 10px; color: var(--muted); }
+.icol { display: inline-block; vertical-align: middle; }
+.icol:hover .fico, .icob:hover .fico { filter: brightness(1.1); transform: translateY(-1px); }

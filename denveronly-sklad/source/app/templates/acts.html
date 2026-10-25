@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icons.html" import ico_pdf, ico_doc %}
 {% block title %}{{ _("Акты") }}{% endblock %}
 {% block content %}
 <div class="row">
@@ -34,9 +35,9 @@
   <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="all">
   <b>{{ _("Архив за") }} {{ period_label(period) }}</b><span class="muted">{{ _("все арендаторы, по папкам компаний") }}</span><span class="spacer"></span>
   <span class="muted">{{ _("Акты + дет.") }}</span>
-  <button class="sm" name="fp" value="pdf|all">PDF zip ↓</button><button class="sm ghost" name="fp" value="docx|all">Word zip ↓</button>
+  <button class="sm ghost icob" name="fp" value="pdf|all" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|all" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
   <span class="muted">{{ _("Детализации") }}</span>
-  <button class="sm ghost" name="fp" value="pdf|detail">PDF zip ↓</button><button class="sm ghost" name="fp" value="docx|detail">Word zip ↓</button>
+  <button class="sm ghost icob" name="fp" value="pdf|detail" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|detail" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
 </form>
 {% endif %}
 
@@ -48,10 +49,10 @@
     <span class="spacer"></span>
     <form method="post" action="{{ url_for('acts_make_company') }}" class="dlgrid">
       <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="{{ grp.c.id if grp.c else '' }}">
-      <span class="muted">{{ _("Акты + дет.") }} zip</span>
-      <button class="sm ghost" name="fp" value="pdf|all">PDF ↓</button><button class="sm ghost" name="fp" value="docx|all">Word ↓</button>
-      <span class="muted">{{ _("Детализации") }} zip</span>
-      <button class="sm ghost" name="fp" value="pdf|detail">PDF ↓</button><button class="sm ghost" name="fp" value="docx|detail">Word ↓</button>
+      <span class="muted">{{ _("Акты + дет.") }}</span>
+      <button class="sm ghost icob" name="fp" value="pdf|all" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|all" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
+      <span class="muted">{{ _("Детализации") }}</span>
+      <button class="sm ghost icob" name="fp" value="pdf|detail" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|detail" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
     </form>
   </div>
   {% if not grp.c %}<div class="warn" style="margin-top:8px">{{ _("У этих контактов не выбрана компания — в акте не будет реквизитов арендодателя") }}.</div>{% endif %}
@@ -93,10 +94,10 @@
         <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()" class="dlgrid">
           <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
           <span class="muted">{{ _("Акт + дет.") }}</span>
-          <button class="sm" name="fp" value="pdf|all">PDF ↓</button><button class="sm ghost" name="fp" value="docx|all">Word ↓</button>
+          <button class="sm ghost icob" name="fp" value="pdf|all" title="PDF">{{ ico_pdf() }}</button><button class="sm ghost icob" name="fp" value="docx|all" title="Word">{{ ico_doc() }}</button>
           {% if it.lines|selectattr('group', 'in', ['util', 'service'])|list %}
           <span class="muted">{{ _("Детализация") }}</span>
-          <button class="sm ghost" name="fp" value="pdf|detail">PDF ↓</button><button class="sm ghost" name="fp" value="docx|detail">Word ↓</button>
+          <button class="sm ghost icob" name="fp" value="pdf|detail" title="PDF">{{ ico_pdf() }}</button><button class="sm ghost icob" name="fp" value="docx|detail" title="Word">{{ ico_doc() }}</button>
           {% endif %}
         </form>
       </span>
