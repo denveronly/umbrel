@@ -77,6 +77,11 @@ def _ensure_dir(smb, path):
         return
     except OSError:
         pass
+    try:                                              # Synology може не віддавати атрибути, але дозволяти список
+        smb.listdir(path)
+        return
+    except OSError:
+        pass
     parent = path.rsplit("\\", 1)[0]
     if parent.count("\\") > 3:                       # \\server\share — корінь, далі не піднімаємось
         _ensure_dir(smb, parent)
@@ -163,22 +168,44 @@ def send_async(items, who="система"):
 
 
 def test_connection():
-    """Перевірка: підключитися, створити папку, записати й видалити пробний файл. -> (ok, повідомлення)."""
+    """Покрокова перевірка, щоб було видно, на якому кроці відмова. -> (ok, звіт)."""
     c = config()
     if not (c["server"] and c["share"] and c["user"]):
         return False, "Укажите сервер, общую папку и пользователя"
+    steps, root, d = [], "\\\\" + c["server"] + "\\" + c["share"], _base(c)
+
+    def step(title, fn):
+        try:
+            r = fn()
+            steps.append(f"✓ {title}" + (f": {r}" if r else ""))
+            return True
+        except Exception as e:
+            steps.append(f"✗ {title}: {type(e).__name__}: {_hint(e)}")
+            return False
     try:
-        smb = _session(c)
-        d = _base(c)
+        if not step(f"вхід на {c['server']} як {c['user']}", lambda: _session(c) and None):
+            return False, "\n".join(steps)
+        import smbclient as smb
+        step(f"список спільної папки {root}", lambda: f"{len(smb.listdir(root))} елементів")
         if c["path"]:
-            _ensure_dir(smb, d)
+            def st():
+                smb.stat(d)
+                return "є"
+            if not step(f"підпапка {d}", st) and not step(f"список {d}", lambda: f"{len(smb.listdir(d))} елементів"):
+                step(f"створити {d}", lambda: smb.mkdir(d))
+            step(f"список {d}", lambda: f"{len(smb.listdir(d))} елементів")
         p = d + "\\.sklad-test"
-        with smb.open_file(p, mode="wb") as f:
-            f.write(b"ok")
-        smb.remove(p)
-        return True, d
-    except Exception as e:
-        return False, f"{type(e).__name__}: {_hint(e)}"[:500]
+
+        def wr():
+            with smb.open_file(p, mode="wb") as f:
+                f.write(b"ok")
+            smb.remove(p)
+        ok = step(f"запис пробного файлу в {d}", wr)
+        if not ok and c["path"]:
+            steps.append("Підказка: на Synology користувачу потрібне право хоча б «Тільки читання» на саму спільну папку "
+                         f"«{c['share']}» (Панель керування → Спільна папка → {c['share']} → Дозволи), а «Читання/запис» — "
+                         f"на підпапку «{c['path']}». «Немає доступу» на спільній папці блокує й підпапки.")
+        return ok, "\n".join(steps)
     finally:
         _close(c)
 

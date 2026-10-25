@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.25.2"
+version: "1.25.3"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Колонки «Різниця» в балансі лінії — з бордовою заливкою. З 1.25.1: SMB з правами лише на підпапку.
+  Перевірка SMB-папки — покрокова (вхід, спільна папка, підпапка, запис), видно, на якому кроці відмова,
+  з підказкою щодо прав Synology. Підпапка розпізнається і без права читання атрибутів.
 dependencies: []
 path: ""
 defaultUsername: ""

@@ -55,7 +55,7 @@ def page():
         port = request.form.get("port", 445, type=int) or 445
         if tool == "smb":
             ok, msg = nas.test_connection()
-            out = ("✓ " if ok else "✗ ") + _(msg)
+            out = _(msg)
             host = nas.config()["server"]
         elif not HOST_RE.match(host):
             out = _("Неверный адрес: только имя или IP, без пробелов и спецсимволов")
