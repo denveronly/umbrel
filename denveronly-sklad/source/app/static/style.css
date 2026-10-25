@@ -429,3 +429,5 @@ details.addsvc > summary::-webkit-details-marker { display: none; }
 details.addsvc[open] > summary { margin-bottom: 8px; }
 .addsvc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; }
 .addsvc-grid .full { grid-column: 1 / -1; }
+.settabs { align-items: center; }
+.settabs .ver { font-size: 12px; padding: 0 6px; }

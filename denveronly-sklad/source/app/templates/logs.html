@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{ _("Логи") }}{% endblock %}
+{% block title %}{{ _("Журнал действий") }}{% endblock %}
 {% block content %}
-<h1>{{ _("Логи") }}</h1>
-{% include "_logs_tabs.html" %}
+<h1>{{ _("Настройки") }}</h1>
+{% include "_settings_tabs.html" %}
 <form method="get" class="row" style="margin-bottom:12px">
   <input name="q" value="{{ q }}" placeholder="{{ _("Поиск по действию или деталям") }}" style="max-width:300px">
   <select name="user" style="width:auto" onchange="this.form.submit()">

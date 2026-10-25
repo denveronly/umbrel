@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ _("База данных") }}{% endblock %}
 {% block content %}
-<h1>{{ _("Логи") }}</h1>
-{% include "_logs_tabs.html" %}
+<h1>{{ _("Настройки") }}</h1>
+{% include "_settings_tabs.html" %}
 
 <div class="kpis">
   <div class="kpi"><small class="muted">{{ _("Размер базы") }}</small><b>{{ st.size|filesize }}</b>{% if st.wal %}<small class="muted">+ {{ _("журнал") }} {{ st.wal|filesize }}</small>{% endif %}</div>

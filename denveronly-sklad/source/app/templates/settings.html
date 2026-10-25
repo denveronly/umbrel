@@ -32,5 +32,6 @@
 <button>{{ _("Сохранить") }}</button>
 </form>
 
-<p class="muted" style="margin-top:16px">{{ _("Бэкапы и журнал действий — во вкладке") }} <a href="{{ url_for('logs.database') }}">{{ _("Логи") }}</a>.</p>
+<div class="card" style="margin-top:16px"><b>{{ _("Версия программы") }}:</b> {{ APP_VERSION }}
+  <span class="muted"> · {{ _("журнал действий, база данных и бэкапы — во вкладках выше") }}</span></div>
 {% endblock %}

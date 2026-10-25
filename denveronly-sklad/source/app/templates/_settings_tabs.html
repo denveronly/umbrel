@@ -1,6 +1,13 @@
-<div class="tabs">
+<div class="tabs settabs">
+  {% if can('settings') %}
   <a href="{{ url_for('settings_page') }}" class="{{ 'on' if request.endpoint == 'settings_page' }}">{{ _("Общие") }}</a>
   <a href="{{ url_for('companies_page') }}" class="{{ 'on' if request.endpoint == 'companies_page' }}">{{ _("Компании") }}</a>
   <a href="{{ url_for('ai_settings_page') }}" class="{{ 'on' if request.endpoint == 'ai_settings_page' }}">{{ _("ИИ") }}</a>
+  {% endif %}
   {% if current_user.role == 'admin' %}<a href="{{ url_for('auth.users') }}" class="{{ 'on' if request.endpoint == 'auth.users' }}">{{ _("Пользователи") }}</a>{% endif %}
+  {% if can('logs') %}
+  <a href="{{ url_for('logs.logs') }}" class="{{ 'on' if request.endpoint == 'logs.logs' }}">{{ _("Журнал действий") }}</a>
+  <a href="{{ url_for('logs.database') }}" class="{{ 'on' if request.endpoint == 'logs.database' }}">{{ _("База данных и бэкапы") }}</a>
+  {% endif %}
+  <span class="spacer"></span><span class="muted ver" title="{{ _("Версия программы") }}">v{{ APP_VERSION }}</span>
 </div>

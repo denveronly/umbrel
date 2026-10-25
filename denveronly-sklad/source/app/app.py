@@ -102,9 +102,24 @@ def site_ctx():
     return {"SITES": SITES, "cur_site": current_site(), "site_name": _(SITES[current_site()]["name"])}
 
 
+def app_version():
+    """Версія з файлу VERSION (в образі — поруч з app.py, у вихідниках — на рівень вище)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(here, "VERSION"), os.path.join(here, "..", "VERSION")):
+        try:
+            with open(p) as f:
+                return f.read().strip()
+        except OSError:
+            continue
+    return "?"
+
+
+APP_VERSION = app_version()
+
+
 @app.context_processor
 def ctx():
-    return {"SERVICE_MODES": SERVICE_MODES, "PAYMENT_TYPES": PAYMENT_TYPES, "money": calc.fmt_money,
+    return {"SERVICE_MODES": SERVICE_MODES, "PAYMENT_TYPES": PAYMENT_TYPES, "money": calc.fmt_money, "APP_VERSION": APP_VERSION,
             "num": calc.fmt_num, "period_label": calc.period_label, "S": settings()}
 
 

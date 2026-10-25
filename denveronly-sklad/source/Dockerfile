@@ -8,6 +8,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ .
+COPY VERSION .
 # Leaflet кладём внутрь образа, чтобы карта работала без интернета
 ADD https://unpkg.com/leaflet@1.9.4/dist/leaflet.js https://unpkg.com/leaflet@1.9.4/dist/leaflet.css static/vendor/
 ADD https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png static/vendor/images/
