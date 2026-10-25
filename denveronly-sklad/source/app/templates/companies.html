@@ -5,6 +5,34 @@
 {% include "_settings_tabs.html" %}
 <p class="muted">{{ _("Компании, на которые идут деньги от аренды. В карточке контакта выбирается, какой компании он платит, — акт печатается с её реквизитами и в её нумерации. Задайте каждой компании свой префикс номера акта, чтобы номера не пересекались") }}. {{ _("Отметьте, какие формы оплаты принимает компания: в карточке контакта при выборе формы оплаты компания подставится сама.") }}</p>
 
+<details class="card" id="numbering">
+  <summary class="row"><b>{{ _("Нумерация актов") }}</b><span class="spacer"></span><span class="muted">{{ _("шаблон") }}: <code>{{ num_fmt }}</code> → {% for n, s in num_samples[:3] %}{{ s }}{{ ', ' if not loop.last }}{% endfor %}</span></summary>
+  <form method="post" class="grid" style="margin-top:12px">
+    <input type="hidden" name="action" value="numbering">
+    <label>{{ _("Шаблон номера") }}<input name="act_num_format" id="nfmt" value="{{ num_fmt }}" list="nfmts"></label>
+    <datalist id="nfmts"><option value="{П}{ММ}{РР}-{NNN}"><option value="{П}{NNN}"><option value="{П}{РРРР}-{NNN}"><option value="{NNN}/{ММ}"><option value="{N}"></datalist>
+    <label>{{ _("Счётчик начинается заново") }}<select name="act_num_reset">
+      {% for k, v in [('month', _("каждый месяц")), ('year', _("каждый год")), ('never', _("никогда (сквозная нумерация)"))] %}<option value="{{ k }}" {{ 'selected' if num_reset == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>{{ _("Первый номер") }}<input name="act_num_start" type="number" min="1" value="{{ num_start }}"></label>
+    <p class="full muted" style="margin:0">{{ _("Подстановки") }}: <code>{П}</code> — {{ _("префикс компании") }}, <code>{ММ}</code> — {{ _("месяц") }}, <code>{РР}</code> / <code>{РРРР}</code> — {{ _("год") }}, <code>{N}</code> <code>{NNN}</code> — {{ _("порядковый номер (NNN = 001)") }}. {{ _("Нумерация — отдельно у каждой компании. Первый номер — например, чтобы продолжить нумерацию из старой программы.") }}</p>
+    <div class="full muted" id="nprev"></div>
+    <div class="full"><button class="sm">{{ _("Сохранить") }}</button></div>
+  </form>
+</details>
+<script>
+(() => {
+  const inp = document.getElementById('nfmt'), out = document.getElementById('nprev'), st = document.querySelector('input[name=act_num_start]');
+  const cos = {{ rows|selectattr('active')|map(attribute='act_prefix')|list|tojson }}, per = {{ num_period|tojson }};
+  const upd = () => {
+    const [y, m] = per.split('-'), n = parseInt(st.value) || 1;
+    const one = p => inp.value.replace(/\{П\}|\{P\}/g, p || '').replace(/\{РРРР\}|\{YYYY\}/g, y).replace(/\{РР\}|\{YY\}/g, y.slice(2))
+      .replace(/\{ММ\}|\{MM\}/g, m).replace(/\{(N+)\}/g, (_, k) => String(n).padStart(k.length, '0'));
+    out.textContent = t('Пример') + ': ' + (cos.length ? cos.map(one).join(', ') : one(''));
+  };
+  inp.addEventListener('input', upd); st.addEventListener('input', upd); upd();
+})();
+</script>
+
 {% macro company_form(c) %}
 <form method="post" class="grid">
   {% if c %}<input type="hidden" name="cid" value="{{ c.id }}">{% endif %}

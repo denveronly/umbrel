@@ -484,3 +484,8 @@ main.embed { padding-top: 12px; }
 .tencols { columns: 3 200px; column-gap: 18px; margin-top: 6px; }
 .tencols label { display: block; break-inside: avoid; margin: 3px 0; }
 .sharetbl table { max-width: 520px; }
+/* завантаження: акт+деталізація / лише деталізація */
+.dlgrid { display: grid; grid-template-columns: auto auto auto; gap: 4px 6px; align-items: center; margin: 0; }
+.dlgrid > span { font-size: 12px; text-align: right; white-space: nowrap; }
+.archbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
+details.actrow .btns form.dlgrid { display: grid; }

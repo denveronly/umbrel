@@ -178,6 +178,9 @@ def _detail_rows(lay):
             name = l["service"]
         else:                                                 # акти, сформовані до цієї версії
             name, where, readings = l["name"], "—", "—"
+        if l.get("only_sum"):
+            rows.append([str(i), name, where, readings, l["unit"], "", "", fmt_money(l["sum"])])
+            continue
         rows.append([str(i), name, where, readings, l["unit"], fmt_num(l["qty"]),
                      fmt_money(l["price"]), fmt_money(l["sum"])])
     return rows
@@ -185,7 +188,8 @@ def _detail_rows(lay):
 
 # ---------------- PDF ----------------
 
-def act_pdf(act):
+def act_pdf(act, part="all"):
+    """part: all — акт і деталізація; detail — лише деталізація."""
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT
     from reportlab.lib.pagesizes import A4
@@ -256,22 +260,25 @@ def act_pdf(act):
                             topMargin=15 * mm, bottomMargin=15 * mm, title=f"Акт {act['number']}")
 
     # ---- аркуш 1: акт ----
-    el = header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
-    el += [Paragraph(_intro(act), base), Spacer(1, 3 * mm)]
-    main_rows = [[str(i), l["name"], l["unit"], fmt_num(l["qty"]), fmt_money(l["price"]), fmt_money(l["sum"])]
-                 for i, l in enumerate(lay["main"], 1)]
-    el.append(table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3))
-    el += [Spacer(1, 2 * mm), totals(_totals_rows(act)), Spacer(1, 3 * mm),
-           Paragraph(_words(act), base), Spacer(1, 2 * mm)]
-    if lay["util"]:
-        el.append(Paragraph("Розрахунок суми компенсації комунальних послуг наведено в Деталізації "
-                            "(додаток до цього акта).", base))
-    el += [Paragraph(f"Форма оплати: {d['payment_label']}. Сторони претензій одна до одної не мають.", base),
-           Spacer(1, 10 * mm), signatures()]
+    el = []
+    if part != "detail":
+        el += header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
+        el += [Paragraph(_intro(act), base), Spacer(1, 3 * mm)]
+        main_rows = [[str(i), l["name"], l["unit"], fmt_num(l["qty"]), fmt_money(l["price"]), fmt_money(l["sum"])]
+                     for i, l in enumerate(lay["main"], 1)]
+        el.append(table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3))
+        el += [Spacer(1, 2 * mm), totals(_totals_rows(act)), Spacer(1, 3 * mm),
+               Paragraph(_words(act), base), Spacer(1, 2 * mm)]
+        if lay["util"]:
+            el.append(Paragraph("Розрахунок суми компенсації комунальних послуг наведено в Деталізації "
+                                "(додаток до цього акта).", base))
+        el += [Paragraph(f"Форма оплати: {d['payment_label']}. Сторони претензій одна до одної не мають.", base),
+               Spacer(1, 10 * mm), signatures()]
 
     # ---- аркуш 2: деталізація ----
     if lay["util"]:
-        el.append(PageBreak())
+        if el:
+            el.append(PageBreak())
         el += header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ",
                       f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         el += [Paragraph(_detail_intro(act), base), Spacer(1, 3 * mm)]
@@ -280,8 +287,7 @@ def act_pdf(act):
                Paragraph(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
                          + (f", у т.ч. ПДВ {fmt_money(lay['util_vat'])} грн." if lay["util_vat"] else ", без ПДВ."),
                          base),
-               Paragraph("Ціни вказано без ПДВ. Кількість за лічильниками = (поточні − попередні показники) "
-                         "× коефіцієнт.", small),
+               Paragraph("Ціни вказано без ПДВ. Кількість за лічильниками = поточні − попередні показники.", small),
                Spacer(1, 10 * mm), signatures(full=False)]
 
     doc.build(el)
@@ -290,7 +296,7 @@ def act_pdf(act):
 
 # ---------------- DOCX ----------------
 
-def act_docx(act):
+def act_docx(act, part="all"):
     from docx import Document
     from docx.enum.section import WD_SECTION
     from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -381,22 +387,24 @@ def act_docx(act):
             sc.add_paragraph("М.П.")
 
     # ---- аркуш 1: акт ----
-    header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
-    para(_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    main_rows = [[str(i), l["name"], l["unit"], fmt_num(l["qty"]), fmt_money(l["price"]), fmt_money(l["sum"])]
-                 for i, l in enumerate(lay["main"], 1)]
-    table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3)
-    for a, b in _totals_rows(act):
-        para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
-    para(_words(act))
-    if lay["util"]:
-        para("Розрахунок суми компенсації комунальних послуг наведено в Деталізації (додаток до цього акта).")
-    para(f"Форма оплати: {d['payment_label']}. Сторони претензій одна до одної не мають.")
-    signatures()
+    if part != "detail":
+        header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
+        para(_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        main_rows = [[str(i), l["name"], l["unit"], fmt_num(l["qty"]), fmt_money(l["price"]), fmt_money(l["sum"])]
+                     for i, l in enumerate(lay["main"], 1)]
+        table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3)
+        for a, b in _totals_rows(act):
+            para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
+        para(_words(act))
+        if lay["util"]:
+            para("Розрахунок суми компенсації комунальних послуг наведено в Деталізації (додаток до цього акта).")
+        para(f"Форма оплати: {d['payment_label']}. Сторони претензій одна до одної не мають.")
+        signatures()
 
     # ---- аркуш 2: деталізація ----
     if lay["util"]:
-        doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+        if part != "detail":
+            doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
         header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ", f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         para(_detail_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         table(DETAIL_HEAD, _detail_rows(lay), [8, 45, 30, 27, 15, 17, 19, 19], 4)
@@ -404,8 +412,7 @@ def act_docx(act):
             para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
         para(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
              + (f", у т.ч. ПДВ {fmt_money(lay['util_vat'])} грн." if lay["util_vat"] else ", без ПДВ."))
-        para("Ціни вказано без ПДВ. Кількість за лічильниками = (поточні − попередні показники) × коефіцієнт.",
-             size=9)
+        para("Ціни вказано без ПДВ. Кількість за лічильниками = поточні − попередні показники.", size=9)
         signatures(full=False)
 
     buf = io.BytesIO()

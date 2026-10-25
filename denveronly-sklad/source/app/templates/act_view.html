@@ -10,6 +10,8 @@
 <div class="row noprint" style="margin-bottom:14px">
   <a class="btn" href="{{ url_for('act_pdf', aid=act.id) }}" target="_blank">PDF</a>
   <a class="btn" href="{{ url_for('act_docx', aid=act.id) }}">Word</a>
+  {% if lay.util %}<a class="btn ghost" href="{{ url_for('act_pdf', aid=act.id, part='detail') }}" target="_blank">{{ _("Детализация") }} PDF</a>
+  <a class="btn ghost" href="{{ url_for('act_docx', aid=act.id, part='detail') }}">{{ _("Детализация") }} Word</a>{% endif %}
   <button class="ghost" onclick="print()">{{ _("Печать") }}</button>
   <span class="spacer"></span>
   <form method="post" action="{{ url_for('act_status', aid=act.id) }}" class="row">
@@ -65,7 +67,7 @@
         <td>{{ l.service or l.name }}</td>
         <td>{{ l.wh or '—' }}{% if l.serial %}, №{{ l.serial }}{% endif %}</td>
         <td>{% if l.cur is defined %}{{ num(l.prev) }} → {{ num(l.cur) }}{% if l.coef and l.coef != 1 %} ×{{ num(l.coef) }}{% endif %}{% elif l.rnote is defined %}{{ l.rnote }}{% else %}—{% endif %}</td>
-        <td>{{ l.unit }}</td><td class="n">{{ num(l.qty) }}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
+        <td>{{ l.unit }}</td>{% if l.only_sum %}<td></td><td></td>{% else %}<td class="n">{{ num(l.qty) }}</td><td class="n">{{ money(l.price) }}</td>{% endif %}<td class="n">{{ money(l.sum) }}</td></tr>
     {% endfor %}</tbody>
     <tfoot>
       {% if d.totals.vat_rate %}

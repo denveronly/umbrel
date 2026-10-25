@@ -29,17 +29,29 @@
 <script>document.addEventListener('click', e => document.querySelectorAll('details.kmore[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));</script>
 </div>
 
+{% if groups %}
+<form method="post" action="{{ url_for('acts_make_company') }}" class="card archbar">
+  <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="all">
+  <b>{{ _("Архив за") }} {{ period_label(period) }}</b><span class="muted">{{ _("все арендаторы, по папкам компаний") }}</span><span class="spacer"></span>
+  <span class="muted">{{ _("Акты + дет.") }}</span>
+  <button class="sm" name="fp" value="pdf|all">PDF zip ↓</button><button class="sm ghost" name="fp" value="docx|all">Word zip ↓</button>
+  <span class="muted">{{ _("Детализации") }}</span>
+  <button class="sm ghost" name="fp" value="pdf|detail">PDF zip ↓</button><button class="sm ghost" name="fp" value="docx|detail">Word zip ↓</button>
+</form>
+{% endif %}
+
 {% for grp in groups %}
 <section class="card cogroup">
   <div class="row">
     <h2 style="margin:0">{{ grp.c.name if grp.c else _("Компания не указана") }}</h2>
     {% if grp.c %}{% if grp.c.vat_payer %}<span class="badge">{{ _("платник ПДВ") }}</span>{% else %}<span class="badge off">{{ _("без ПДВ") }}</span>{% endif %}{% endif %}
     <span class="spacer"></span>
-    <form method="post" action="{{ url_for('acts_make_company') }}" class="row" style="gap:6px">
+    <form method="post" action="{{ url_for('acts_make_company') }}" class="dlgrid">
       <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="{{ grp.c.id if grp.c else '' }}">
-      <span class="muted">{{ _("все акты") }}:</span>
-      <button class="sm ghost" name="fmt" value="pdf">PDF zip ↓</button>
-      <button class="sm ghost" name="fmt" value="docx">Word zip ↓</button>
+      <span class="muted">{{ _("Акты + дет.") }} zip</span>
+      <button class="sm ghost" name="fp" value="pdf|all">PDF ↓</button><button class="sm ghost" name="fp" value="docx|all">Word ↓</button>
+      <span class="muted">{{ _("Детализации") }} zip</span>
+      <button class="sm ghost" name="fp" value="pdf|detail">PDF ↓</button><button class="sm ghost" name="fp" value="docx|detail">Word ↓</button>
     </form>
   </div>
   {% if not grp.c %}<div class="warn" style="margin-top:8px">{{ _("У этих контактов не выбрана компания — в акте не будет реквизитов арендодателя") }}.</div>{% endif %}
@@ -78,10 +90,14 @@
       <span class="btns">
         <button type="button" class="sm ghost gearbtn" title="{{ _("Настройки арендатора") }}" data-tid="{{ it.t.id }}" data-name="{{ it.t.name }}"
                 onclick="event.preventDefault(); event.stopPropagation(); openTenant(this)">⚙</button>
-        <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()">
+        <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()" class="dlgrid">
           <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
-          <button class="sm" name="fmt" value="pdf">PDF ↓</button>
-          <button class="sm ghost" name="fmt" value="docx">Word ↓</button>
+          <span class="muted">{{ _("Акт + дет.") }}</span>
+          <button class="sm" name="fp" value="pdf|all">PDF ↓</button><button class="sm ghost" name="fp" value="docx|all">Word ↓</button>
+          {% if it.lines|selectattr('group', 'in', ['util', 'service'])|list %}
+          <span class="muted">{{ _("Детализация") }}</span>
+          <button class="sm ghost" name="fp" value="pdf|detail">PDF ↓</button><button class="sm ghost" name="fp" value="docx|detail">Word ↓</button>
+          {% endif %}
         </form>
       </span>
     </summary>
@@ -108,13 +124,7 @@
 <p class="muted">{{ _("Нет активных контактов") }}.</p>
 {% endfor %}
 
-{% if groups %}
-<div class="row">
-  <span class="muted">{{ _("Уже сформированные акты за месяц") }}:</span>
-  <a class="btn ghost sm" href="{{ url_for('acts_zip', period=period, fmt='pdf') }}">{{ _("все PDF") }} ↓</a>
-  <a class="btn ghost sm" href="{{ url_for('acts_zip', period=period, fmt='docx') }}">{{ _("все Word") }} ↓</a>
-</div>
-{% endif %}
+
 <dialog id="tdlg" class="tdlg">
   <div class="row tdlg-h"><b id="tdlg-title"></b><span class="spacer"></span>
     <a id="tdlg-open" class="btn sm ghost" href="#" target="_top">{{ _("Открыть карточку") }} ↗</a>

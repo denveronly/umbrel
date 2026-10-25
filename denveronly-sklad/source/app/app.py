@@ -692,6 +692,19 @@ def companies_page():
     db = get_db()
     if request.method == "POST":
         cid = request.form.get("cid", type=int)
+        if request.form.get("action") == "numbering":       # шаблон номера акта
+            fmt = (request.form.get("act_num_format") or calc.NUM_DEFAULT).strip()[:60]
+            if not re.search(r"\{N+\}", fmt):
+                flash(_("В шаблоне нужен счётчик {N}, {NN} или {NNN}"))
+                return redirect(url_for("companies_page") + "#numbering")
+            reset = request.form.get("act_num_reset") if request.form.get("act_num_reset") in ("month", "year", "never") else "month"
+            start = str(max(1, request.form.get("act_num_start", 1, type=int) or 1))
+            for k, v in (("act_num_format", fmt), ("act_num_reset", reset), ("act_num_start", start)):
+                db.execute("INSERT INTO settings(key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, v))
+            db.commit()
+            log("Нумерация актов изменена", f"{fmt}, сброс: {reset}, с {start}")
+            flash(_("Нумерация сохранена — новые номера будут по шаблону. Уже выданные номера не меняются."))
+            return redirect(url_for("companies_page") + "#numbering")
         if request.form.get("delete") and cid:
             used = db.execute("SELECT COUNT(*) FROM tenants WHERE company_id=?", (cid,)).fetchone()[0]
             if used:
@@ -715,7 +728,11 @@ def companies_page():
         return redirect(url_for("companies_page"))
     rows = db.execute("SELECT c.*, (SELECT COUNT(*) FROM tenants t WHERE t.company_id=c.id AND t.active=1) AS used "
                       "FROM companies c ORDER BY c.active DESC, c.name").fetchall()
-    return render_template("companies.html", rows=rows)
+    fmt, reset, start = calc.num_format()
+    per = current_period()
+    samples = [(r["name"], calc.format_act_number(fmt, r["act_prefix"] or "", per, start)) for r in rows if r["active"]]
+    return render_template("companies.html", rows=rows, num_fmt=fmt, num_reset=reset, num_start=start, num_samples=samples,
+                           num_period=per)
 
 
 # ---------------- показания, цены месяца, услуги ----------------
@@ -1072,12 +1089,12 @@ def act_make():
     import io
     period = get_period()
     tid = request.form.get("tenant_id", type=int)
-    fmt = request.form.get("fmt", "pdf")
+    fmt = _fmt()
     aid, warnings = calc.save_act(tid, period, final=bool(request.form.get("final")))
     act = load_act(aid)
     log("Акт сформирован", f"№{act['number']} {act['data']['tenant']['name']} за {calc.period_label(period)}, "
         f"{calc.fmt_money(act['total'])} грн")
-    return _send_act(act, fmt)
+    return _send_act(act, fmt, part=_part())
 
 
 @app.route("/acts/make_company", methods=["POST"])
@@ -1085,13 +1102,20 @@ def acts_make_company():
     """Сформировать акты всех контактов компании за месяц и скачать архивом."""
     db = get_db()
     period = get_period()
-    cid = request.form.get("company_id", type=int)
-    fmt = request.form.get("fmt", "pdf")
-    q = "SELECT id FROM tenants WHERE active=1 AND " + ("company_id=?" if cid else "company_id IS NULL")
-    ids = [r["id"] for r in db.execute(q, (cid,) if cid else ()).fetchall()]
+    scope = request.form.get("company_id", "")
+    fmt = _fmt()
+    if scope == "all":                                  # архів місяця: усі активні орендарі
+        ids = [r["id"] for r in db.execute("SELECT id FROM tenants WHERE active=1").fetchall()]
+        who = None
+    else:
+        cid = int(scope) if scope.isdigit() else None
+        q = "SELECT id FROM tenants WHERE active=1 AND " + ("company_id=?" if cid else "company_id IS NULL")
+        ids = [r["id"] for r in db.execute(q, (cid,) if cid else ()).fetchall()]
+        co = db.execute("SELECT name FROM companies WHERE id=?", (cid,)).fetchone() if cid else None
+        who = re.sub(r'[\\/:*?"<>|]+', " ", co["name"]) if co else "Без компанії"
     act_ids = [calc.save_act(tid, period)[0] for tid in ids]
     log("Акты компании сформированы", f"{len(act_ids)} шт. за {calc.period_label(period)}")
-    return _zip_acts(act_ids, fmt, f"Akty_{period}_{fmt}.zip")
+    return _zip_acts(act_ids, fmt, _zip_name(period, fmt, _part(), who), _part())
 
 
 def load_act(aid):
@@ -1134,42 +1158,63 @@ def act_status(aid):
     return redirect(url_for("act_view", aid=aid))
 
 
-def _fname(act, ext):
-    name = re.sub(r"[^\w\-]+", "_", act["data"]["tenant"]["name"])[:40]
-    return f"Akt_{act['number']}_{name}.{ext}"
+def _fname(act, ext, part="all"):
+    """Ім'я файлу: на кого виставлено + номер акта («ТОВ Альфа — Акт № А-1026-001.pdf»)."""
+    who = re.sub(r'"([^"]*)"?', r"«\1»", act["data"]["tenant"]["name"])          # прямі лапки — недопустимі у Windows
+    who = re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|\r\n]+', " ", who)).strip().strip(".")[:80] or "Орендар"
+    num = re.sub(r'[\\/:*?"<>|]+', "-", act["number"] or "")
+    kind = "Деталізація до акта" if part == "detail" else "Акт"
+    return f"{who} — {kind} № {num}.{ext}"
 
 
-def _send_act(act, fmt, inline=False):
+def _render(act, fmt, part="all"):
+    return documents.act_docx(act, part) if fmt == "docx" else documents.act_pdf(act, part)
+
+
+def _send_act(act, fmt, inline=False, part="all"):
     import io
     if fmt == "docx":
-        return send_file(io.BytesIO(documents.act_docx(act)), as_attachment=True, download_name=_fname(act, "docx"),
+        return send_file(io.BytesIO(_render(act, "docx", part)), as_attachment=True, download_name=_fname(act, "docx", part),
                          mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    return send_file(io.BytesIO(documents.act_pdf(act)), mimetype="application/pdf",
-                     download_name=_fname(act, "pdf"), as_attachment=not inline)
+    return send_file(io.BytesIO(_render(act, "pdf", part)), mimetype="application/pdf",
+                     download_name=_fname(act, "pdf", part), as_attachment=not inline)
 
 
-def _zip_acts(act_ids, fmt, name):
+def _part():
+    fp = request.values.get("fp", "")
+    part = fp.split("|")[1] if "|" in fp else request.values.get("part")
+    return "detail" if part == "detail" else "all"
+
+
+def _fmt():
+    fp = request.values.get("fp", "")
+    f = fp.split("|")[0] if fp else request.values.get("fmt", "pdf")
+    return "docx" if f == "docx" else "pdf"
+
+
+def _zip_acts(act_ids, fmt, name, part="all"):
     import io
     import zipfile
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for aid in act_ids:
             act = load_act(aid)
-            data = documents.act_pdf(act) if fmt == "pdf" else documents.act_docx(act)
+            if part == "detail" and not calc.act_layout(act["data"])["util"]:
+                continue                                   # без комунальних — деталізації немає
             folder = re.sub(r'[\\/:*?"<>|]+', "_", act["data"]["company"].get("company_name") or "Без компании")
-            z.writestr(f"{folder}/{_fname(act, fmt)}", data)
+            z.writestr(f"{folder}/{_fname(act, fmt, part)}", _render(act, fmt, part))
     buf.seek(0)
     return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=name)
 
 
 @app.route("/acts/<int:aid>.pdf")
 def act_pdf(aid):
-    return _send_act(load_act(aid), "pdf", inline=request.args.get("dl") != "1")
+    return _send_act(load_act(aid), "pdf", inline=request.args.get("dl") != "1", part=_part())
 
 
 @app.route("/acts/<int:aid>.docx")
 def act_docx(aid):
-    return _send_act(load_act(aid), "docx")
+    return _send_act(load_act(aid), "docx", part=_part())
 
 
 @app.route("/acts/zip")
@@ -1177,7 +1222,12 @@ def acts_zip():
     period = get_period()
     fmt = request.args.get("fmt", "pdf")
     ids = [r["id"] for r in get_db().execute("SELECT id FROM acts WHERE period=?", (period,)).fetchall()]
-    return _zip_acts(ids, fmt, f"Akty_{period}_{fmt}.zip")
+    return _zip_acts(ids, fmt, _zip_name(period, fmt, _part()), _part())
+
+
+def _zip_name(period, fmt, part, who=None):
+    kind = "Деталізації" if part == "detail" else "Акти"
+    return f"{kind} {calc.period_label(period)}{' — ' + who if who else ''} ({fmt.upper()}).zip"
 
 
 # ---------------- настройки ----------------

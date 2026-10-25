@@ -1,6 +1,7 @@
 """Розрахунки: оренда, комунальні, акти, сума прописом."""
 import json
 import math
+import re
 from decimal import Decimal, ROUND_HALF_UP
 
 from db import get_db, settings, price_for, PAYMENT_TYPES
@@ -314,7 +315,9 @@ def build_act(tenant_id, period):
             qty = round((cons if svc["has_main"] else 1) * pct / 100, 3)
             lines.append({"group": "service", "name": f"{svc['name']} за {ulabel} — {pct_s}% × {fmt_money(p)}",
                           "unit": (svc["unit"] or "м³") if svc["has_main"] else "послуга", "qty": qty, "price": p, "sum": r2(total * pct / 100),
-                          "service": svc["name"], "wh": "", "serial": "", "rnote": f"{pct_s}%"})
+                          "service": svc["name"], "wh": "", "serial": "", "rnote": f"{pct_s}%",
+                          # без загального лічильника в деталізації — лише % і сума (без «0,20 × 9 000»)
+                          "only_sum": not svc["has_main"]})
 
     net = r2(sum(l["sum"] for l in lines))
     vat_sum = r2(net * vat)
@@ -363,15 +366,68 @@ def company_snapshot(c):
             "company_vat_payer": c["vat_payer"]}
 
 
+NUM_DEFAULT = "{П}{ММ}{РР}-{NNN}"
+_TOKEN_ALIASES = {"{P}": "{П}", "{MM}": "{ММ}", "{YY}": "{РР}", "{YYYY}": "{РРРР}", "{М}": "{ММ}"}
+
+
+def num_format(s=None):
+    s = s or settings()
+    f = (s.get("act_num_format") or NUM_DEFAULT).strip() or NUM_DEFAULT
+    for k, v in _TOKEN_ALIASES.items():
+        f = f.replace(k, v)
+    if not re.search(r"\{N+\}", f):
+        f += "-{NNN}"
+    return f, s.get("act_num_reset") or "month", max(1, int(s.get("act_num_start") or 1))
+
+
+def format_act_number(fmt, prefix, period, n):
+    y, m = period.split("-")
+    out = fmt.replace("{П}", prefix or "").replace("{РРРР}", y).replace("{РР}", y[2:]).replace("{ММ}", m)
+    return re.sub(r"\{(N+)\}", lambda mt: f"{n:0{len(mt.group(1))}d}", out)
+
+
 def next_act_number(company, period):
-    """Нумерація окремо для кожної компанії: <префікс>ММРР-NNN."""
+    """Нумерація окремо для кожної компанії за шаблоном з Налаштувань (за замовчуванням <префікс>ММРР-NNN).
+    Лічильник починається заново щомісяця / щороку / ніколи — теж у налаштуваннях."""
+    fmt, reset, start = num_format()
     y, m = period.split("-")
     prefix = (company["act_prefix"] if company else "") or ""
-    base = f"{prefix}{m}{y[2:]}-"
-    rows = get_db().execute("SELECT number FROM acts WHERE number LIKE ? AND period=?",
-                            (base + "%", period)).fetchall()
-    used = [int(r["number"][len(base):]) for r in rows if r["number"][len(base):].isdigit()]
-    return f"{base}{(max(used) if used else 0) + 1:03d}"
+    # регулярний вираз для пошуку вже виданих номерів у межах «періоду обнулення»
+    rx, i = "", 0
+    while i < len(fmt):
+        mt = re.match(r"\{П\}|\{РРРР\}|\{РР\}|\{ММ\}|\{N+\}", fmt[i:])
+        if not mt:
+            rx += re.escape(fmt[i])
+            i += 1
+            continue
+        tok = mt.group(0)
+        if tok == "{П}":
+            rx += re.escape(prefix)
+        elif tok == "{РРРР}":
+            rx += y if reset in ("month", "year") else r"\d{4}"
+        elif tok == "{РР}":
+            rx += y[2:] if reset in ("month", "year") else r"\d{2}"
+        elif tok == "{ММ}":
+            rx += m if reset == "month" else r"\d{2}"
+        else:
+            rx += r"(?P<n>\d+)"
+        i += len(tok)
+    rx = re.compile("^" + rx + "$")
+    q, args = "SELECT number, period FROM acts WHERE ", []
+    if company:
+        q += "company_id=?"
+        args.append(company["id"])
+    else:
+        q += "company_id IS NULL"
+    if reset == "month":
+        q += " AND period=?"
+        args.append(period)
+    elif reset == "year":
+        q += " AND substr(period, 1, 4)=?"
+        args.append(y)
+    used = [int(mt.group("n")) for r in get_db().execute(q, args).fetchall() if (mt := rx.match(r["number"] or ""))]
+    n = max(max(used) + 1 if used else start, start)
+    return format_act_number(fmt, prefix, period, n)
 
 
 def save_act(tenant_id, period, final=False):
