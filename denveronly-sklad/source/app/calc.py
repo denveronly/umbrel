@@ -313,7 +313,7 @@ def build_act(tenant_id, period):
             # кількість — частка орендаря: м³ від загального лічильника (вода) або частка однієї послуги (сміття)
             qty = round((cons if svc["has_main"] else 1) * pct / 100, 3)
             lines.append({"group": "service", "name": f"{svc['name']} за {ulabel} — {pct_s}% × {fmt_money(p)}",
-                          "unit": svc["unit"] or "послуга", "qty": qty, "price": p, "sum": r2(total * pct / 100),
+                          "unit": (svc["unit"] or "м³") if svc["has_main"] else "послуга", "qty": qty, "price": p, "sum": r2(total * pct / 100),
                           "service": svc["name"], "wh": "", "serial": "", "rnote": f"{pct_s}%"})
 
     net = r2(sum(l["sum"] for l in lines))
