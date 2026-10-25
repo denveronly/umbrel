@@ -63,7 +63,7 @@ def line_data(line_id, periods):
         rows = db.execute("SELECT period, value, reactive FROM readings WHERE meter_id=?", (m["id"],)).fetchall()
         cols.append({"kind": "m", "id": m["id"], "title": m["wh"], "sub": m["tenant"] or _("свободен"),
                      "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": "tenant",
-                     "tid": m["tid"], "tenant": m["tenant"], "svc": m["svc"], "name": m["name"],
+                     "tid": m["tid"], "tenant": m["tenant"], "svc": m["svc"], "name": m["name"], "wid": m["warehouse_id"],
                      "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
     for m in db.execute("SELECT * FROM line_meters WHERE line_id=? AND active=1 ORDER BY sort, CASE role WHEN 'own' THEN 0 "
                         "WHEN 'input' THEN 1 ELSE 2 END, name", (line_id,)).fetchall():
@@ -236,6 +236,24 @@ def _group(cols):
     return groups
 
 
+def _mark_past(groups, periods):
+    """Місяці, коли склад орендував інший орендар (або стояв вільним): {period: ім'я} — у таблиці сірим."""
+    cache = {}
+    for g in groups:
+        for c in g["cols"]:
+            if c.get("kind") != "m" or not c.get("wid"):
+                continue
+            tens = cache.setdefault(c["wid"], calc.tenancies(c["wid"]))
+            past = {}
+            if len(tens) > 1 or (tens and not tens[-1]["current"]):
+                for p in periods:
+                    t = calc.tenancy_for(tens, p)
+                    if (t["tid"] if t else None) != c.get("tid"):
+                        past[p] = (t["name"] or "—") if t else _("свободен")
+            c["past"] = past
+    return groups
+
+
 def table_view(line_id, periods, service_id=None):
     """Вкладка таблиці: line_id — лінія (лічильники орендарів + власні лічильники лінії + баланс) або None — без лінії."""
     db = get_db()
@@ -243,6 +261,7 @@ def table_view(line_id, periods, service_id=None):
         cols, bal = line_data(line_id, periods)
         groups = _group([c for c in cols if c["kind"] == "m"])
         own = [c for c in cols if c["kind"] == "l"]
+        _mark_past(groups, periods)
         if own:
             groups.append({"kind": "line", "tid": None, "title": None, "cols": own})
         return groups, bal
@@ -266,10 +285,11 @@ def table_view(line_id, periods, service_id=None):
             cols.append({"kind": "m", "id": m["id"], "title": m["wh"], "svc": m["svc"], "name": m["name"],
                          "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": "tenant",
                          "rmode": "alloc" if m["has_reactive"] else None, "tid": tid, "tenant": name,
+                         "wid": m["warehouse_id"],
                          "_key": (m["sort_order"] is None, m["sort_order"] or 0, oi, m["ssort"], m["serial"] or ""),
                          "data": _series(rows, m["initial_value"], 0, m["coef"] or 1, periods)})
     cols.sort(key=lambda c: c["_key"])
-    return _group(cols) + empty, None
+    return _mark_past(_group(cols), periods) + empty, None
 
 
 @bp.route("/readings/table/order", methods=["POST"])

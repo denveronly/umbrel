@@ -121,7 +121,8 @@ def month_totals(period, today_period, detail=False):
         res["acts"] += 1
         seen.add(a["tenant_id"])
     if future:
-        for t in active.values():
+        everyone = {t["id"]: t for t in db.execute("SELECT id, name, payment_type FROM tenants").fetchall()}
+        for t in everyone.values():                 # і колишні — у місяці після виїзду ще можуть бути комунальні
             if t["id"] in seen:
                 continue
             lines, totals, _w = calc.build_act(t["id"], period)

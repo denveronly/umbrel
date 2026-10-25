@@ -69,6 +69,85 @@ def util_period_for(period, s=None):
     return prev_period(period) if s.get("util_shift", "1") == "1" else period
 
 
+# ---------- хто орендував склад у місяці (історія оренди) ----------
+
+def _month_bounds(period):
+    import calendar
+    y, m = map(int, period.split("-"))
+    return f"{period}-01", f"{period}-{calendar.monthrange(y, m)[1]:02d}"
+
+
+def tenancies(wid, db=None):
+    """Усі оренди складу: минулі (warehouse_tenancy) + поточна. [{tid, name, start, end, price_m2, area, current}]."""
+    from db import to_iso
+    db = db or get_db()
+    out = []
+    for h in db.execute("SELECT * FROM warehouse_tenancy WHERE warehouse_id=? ORDER BY id", (wid,)).fetchall():
+        out.append({"tid": h["tenant_id"], "name": h["tenant_name"], "start": to_iso(h["started"]),
+                    "end": to_iso(h["ended"]), "price_m2": h["price_m2"], "area": h["area"], "current": False})
+    w = db.execute("SELECT w.*, t.name AS tname FROM warehouses w LEFT JOIN tenants t ON t.id=w.tenant_id WHERE w.id=?",
+                   (wid,)).fetchone()
+    if w and w["tenant_id"]:
+        out.append({"tid": w["tenant_id"], "name": w["tname"], "start": to_iso(w["tenant_since"]), "end": None,
+                    "price_m2": w["price_m2"], "area": w["area"], "current": True})
+    if out:
+        out[0]["start"] = None      # до першого відомого орендаря вважаємо, що склад був у нього (дані до ведення історії)
+    return out
+
+
+def tenancy_for(tens, period):
+    """Оренда, що найбільше покриває місяць (за кількістю днів); при рівності — пізніша."""
+    from datetime import date as _d
+    ms, me = _month_bounds(period)
+    best, best_days = None, 0
+    for i, t in enumerate(tens):
+        s = max(ms, t["start"] or "0000-01-01")
+        e = min(me, t["end"] or "9999-12-31")
+        if s > e:
+            continue
+        days = (_d.fromisoformat(e) - _d.fromisoformat(s)).days + 1
+        if days > best_days or (days == best_days and best is not None):
+            best, best_days = t, days
+    return best
+
+
+def _tenancy_index(db):
+    """Склади й їхні оренди — один раз за запит (акти й економіка рахують багато орендарів/місяців)."""
+    try:
+        from flask import g, has_app_context
+        if has_app_context():
+            if getattr(g, "_tenancy_idx", None) is None:
+                ws = db.execute("SELECT * FROM warehouses ORDER BY name").fetchall()
+                g._tenancy_idx = [(w, tenancies(w["id"], db)) for w in ws]
+            return g._tenancy_idx
+    except Exception:
+        pass
+    return [(w, tenancies(w["id"], db)) for w in db.execute("SELECT * FROM warehouses ORDER BY name").fetchall()]
+
+
+def reset_tenancy_cache():
+    try:
+        from flask import g
+        g._tenancy_idx = None
+    except Exception:
+        pass
+
+
+def warehouses_of(tenant_id, period, db=None):
+    """Склади, які орендар мав у цьому місяці (з площею й ціною тієї оренди)."""
+    db = db or get_db()
+    out = []
+    for w, tens in _tenancy_index(db):
+        t = tenancy_for(tens, period)
+        if t and t["tid"] == tenant_id:
+            d = dict(w)
+            if not t["current"]:
+                d["area"] = t["area"] if t["area"] is not None else w["area"]
+                d["price_m2"] = t["price_m2"]
+            out.append(d)
+    return out
+
+
 def build_act(tenant_id, period):
     """Повертає (lines, totals, warnings) для орендаря за місяць акта.
 
@@ -79,10 +158,12 @@ def build_act(tenant_id, period):
     tenant = db.execute("SELECT * FROM tenants WHERE id=?", (tenant_id,)).fetchone()
     pt = tenant["payment_type"]
     vat = float(s["vat_rate"]) / 100 if pt == "bank_vat" else 0
-    whs = db.execute("SELECT * FROM warehouses WHERE tenant_id=? ORDER BY name", (tenant_id,)).fetchall()
-    area = sum(w["area"] or 0 for w in whs)
     plabel = period_label(period)
     uperiod = util_period_for(period, s)
+    # склади — ті, що орендар мав саме в цих місяцях (оренда — за місяць акта, комунальні — за місяць споживання)
+    whs = warehouses_of(tenant_id, period, db)
+    uwhs = warehouses_of(tenant_id, uperiod, db) if uperiod != period else whs
+    area = sum(w["area"] or 0 for w in uwhs)
     ulabel = period_label(uperiod)
     lines, warnings = [], []
 
@@ -92,8 +173,10 @@ def build_act(tenant_id, period):
         warnings.append("Не вказано компанію-отримувача")
     elif pt == "bank_vat" and not company["vat_payer"]:
         warnings.append(f"Оплата з ПДВ, але «{company['name']}» не платник ПДВ")
-    if not whs:
+    if not whs and not uwhs:
         warnings.append("За орендарем не закріплено жодного складу")
+    elif not whs:
+        warnings.append(f"У {plabel} орендар уже не орендував склад — в акті лише комунальні за {period_label(uperiod)}")
 
     def price(svc):
         p, p_period = price_for(svc["id"], uperiod)
@@ -114,7 +197,7 @@ def build_act(tenant_id, period):
                           "unit": "м²", "qty": wh["area"], "price": rate, "sum": rent_sum})
 
     # --- послуги за лічильниками ---
-    for wh in whs:
+    for wh in uwhs:
         meters = db.execute("SELECT m.*, s.name AS svc_name, s.unit, s.id AS sid, s.active AS svc_active "
                             "FROM meters m JOIN services s ON s.id=m.service_id "
                             "WHERE m.warehouse_id=? AND m.active=1 ORDER BY s.sort, s.name", (wh["id"],)).fetchall()
@@ -167,6 +250,8 @@ def build_act(tenant_id, period):
             qty = row["qty"] if row else 0
             if not qty:
                 continue
+        elif not uwhs:
+            continue                                  # складу в місяці споживання вже не було — без «за м²» і фіксованих
         elif svc["mode"] == "area":
             qty = area
         else:

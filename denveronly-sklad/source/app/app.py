@@ -246,6 +246,20 @@ def set_price(wid, new_price, kind="set"):
     return True
 
 
+def remind_final_act(old_tid):
+    """Після зміни/звільнення складу: нагадати сформувати колишньому орендарю акт за місяць виїзду (комунальні)."""
+    if not old_tid:
+        return
+    db = get_db()
+    t = db.execute("SELECT name FROM tenants WHERE id=?", (old_tid,)).fetchone()
+    um = this_month()
+    ap = calc.next_period(um) if settings().get("util_shift", "1") == "1" else um
+    if t and not db.execute("SELECT 1 FROM acts WHERE tenant_id=? AND period=?", (old_tid, ap)).fetchone():
+        flash(_("Не забудьте сформировать акт для «{t}» за {a} (коммунальные за {u}) во вкладке «Акты» — "
+                "он посчитается по складам, которые были у арендатора в том месяце.").format(
+            t=t["name"], a=calc.period_label(ap), u=calc.period_label(um)))
+
+
 def form_price(prefix=""):
     """Ціна за м² з форми: або явно за м², або з суми за місяць ÷ площа."""
     rate = fnum(prefix + "price_m2")
@@ -289,6 +303,8 @@ def warehouse_edit(wid=None):
         if wh:
             db.execute("UPDATE warehouses SET name=?, area=?, tenant_id=?, color=?, note=?, category_id=?, "
                        "adjacent_area=? WHERE id=?", vals + (wid,))
+            if wh["tenant_id"] and str(wh["tenant_id"]) != str(vals[2] or ""):
+                remind_final_act(wh["tenant_id"])
         else:
             wid = db.execute("INSERT INTO warehouses(name, area, tenant_id, color, note, category_id, adjacent_area) "
                              "VALUES (?,?,?,?,?,?,?)", vals).lastrowid
@@ -498,6 +514,7 @@ def tenant_edit(tid=None):
                 log("Арендатор выехал", f"{t['name']}" + (f"; освобождены: {', '.join(freed)}" if freed else ""), commit=False)
                 if freed:
                     flash(_("Арендатор выехал, склады освобождены") + ": " + ", ".join(freed))
+                    remind_final_act(tid)
             elif not t["active"] and active:
                 db.execute("UPDATE tenants SET moved_out=NULL WHERE id=?", (tid,))
         else:
@@ -573,6 +590,7 @@ def tenant_warehouses(tid):
     elif action == "detach" and wid:
         db.execute("UPDATE warehouses SET tenant_id=NULL WHERE id=? AND tenant_id=?", (wid, tid))
         flash(_("Склад откреплён и стал свободным"))
+        remind_final_act(tid)
     elif action == "prices":
         for w in db.execute("SELECT id FROM warehouses WHERE tenant_id=?", (tid,)).fetchall():
             set_price(w["id"], form_price(f"w{w['id']}_"))
@@ -796,7 +814,17 @@ def acts():
     db = get_db()
     period = get_period(this_month())
     tenants = db.execute("SELECT t.*, c.name AS company_name FROM tenants t LEFT JOIN companies c "
-                         "ON c.id=t.company_id WHERE t.active=1 ORDER BY t.name").fetchall()
+                         "ON c.id=t.company_id ORDER BY t.name").fetchall()
+    uperiod = calc.util_period_for(period)
+    # колишні орендарі (неактивні або без складу зараз) — лише якщо мали склад у цьому місяці чи місяці споживання
+    had = set()
+    for w in db.execute("SELECT id FROM warehouses").fetchall():
+        tens = calc.tenancies(w["id"], db)
+        for p in {period, uperiod}:
+            t_ = calc.tenancy_for(tens, p)
+            if t_ and t_["tid"]:
+                had.add(t_["tid"])
+    tenants = [t for t in tenants if t["active"] or t["id"] in had]
     groups = {}
     for c in companies():
         groups[c["id"]] = {"c": c, "rows": [], "tot": {"net": 0, "vat": 0, "total": 0}, "by_pt": {}}

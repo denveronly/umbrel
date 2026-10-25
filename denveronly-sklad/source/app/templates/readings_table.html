@@ -55,6 +55,12 @@ dialog.qm .full { grid-column: 1 / -1; }
 .rgrid th.dragging { opacity: .45; }
 .rgrid th.drop-l { box-shadow: inset 3px 0 0 var(--accent); }
 .rgrid th.drop-r { box-shadow: inset -3px 0 0 var(--accent); }
+.rgrid td.pastt { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--muted) 10%, transparent) 6px 12px); }
+.rgrid td.pastt, .rgrid td.pastt input { color: var(--muted); }
+.rgrid td.pastt { position: relative; }
+.rgrid .pastn { position: absolute; left: 6px; top: 1px; font-size: 9.5px; color: var(--muted); max-width: 92%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.rgrid td.pastt input { padding-top: 9px; }
 .rgrid td.rnar { width: 1%; min-width: 0; padding-left: 8px; padding-right: 8px; }
 .rgrid th.ten.solarg { background: color-mix(in srgb, #eda100 26%, var(--card)); border-left-color: #eda100; }
 .rgrid .r-solar { background: color-mix(in srgb, #eda100 16%, var(--card)); }
@@ -133,14 +139,14 @@ dialog.qm .full { grid-column: 1 / -1; }
       <td class="pcol">{{ period_label(p) }}</td>
       <td class="dcol"><input class="dt" data-key="d|0|taken|{{ p }}" value="{{ dates.get(p)|dmy if dates.get(p) else '' }}" placeholder="{{ _("дд.мм") }}" inputmode="numeric"></td>
       {% for g in groups %}
-        {% for c in g.cols %}{% set d = c.data[p] %}
-          <td class="{{ 'first' if loop.first }} r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
-          <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
+        {% for c in g.cols %}{% set d = c.data[p] %}{% set pastn = (c.past or {}).get(p) %}
+          <td class="{{ 'first' if loop.first }} r-{{ c.role }} {{ 'pastt' if pastn }}" {% if pastn %}title="{{ _("Арендатор в этом месяце") }}: {{ pastn }}"{% endif %}>{% if pastn %}<span class="pastn">{{ pastn }}</span>{% endif %}<input data-key="{{ c.kind }}|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
+          <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }} {{ 'pastt' if pastn }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
           {% if c.rmode == 'input' %}
             <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
             <td class="c rx r-{{ c.role }}">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
           {% elif c.rmode == 'alloc' %}
-            <td class="c al rnar r-{{ c.role }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ num(d.ralloc) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
+            <td class="c al rnar r-{{ c.role }} {{ 'pastt' if pastn }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ num(d.ralloc) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
           {% endif %}
         {% else %}<td class="nom first"></td>{% endfor %}
       {% endfor %}
