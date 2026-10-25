@@ -122,7 +122,7 @@ dialog.qm .full { grid-column: 1 / -1; }
         {% endfor %}
       {% endfor %}
       {% if bal %}
-        <th class="mt r-solar first solarc" colspan="2">{{ _("Солнечная генерация") }}<small>{{ _("сразу выработанные кВт·год за месяц") }}</small></th>
+        <th class="mt r-solar first solarc" colspan="2">{{ _("Солнечная генерация") }}<small>{{ _("сразу выработанные кВт·ч за месяц") }}</small></th>
         <th class="mt sum first" colspan="2">{{ _("Сумма счётчиков") }}<small>{{ _("потребители линии") }}</small></th>
         <th class="mt sum" rowspan="2">{{ _("Ввод + солнце") }}</th>
         <th class="mt sum" colspan="2">{{ _("Разница") }}<small>{{ _("потери / общее") }}</small></th>
@@ -131,11 +131,11 @@ dialog.qm .full { grid-column: 1 / -1; }
     <tr class="h3">
       {% for g in groups %}{% for c in g.cols %}
         <th class="{{ 'first' if loop.first }} r-{{ c.role }}">{{ _("показание") }}</th><th class="r-{{ c.role }}">{{ _("расход") }}</th>
-        {% if c.rmode == 'input' %}<th class="r-{{ c.role }}">{{ _("реакт.") }}</th><th class="r-{{ c.role }}">{{ _("реакт. расход, кВт·год") }}</th>
-        {% elif c.rmode == 'alloc' %}<th class="r-{{ c.role }}" title="{{ _("Реактив линии, распределённый пропорционально активному расходу") }}, {{ _("кВт·год") }}">{{ _("реактив") }}</th>{% endif %}
+        {% if c.rmode == 'input' %}<th class="r-{{ c.role }}">{{ _("реакт.") }}</th><th class="r-{{ c.role }}">{{ _("реакт. расход кВт·ч") }}</th>
+        {% elif c.rmode == 'alloc' %}<th class="r-{{ c.role }}" title="{{ _("Реактив линии, распределённый пропорционально активному расходу") }} {{ _("кВт·ч") }}">{{ _("реактив") }}</th>{% endif %}
       {% endfor %}{% endfor %}
-      {% if bal %}<th class="r-solar first solarc">{{ _("выработано, кВт·год") }}</th><th class="r-solar" title="{{ _("Учитывается в балансе с потерями") }}">−{{ solar_loss|plain }}% {{ _("потерь") }}</th>
-        <th class="sum first">{{ _("кВт·год") }}</th><th class="sum">{{ _("реакт., кВт·год") }}</th><th class="sum">{{ _("кВт·год") }}</th><th class="sum">%</th>{% endif %}
+      {% if bal %}<th class="r-solar first solarc">{{ _("выработано кВт·ч") }}</th><th class="r-solar" title="{{ _("Учитывается в балансе с потерями") }}">−{{ solar_loss|plain }}% {{ _("потерь") }}</th>
+        <th class="sum first">{{ _("кВт·ч") }}</th><th class="sum">{{ _("реакт. кВт·ч") }}</th><th class="sum">{{ _("кВт·ч") }}</th><th class="sum">%</th>{% endif %}
     </tr>
   </thead>
   <tbody>

@@ -69,8 +69,8 @@ table.lgrid { border-collapse: separate; border-spacing: 0; font-size: 12.5px; w
         <th class="r-{{ c.role }}">{{ _("показание") }}</th><th class="r-{{ c.role }}">{{ _("расход") }}</th>
         {% if c.reactive %}<th class="r-{{ c.role }}">{{ _("реакт.") }}</th><th class="r-{{ c.role }}">{{ _("реакт. расход") }}</th>{% endif %}
       {% endfor %}
-      <th class="sum">{{ _("кВт·год") }}</th><th class="sum">{{ _("реакт.") }}</th>
-      <th class="sum">{{ _("кВт·год") }}</th><th class="sum">%</th>
+      <th class="sum">{{ _("кВт·ч") }}</th><th class="sum">{{ _("реакт.") }}</th>
+      <th class="sum">{{ _("кВт·ч") }}</th><th class="sum">%</th>
     </tr>
   </thead>
   <tbody>

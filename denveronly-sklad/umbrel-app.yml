@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.18.2"
+version: "1.18.3"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  кВт·год — завжди цілі: витрата, сонце з втратами, баланс лінії, реактив і кількість кВт·год в актах
-  (округлення до найближчого цілого, частка реактиву — вгору).
+  Коротші заголовки колонок: «кВт·г» без коми («вироблено кВт·г», «реакт. кВт·г»).
+  З 1.18.2: кВт·год скрізь цілі.
 dependencies: []
 path: ""
 defaultUsername: ""
