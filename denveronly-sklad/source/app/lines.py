@@ -51,6 +51,45 @@ def _series(rows, initial, initial_r, coef, periods):
     return out
 
 
+def resolve_src(src):
+    """'m:12' / 'l:5' -> (kind, id, рядок лічильника, підпис «Офіс (Лінія 1)») або None, якщо лічильника вже нема."""
+    try:
+        kind, sid = src.split(":")
+        sid = int(sid)
+    except (ValueError, AttributeError):
+        return None
+    db = get_db()
+    if kind == "m":
+        r = db.execute("SELECT m.*, w.name AS wh, l.name AS line FROM meters m JOIN warehouses w ON w.id=m.warehouse_id "
+                       "LEFT JOIN power_lines l ON l.id=m.line_id WHERE m.id=?", (sid,)).fetchone()
+        if r:
+            return "m", sid, r, (r["name"] or r["wh"]) + (f" №{r['serial']}" if r["serial"] else "") + \
+                (f" ({r['line']})" if r["line"] else "")
+    elif kind == "l":
+        r = db.execute("SELECT lm.*, l.name AS line FROM line_meters lm JOIN power_lines l ON l.id=lm.line_id "
+                       "WHERE lm.id=? AND lm.src IS NULL", (sid,)).fetchone()
+        if r:
+            return "l", sid, r, f"{r['name']} ({r['line']})"
+    return None
+
+
+def src_options(exclude_line=None):
+    """Лічильники, з яких можна брати показники для ввідного лічильника лінії."""
+    db = get_db()
+    out = []
+    for r in db.execute("SELECT m.id, m.name, m.serial, m.line_id, w.name AS wh, s.name AS svc, l.name AS line FROM meters m "
+                        "JOIN warehouses w ON w.id=m.warehouse_id JOIN services s ON s.id=m.service_id "
+                        "LEFT JOIN power_lines l ON l.id=m.line_id WHERE m.active=1 AND s.mode='meter' "
+                        "ORDER BY l.sort, l.id, w.name").fetchall():
+        out.append({"value": f"m:{r['id']}", "line_id": r["line_id"],
+                    "label": f"{r['name'] or r['wh']} · {r['svc']}" + (f" №{r['serial']}" if r["serial"] else "")
+                             + f" — {r['line'] or _('без линии')}"})
+    for r in db.execute("SELECT lm.id, lm.name, lm.line_id, l.name AS line FROM line_meters lm JOIN power_lines l "
+                        "ON l.id=lm.line_id WHERE lm.active=1 AND lm.src IS NULL ORDER BY l.sort, l.id, lm.name").fetchall():
+        out.append({"value": f"l:{r['id']}", "line_id": r["line_id"], "label": f"{r['name']} — {r['line']}"})
+    return out
+
+
 def line_data(line_id, periods):
     db = get_db()
     cols = []
@@ -67,6 +106,18 @@ def line_data(line_id, periods):
                      "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
     for m in db.execute("SELECT * FROM line_meters WHERE line_id=? AND active=1 ORDER BY sort, CASE role WHEN 'own' THEN 0 "
                         "WHEN 'input' THEN 1 ELSE 2 END, name", (line_id,)).fetchall():
+        src = resolve_src(m["src"]) if m["src"] else None
+        if src:            # показники беруться з наявного лічильника іншої лінії (і вносяться туди ж)
+            kind, sid, base, label = src
+            table, idcol = ("readings", "meter_id") if kind == "m" else ("line_readings", "line_meter_id")
+            rows = db.execute(f"SELECT period, value, reactive FROM {table} WHERE {idcol}=?", (sid,)).fetchall()
+            cols.append({"kind": kind, "id": sid, "dkind": "l", "did": m["id"], "title": m["name"],
+                         "sub": _(ROLES[m["role"]]).split(" (")[0] + " · = " + label,
+                         "serial": base["serial"], "reactive": bool(m["has_reactive"]), "role": m["role"], "name": None,
+                         "linked": label,
+                         "data": _series(rows, base["initial_value"], base["initial_reactive"] or 0, base["coef"] or 1,
+                                         periods)})
+            continue
         rows = db.execute("SELECT period, value, reactive FROM line_readings WHERE line_meter_id=?", (m["id"],)).fetchall()
         cols.append({"kind": "l", "id": m["id"], "title": m["name"], "sub": _(ROLES[m["role"]]).split(" (")[0],
                      "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": m["role"], "name": None,
@@ -90,8 +141,9 @@ def line_data(line_id, periods):
     # баланс по місяцях; сонце — з втратами (налаштування solar_loss_pct, типово 5%)
     from db import settings as _settings
     loss = float(_settings().get("solar_loss_pct") or 5)
+    ln = db.execute("SELECT has_solar FROM power_lines WHERE id=?", (line_id,)).fetchone()
     solar_kwh = {r["period"]: r["kwh"] for r in db.execute("SELECT period, kwh FROM line_solar WHERE line_id=?",
-                                                              (line_id,))}
+                                                              (line_id,))} if not ln or ln["has_solar"] else {}
     bal = {}
     for p in periods:
         def s(role, key="cons"):                        # кВт·год — цілі: кожен лічильник округлюється, як в акті
@@ -259,8 +311,8 @@ def table_view(line_id, periods, service_id=None):
     db = get_db()
     if line_id:
         cols, bal = line_data(line_id, periods)
-        groups = _group([c for c in cols if c["kind"] == "m"])
-        own = [c for c in cols if c["kind"] == "l"]
+        groups = _group([c for c in cols if c.get("dkind", c["kind"]) == "m"])
+        own = [c for c in cols if c.get("dkind", c["kind"]) == "l"]
         _mark_past(groups, periods)
         if own:
             groups.append({"kind": "line", "tid": None, "title": None, "cols": own})
@@ -372,11 +424,13 @@ def manage():
                 db.execute("DELETE FROM line_meters WHERE line_id=?", (lid,))
                 db.execute("DELETE FROM power_lines WHERE id=?", (lid,))
             elif lid:
-                db.execute("UPDATE power_lines SET name=?, note=?, sort=? WHERE id=?",
-                           (name, request.form.get("note", "").strip(), request.form.get("sort", type=int) or 100, lid))
+                db.execute("UPDATE power_lines SET name=?, note=?, sort=?, has_solar=? WHERE id=?",
+                           (name, request.form.get("note", "").strip(), request.form.get("sort", type=int) or 100,
+                            1 if request.form.get("has_solar") else 0, lid))
             elif name:
-                db.execute("INSERT INTO power_lines(name, note, sort) VALUES (?,?,?)",
-                           (name, request.form.get("note", "").strip(), request.form.get("sort", type=int) or 100))
+                db.execute("INSERT INTO power_lines(name, note, sort, has_solar) VALUES (?,?,?,?)",
+                           (name, request.form.get("note", "").strip(), request.form.get("sort", type=int) or 100,
+                            1 if request.form.get("has_solar") else 0))
         elif a == "lmeter":
             mid = request.form.get("mid", type=int)
             vals = [request.form.get("line_id", type=int), request.form.get("name", "").strip(),
@@ -384,15 +438,24 @@ def manage():
                     request.form.get("serial", "").strip(), _num(request.form.get("coef")) or 1,
                     _num(request.form.get("initial_value")) or 0, _num(request.form.get("initial_reactive")) or 0,
                     1 if request.form.get("has_reactive") else 0]
+            src = request.form.get("src") or None
+            if src and (not resolve_src(src) or (src.startswith("m:") and db.execute(
+                    "SELECT 1 FROM meters WHERE id=? AND line_id=?", (int(src[2:]), vals[0])).fetchone())
+                    or (src.startswith("l:") and db.execute(
+                    "SELECT 1 FROM line_meters WHERE id=? AND line_id=?", (int(src[2:]), vals[0])).fetchone())):
+                flash(_("Нельзя взять показания со счётчика этой же линии"))
+                return redirect(url_for("lines.manage"))
+            if src:
+                vals[2] = "input"
             if request.form.get("delete") and mid:
                 db.execute("DELETE FROM line_readings WHERE line_meter_id=?", (mid,))
                 db.execute("DELETE FROM line_meters WHERE id=?", (mid,))
             elif mid:
                 db.execute("UPDATE line_meters SET line_id=?, name=?, role=?, serial=?, coef=?, initial_value=?, "
-                           "initial_reactive=?, has_reactive=? WHERE id=?", vals + [mid])
+                           "initial_reactive=?, has_reactive=?, src=? WHERE id=?", vals + [src, mid])
             elif vals[1]:
                 db.execute("INSERT INTO line_meters(line_id, name, role, serial, coef, initial_value, initial_reactive, "
-                           "has_reactive) VALUES (?,?,?,?,?,?,?,?)", vals)
+                           "has_reactive, src) VALUES (?,?,?,?,?,?,?,?,?)", vals + [src])
         elif a == "solar_loss":
             from db import set_setting
             v = _num(request.form.get("solar_loss_pct"))
@@ -415,6 +478,7 @@ def manage():
                          "JOIN services s ON s.id=m.service_id WHERE m.active=1 ORDER BY s.sort, w.name").fetchall()
     from db import settings as _settings
     return render_template("lines_manage.html", all_lines=all_lines, lmeters=lmeters, tmeters=tmeters, LROLES=ROLES,
+                           srcs=src_options(),
                            solar_loss=float(_settings().get("solar_loss_pct") or 5))
 
 

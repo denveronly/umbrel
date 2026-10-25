@@ -483,6 +483,8 @@ END;
 
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
+    "line_meters": {"src": "TEXT"},   # ввідний = наявний лічильник іншої лінії: "m:<id>" | "l:<id>"
+    "power_lines": {"has_solar": "INTEGER NOT NULL DEFAULT 1"},   # сонячна генерація на лінії (для субліній — вимкнути)
     "users": {"perms": "TEXT NOT NULL DEFAULT 'economics'"},   # права оператора (через кому); раніше Економіку бачили всі
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
                    "row_no": "TEXT", "description": "TEXT", "tenant_since": "TEXT"},

@@ -14,6 +14,7 @@
     <input name="name" value="{{ l.name }}" required style="width:220px">
     <input name="note" value="{{ l.note or '' }}" placeholder="{{ _("Заметка") }}" style="flex:1;min-width:180px">
     <input name="sort" value="{{ l.sort }}" inputmode="numeric" style="width:60px" title="{{ _("Порядок") }}">
+    <label class="check" title="{{ _("Для подлиний (например, офис) снимите галочку — колонки «Солнце» не будет") }}"><input type="checkbox" name="has_solar" value="1" {{ 'checked' if l.has_solar }}> ☀ {{ _("Солнечная генерация") }}</label>
     <button class="sm ghost">{{ _("Сохранить") }}</button>
     <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить линию вместе с её вводными счётчиками и их показаниями? Счётчики складов останутся, только отвяжутся от линии.")|tojson|forceescape }})">{{ _("Удалить") }}</button>
   </form>
@@ -22,6 +23,7 @@
     <input type="hidden" name="action" value="line">
     <input name="name" required placeholder="{{ _("Линия 1") }}" style="width:220px">
     <input name="note" placeholder="{{ _("Заметка") }}" style="flex:1;min-width:180px">
+    <label class="check"><input type="checkbox" name="has_solar" value="1" checked> ☀ {{ _("Солнечная генерация") }}</label>
     <button class="sm">+ {{ _("Добавить линию") }}</button>
   </form>
 </div>
@@ -37,13 +39,16 @@
 
 <div class="card">
   <h2 style="margin-top:0">2. {{ _("Счётчики линии") }}</h2>
-  <p class="muted">{{ _("Вводный счётчик линии, солнечная генерация и собственные потребители базы (охрана, котельня, освещение территории) — то, что не выставляется арендаторам.") }}</p>
+  <p class="muted">{{ _("Вводный счётчик линии, солнечная генерация и собственные потребители базы (охрана, котельня, освещение территории) — то, что не выставляется арендаторам.") }}
+    {{ _("Вводным счётчиком может быть счётчик другой линии (например, «Офис» на Линии 1 — ввод для отдельной линии с помещениями офиса): выберите его в «Показания берутся с» — показания не дублируются, вносятся в одном месте.") }}</p>
   {% for m in lmeters %}
   <form method="post" class="grid" style="padding:10px 0;border-bottom:1px solid var(--line)">
     <input type="hidden" name="action" value="lmeter"><input type="hidden" name="mid" value="{{ m.id }}">
     <label>{{ _("Название") }}<input name="name" value="{{ m.name }}" required></label>
     <label>{{ _("Линия") }}<select name="line_id">{% for l in all_lines %}<option value="{{ l.id }}" {{ 'selected' if m.line_id == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
     <label>{{ _("Роль") }}<select name="role">{% for k, v in LROLES.items() %}<option value="{{ k }}" {{ 'selected' if m.role == k }}>{{ _(v) }}</option>{% endfor %}</select></label>
+    <label>{{ _("Показания берутся с") }}<select name="src"><option value="">— {{ _("свои показания") }} —</option>
+      {% for o in srcs if o.line_id != m.line_id %}<option value="{{ o.value }}" {{ 'selected' if m.src == o.value }}>{{ o.label }}</option>{% endfor %}</select></label>
     <label>{{ _("Номер счётчика") }}<input name="serial" value="{{ m.serial or '' }}"></label>
     <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="{{ m.coef|plain }}"></label>
     <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="{{ m.initial_value|plain }}"></label>
@@ -61,6 +66,8 @@
     <label>{{ _("Название") }}<input name="name" required placeholder="{{ _("Ввод") }}"></label>
     <label>{{ _("Линия") }}<select name="line_id">{% for l in all_lines %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label>
     <label>{{ _("Роль") }}<select name="role">{% for k, v in LROLES.items() %}<option value="{{ k }}">{{ _(v) }}</option>{% endfor %}</select></label>
+    <label>{{ _("Показания берутся с") }}<select name="src" id="newsrc"><option value="">— {{ _("свои показания") }} —</option>
+      {% for o in srcs %}<option value="{{ o.value }}" data-line="{{ o.line_id }}">{{ o.label }}</option>{% endfor %}</select></label>
     <label>{{ _("Номер счётчика") }}<input name="serial"></label>
     <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="1"></label>
     <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="0"></label>
