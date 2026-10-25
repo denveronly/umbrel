@@ -494,7 +494,7 @@ MIGRATIONS = {
     "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT"},
     "acts": {"company_id": "INTEGER"},
-    "meters": {"name": "TEXT", "service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",
+    "meters": {"name": "TEXT", "sort_order": "INTEGER", "service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",
                "initial_reactive": "REAL NOT NULL DEFAULT 0"},
 }
 OLD_RESOURCES = {"electricity": "Електроенергія", "water": "Водопостачання та водовідведення",

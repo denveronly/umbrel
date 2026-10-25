@@ -46,6 +46,10 @@ dialog.qm .full { grid-column: 1 / -1; }
 .rgrid .sum { background: var(--accent-soft); font-weight: 600; }
 .rgrid th.ten.bal { background: var(--accent-soft); border-left-color: var(--accent); }
 .rgrid td.al { color: var(--muted); font-style: italic; }
+.rgrid th[draggable] { cursor: grab; }
+.rgrid th.dragging { opacity: .45; }
+.rgrid th.drop-l { box-shadow: inset 3px 0 0 var(--accent); }
+.rgrid th.drop-r { box-shadow: inset -3px 0 0 var(--accent); }
 .rgrid td.rnar { width: 1%; min-width: 0; padding-left: 8px; padding-right: 8px; }
 .rgrid th.ten.solarg { background: color-mix(in srgb, #eda100 26%, var(--card)); border-left-color: #eda100; }
 .rgrid .r-solar { background: color-mix(in srgb, #eda100 16%, var(--card)); }
@@ -84,7 +88,8 @@ dialog.qm .full { grid-column: 1 / -1; }
       <th class="pcol" rowspan="3">{{ _("Месяц") }}</th>
       <th class="dcol" rowspan="3">{{ _("Дата снятия") }}</th>
       {% for g in groups %}{% set ns = namespace(w=0) %}{% for c in g.cols %}{% set ns.w = ns.w + width(c)|int %}{% endfor %}
-        <th class="ten {{ 'free' if g.kind == 'tenant' and not g.tid }} {{ 'lineg' if g.kind == 'line' }}" colspan="{{ ns.w or 1 }}">
+        <th class="ten {{ 'free' if g.kind == 'tenant' and not g.tid }} {{ 'lineg' if g.kind == 'line' }}" colspan="{{ ns.w or 1 }}"
+            {% if g.cols %}draggable="true" data-kind="{{ g.cols[0].kind }}" data-ids="{{ g.cols|map(attribute='id')|join(',') }}" title="{{ _("Перетащите, чтобы переместить всю группу") }}"{% endif %}>
           {% if g.kind == 'line' %}⚡ {{ _("Счётчики линии") }}{% elif g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.title }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}
           {% if g.kind == 'tenant' %}<button type="button" class="sm ghost addm" onclick="openQM({{ g.tid|tojson }})" title="{{ _("Добавить счётчик") }}">＋</button>{% endif %}</th>
       {% endfor %}
@@ -93,8 +98,8 @@ dialog.qm .full { grid-column: 1 / -1; }
     <tr class="h2">
       {% for g in groups %}
         {% for c in g.cols %}
-          <th class="mt {{ 'first' if loop.first }} r-{{ c.role }}" colspan="{{ width(c) }}">{{ c.title }}{% if c.svc %} · {{ c.svc }}{% endif %}
-            <small>{% if c.kind == 'l' %}{{ c.sub }}{% if c.serial %} · №{{ c.serial }}{% endif %}{% else %}{% if c.name %}{{ c.name }} · {% endif %}{% if c.serial %}№{{ c.serial }}{% endif %}{% endif %}</small></th>
+          <th class="mt {{ 'first' if loop.first }} r-{{ c.role }}" colspan="{{ width(c) }}" draggable="true" data-kind="{{ c.kind }}" data-id="{{ c.id }}" title="{{ _("Перетащите, чтобы поменять порядок") }}">{{ c.title }}{% if c.svc %} · {{ c.svc }}{% endif %}
+            <small>{% if c.kind == 'l' %}{{ c.sub }}{% if c.serial %} · №{{ c.serial }}{% endif %}{% else %}{{ [c.name, ('№' ~ c.serial) if c.serial else ''] | select | join(' · ') }}{% endif %}</small></th>
         {% else %}
           <th class="mt first" rowspan="2"><button type="button" class="sm" onclick="openQM({{ g.tid|tojson }})">＋ {{ _("счётчик") }}</button></th>
         {% endfor %}
@@ -178,6 +183,41 @@ dialog.qm .full { grid-column: 1 / -1; }
 {% block scripts %}
 <script>
 const OWNERS = {{ owners|tojson }};
+// перетягування колонок: заголовок лічильника або групи (орендаря) — ліворуч/праворуч від іншого заголовка
+(() => {
+  let drag = null;
+  const ids = th => (th.dataset.ids || th.dataset.id || '').split(',').filter(Boolean);
+  const heads = kind => [...document.querySelectorAll(`.rgrid tr.h2 th[data-kind="${kind}"]`)];
+  const clear = () => document.querySelectorAll('.drop-l,.drop-r').forEach(e => e.classList.remove('drop-l', 'drop-r'));
+  document.querySelectorAll('.rgrid th[draggable]').forEach(th => {
+    th.addEventListener('dragstart', e => { drag = th; th.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', ids(th).join(',')); });
+    th.addEventListener('dragend', () => { th.classList.remove('dragging'); clear(); drag = null; });
+    th.addEventListener('dragover', e => {
+      if (!drag || drag === th || drag.dataset.kind !== th.dataset.kind) return;
+      e.preventDefault(); clear();
+      const r = th.getBoundingClientRect();
+      th.classList.add(e.clientX < r.left + r.width / 2 ? 'drop-l' : 'drop-r');
+    });
+    th.addEventListener('dragleave', clear);
+    th.addEventListener('drop', async e => {
+      if (!drag || drag === th || drag.dataset.kind !== th.dataset.kind) return;
+      e.preventDefault();
+      const before = th.classList.contains('drop-l'); clear();
+      const kind = th.dataset.kind, moving = ids(drag), target = ids(th);
+      let order = heads(kind).map(h => h.dataset.id).filter(x => !moving.includes(x));
+      let at = before ? order.indexOf(target.find(x => !moving.includes(x)))
+                      : order.indexOf([...target].reverse().find(x => !moving.includes(x))) + 1;
+      if (at < 0) return;
+      order.splice(at, 0, ...moving);
+      if (Object.keys(changed).length && !confirm(t('Есть несохранённые показания — они будут потеряны. Продолжить?'))) return;
+      Object.keys(changed).forEach(k => delete changed[k]);
+      const r = await fetch({{ url_for('lines.table_order')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({kind, ids: order})});
+      if (r.ok) location.reload(); else alert(t('Ошибка сохранения'));
+    });
+  });
+})();
 // липкі рядки шапки й перші дві колонки: відступи за фактичними розмірами
 function stick() {
   let top = 0;

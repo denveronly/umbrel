@@ -58,14 +58,15 @@ def line_data(line_id, periods):
     for m in db.execute("SELECT m.*, w.name AS wh, t.id AS tid, t.name AS tenant, s.name AS svc FROM meters m "
                         "JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN tenants t ON t.id=w.tenant_id "
                         "JOIN services s ON s.id=m.service_id WHERE m.line_id=? AND m.active=1 "
-                        "ORDER BY t.name IS NULL, t.name COLLATE NOCASE, w.name, m.serial", (line_id,)).fetchall():
+                        "ORDER BY m.sort_order IS NULL, m.sort_order, t.name IS NULL, t.name COLLATE NOCASE, w.name, m.serial",
+                        (line_id,)).fetchall():
         rows = db.execute("SELECT period, value, reactive FROM readings WHERE meter_id=?", (m["id"],)).fetchall()
         cols.append({"kind": "m", "id": m["id"], "title": m["wh"], "sub": m["tenant"] or _("свободен"),
                      "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": "tenant",
                      "tid": m["tid"], "tenant": m["tenant"], "svc": m["svc"], "name": m["name"],
                      "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
-    for m in db.execute("SELECT * FROM line_meters WHERE line_id=? AND active=1 ORDER BY CASE role WHEN 'own' THEN 0 "
-                        "WHEN 'input' THEN 1 ELSE 2 END, sort, name", (line_id,)).fetchall():
+    for m in db.execute("SELECT * FROM line_meters WHERE line_id=? AND active=1 ORDER BY sort, CASE role WHEN 'own' THEN 0 "
+                        "WHEN 'input' THEN 1 ELSE 2 END, name", (line_id,)).fetchall():
         rows = db.execute("SELECT period, value, reactive FROM line_readings WHERE line_meter_id=?", (m["id"],)).fetchall()
         cols.append({"kind": "l", "id": m["id"], "title": m["name"], "sub": _(ROLES[m["role"]]).split(" (")[0],
                      "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": m["role"], "name": None,
@@ -246,28 +247,44 @@ def table_view(line_id, periods, service_id=None):
             groups.append({"kind": "line", "tid": None, "title": None, "cols": own})
         return groups, bal
     known = {r["id"] for r in db.execute("SELECT id FROM power_lines WHERE active=1")}
-    cols = []
-    q = ("SELECT m.*, w.name AS wh, s.name AS svc FROM meters m JOIN warehouses w ON w.id=m.warehouse_id "
+    q = ("SELECT m.*, w.name AS wh, s.name AS svc, s.sort AS ssort FROM meters m JOIN warehouses w ON w.id=m.warehouse_id "
          "JOIN services s ON s.id=m.service_id WHERE m.active=1 AND s.active=1 AND w.id=?"
-         + (" AND m.service_id=?" if service_id else "") + " ORDER BY s.sort, m.serial")
-    groups = []
-    for tid, name, whs in _owners():
+         + (" AND m.service_id=?" if service_id else ""))
+    cols, empty = [], []
+    for oi, (tid, name, whs) in enumerate(_owners()):
         all_m = [m for w in whs for m in db.execute(q, (w["id"], service_id) if service_id else (w["id"],)).fetchall()]
         ms = [m for m in all_m if m["line_id"] not in known]
-        has_any = db.execute("SELECT 1 FROM meters m JOIN warehouses w ON w.id=m.warehouse_id WHERE m.active=1 AND "
-                             + ("w.tenant_id=?" if tid else "w.tenant_id IS NULL") + " LIMIT 1",
-                             (tid,) if tid else ()).fetchone()
-        if not ms and (has_any or not tid):
-            continue                                  # орендар без жодного лічильника — тут, з кнопкою «＋»
-        cols = []
+        if not ms:
+            has_any = db.execute("SELECT 1 FROM meters m JOIN warehouses w ON w.id=m.warehouse_id WHERE m.active=1 AND "
+                                 + ("w.tenant_id=?" if tid else "w.tenant_id IS NULL") + " LIMIT 1",
+                                 (tid,) if tid else ()).fetchone()
+            if tid and not has_any:
+                empty.append({"kind": "tenant", "tid": tid, "title": name, "cols": []})   # з кнопкою «＋»
+            continue
         for m in ms:
             rows = db.execute("SELECT period, value, reactive FROM readings WHERE meter_id=?", (m["id"],)).fetchall()
             cols.append({"kind": "m", "id": m["id"], "title": m["wh"], "svc": m["svc"], "name": m["name"],
                          "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": "tenant",
-                         "rmode": "alloc" if m["has_reactive"] else None,
+                         "rmode": "alloc" if m["has_reactive"] else None, "tid": tid, "tenant": name,
+                         "_key": (m["sort_order"] is None, m["sort_order"] or 0, oi, m["ssort"], m["serial"] or ""),
                          "data": _series(rows, m["initial_value"], 0, m["coef"] or 1, periods)})
-        groups.append({"kind": "tenant", "tid": tid, "title": name, "cols": cols})
-    return groups, None
+    cols.sort(key=lambda c: c["_key"])
+    return _group(cols) + empty, None
+
+
+@bp.route("/readings/table/order", methods=["POST"])
+def table_order():
+    """Порядок колонок після перетягування: {kind: 'm'|'l', ids: [...]}."""
+    db = get_db()
+    d = request.get_json(force=True) or {}
+    ids = [int(x) for x in d.get("ids") or [] if str(x).isdigit()]
+    table = {"m": ("meters", "sort_order"), "l": ("line_meters", "sort")}.get(d.get("kind"))
+    if not table or not ids:
+        abort(400)
+    for i, mid in enumerate(ids):
+        db.execute(f"UPDATE {table[0]} SET {table[1]}=? WHERE id=?", ((i + 1) * 10, mid))
+    db.commit()
+    return jsonify(ok=True)
 
 
 @bp.route("/readings/table")
