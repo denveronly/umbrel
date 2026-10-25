@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.30.3"
+version: "1.31.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  YASNO: виправлено вхід у кабінет (HTTP 422) — логін тепер іде в поле «username», а не в приховане поле-пастку для ботів;
-  додано постійний відбиток пристрою, як у браузері.
+  Послуги: у кожній послузі (Показники → Послуги → змінити) — кому вона підключена (галочки, «усім»/«нікому»),
+  а для послуги «частка» — % усіх орендарів одним списком із живою сумою Σ.
+  «Кількість за місяць» показує всіх активних орендарів; вписали кількість — послуга підключається сама.
 dependencies: []
 path: ""
 defaultUsername: ""

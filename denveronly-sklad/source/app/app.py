@@ -759,6 +759,8 @@ def readings():
                     db.execute("INSERT INTO service_usage(tenant_id, service_id, period, qty) VALUES (?,?,?,?) "
                                "ON CONFLICT(tenant_id, service_id, period) DO UPDATE SET qty=excluded.qty",
                                (tid, sid, period, float(v)))
+                    # вписали кількість орендарю без підключеної послуги — підключаємо, інакше в акт не піде
+                    db.execute("INSERT OR IGNORE INTO tenant_services(tenant_id, service_id) VALUES (?,?)", (tid, sid))
                     n_qty += 1
         db.commit()
         log("Показания сохранены", f"{calc.period_label(period)}: показаний {n_read}, цен {n_price}, количеств {n_qty}")
@@ -810,8 +812,8 @@ def readings():
             u = db.execute("SELECT qty FROM service_usage WHERE tenant_id=? AND service_id=? AND period=?",
                            (t["id"], sv["id"], period)).fetchone()
             cells.append({"s": sv, "sub": bool(sub), "qty": u["qty"] if u else None})
-        if any(c["sub"] for c in cells):
-            qty_rows.append({"t": t, "cells": cells})
+        qty_rows.append({"t": t, "cells": cells})
+    qty_rows.sort(key=lambda r: not any(c["sub"] for c in r["cells"]))      # спершу ті, кому послуга підключена
 
     return render_template("readings.html", period=period, rows=rows, price_rows=price_rows,
                            acts_period=calc.next_period(period) if settings().get("util_shift", "1") == "1" else period,
@@ -960,10 +962,61 @@ def services_page():
     rows = db.execute("SELECT s.*, (SELECT COUNT(*) FROM meters m WHERE m.service_id=s.id) AS meters, "
                       "(SELECT COUNT(*) FROM tenant_services ts WHERE ts.service_id=s.id) AS subs "
                       "FROM services s ORDER BY s.active DESC, s.sort, s.name").fetchall()
-    rows = [dict(r, share_sum=share_sum(r["id"], this_month())) if r["mode"] == "share" else dict(r) for r in rows]
+    cp = current_period()
+    rows = [dict(r, share_sum=share_sum(r["id"], cp)) if r["mode"] == "share" else dict(r) for r in rows]
+    # хто користується кожною послугою: підключені орендарі (кількість / м² / фіксовано) або % (частка)
+    tenants_all = db.execute("SELECT id, name, payment_type FROM tenants WHERE active=1 ORDER BY name").fetchall()
+    subs = {}
+    for r_ in db.execute("SELECT tenant_id, service_id FROM tenant_services").fetchall():
+        subs.setdefault(r_["service_id"], set()).add(r_["tenant_id"])
+    for r in rows:
+        r["subs_ids"] = subs.get(r["id"], set())
+        if r["mode"] == "share":
+            r["pcts"] = {t["id"]: calc.tenant_share(t["id"], r["id"], cp, db) for t in tenants_all}
     months = request.args.get("months", 12, type=int)
     months = months if months in (6, 12, 24, 36) else 12
-    return render_template("services.html", rows=rows, ph=price_history(this_month(), months), months=months)
+    return render_template("services.html", rows=rows, ph=price_history(this_month(), months), months=months,
+                           tenants_all=tenants_all, cur_period=cp)
+
+
+@app.route("/services/<int:sid>/tenants", methods=["POST"])
+def service_tenants(sid):
+    """Підключити послугу орендарям (галочки) або задати % для послуги «частка» — для всіх одразу."""
+    db = get_db()
+    sv = db.execute("SELECT * FROM services WHERE id=?", (sid,)).fetchone()
+    if not sv:
+        abort(404)
+    active = [r["id"] for r in db.execute("SELECT id FROM tenants WHERE active=1").fetchall()]
+    if sv["mode"] == "share":
+        frm = request.form.get("from_period") or current_period()
+        if not re.fullmatch(r"\d{4}-\d{2}", frm):
+            abort(400)
+        changed = 0
+        for tid in active:
+            v = fnum(f"pct_{tid}")
+            v = 0 if v is None else v
+            if not 0 <= v <= 100:
+                flash(_("Процент — от 0 до 100"))
+                return redirect(url_for("services_page") + f"#svc{sid}")
+            if abs(calc.tenant_share(tid, sid, frm, db) - v) > 1e-9:
+                db.execute("INSERT INTO tenant_shares(tenant_id, service_id, pct, from_period, username) VALUES (?,?,?,?,?) "
+                           "ON CONFLICT(tenant_id, service_id, from_period) DO UPDATE SET pct=excluded.pct",
+                           (tid, sid, v, frm, g.user["username"] if g.get("user") else None))
+                changed += 1
+        log("Доли услуги изменены", f"{sv['name']}, с {calc.period_label(frm)}: изменено {changed}", commit=False)
+        flash(_("Доли сохранены") + f" ({_('с')} {calc.period_label(frm)})")
+    else:
+        on = {int(x) for x in request.form.getlist("tenant_id")}
+        for tid in active:
+            if tid in on:
+                db.execute("INSERT OR IGNORE INTO tenant_services(tenant_id, service_id) VALUES (?,?)", (tid, sid))
+            else:
+                db.execute("DELETE FROM tenant_services WHERE tenant_id=? AND service_id=?", (tid, sid))
+        log("Подключение услуги изменено", f"{sv['name']}: {len(on)} арендаторов", commit=False)
+        flash(_("Услуги сохранены"))
+    db.commit()
+    nxt = request.form.get("next") or ""
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("services_page") + f"#svc{sid}")
 
 
 # ---------------- акты ----------------

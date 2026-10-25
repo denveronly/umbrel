@@ -479,3 +479,8 @@ main.embed { padding-top: 12px; }
 .gearbtn { font-size: 16px; padding: 4px 9px; }
 .cototals .ctsum { border-left: 1px solid var(--line); padding-left: 16px; }
 .actrow summary .btns { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.svcten { padding: 4px 12px 14px; border-top: 1px dashed var(--line); }
+.svcten h3 { font-size: 14px; margin: 10px 0 6px; }
+.tencols { columns: 3 200px; column-gap: 18px; margin-top: 6px; }
+.tencols label { display: block; break-inside: avoid; margin: 3px 0; }
+.sharetbl table { max-width: 520px; }
