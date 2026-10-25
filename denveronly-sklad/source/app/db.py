@@ -518,7 +518,8 @@ MIGRATIONS = {
                 "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT"},
     "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
     "readings": {"reactive": "REAL"},
-    "companies": {"signer_position": "TEXT", "basis": "TEXT"},
+    "companies": {"signer_position": "TEXT", "basis": "TEXT",
+                  "pay_types": "TEXT"},   # які форми оплати приймає компанія: "cash,bank,bank_vat"; порожньо — будь-які
     "acts": {"company_id": "INTEGER"},
     "meters": {"name": "TEXT", "sort_order": "INTEGER", "service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",
                "initial_reactive": "REAL NOT NULL DEFAULT 0"},

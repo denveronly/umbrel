@@ -29,7 +29,7 @@
   <label class="full">{{ _("Адрес") }}<input name="address" value="{{ v('address') }}"></label>
   <label>{{ _("Компания-получатель денег") }}
     <select name="company_id"><option value="">— {{ _("не выбрана") }} —</option>
-      {% for c in companies %}<option value="{{ c.id }}" {{ 'selected' if t and t.company_id == c.id }} {{ 'disabled' if not c.active and not (t and t.company_id == c.id) }}>{{ c.name }}{{ _(" (платник ПДВ)") if c.vat_payer }}{{ _(" — отключена") if not c.active }}</option>{% endfor %}
+      {% for c in companies %}<option value="{{ c.id }}" data-pt="{{ c.pay_types or '' }}" {{ 'selected' if t and t.company_id == c.id }} {{ 'disabled' if not c.active and not (t and t.company_id == c.id) }}>{{ c.name }}{{ _(" (платник ПДВ)") if c.vat_payer }}{{ _(" — отключена") if not c.active }}</option>{% endfor %}
     </select>
     {% if not companies %}<span class="muted">{{ _("Компаний нет") }} — {% if can('settings') %}<a href="{{ url_for('companies_page') }}">{{ _("добавить") }}</a>{% else %}{{ _("попросите администратора добавить") }}{% endif %}</span>{% endif %}
   </label>
@@ -246,6 +246,19 @@
 {% endblock %}
 {% block scripts %}
 <script>
+// форма оплати -> компанія, що приймає цю форму (якщо обрана не приймає)
+(() => {
+  const pt = document.querySelector('select[name=payment_type]'), co = document.querySelector('select[name=company_id]');
+  if (!pt || !co) return;
+  const ok = (o, v) => o && o.value && !o.disabled && (!o.dataset.pt || o.dataset.pt.split(',').includes(v));
+  pt.addEventListener('change', () => {
+    const cur = co.selectedOptions[0];
+    if (cur && cur.value && cur.dataset.pt && ok(cur, pt.value)) return;
+    const pick = [...co.options].find(o => o.dataset.pt && ok(o, pt.value));
+    if (pick) co.value = pick.value;
+    else if (cur && cur.value && !ok(cur, pt.value)) co.value = '';
+  });
+})();
 // ціна за м² <-> сума за місяць
 const pnum = s => parseFloat(String(s).replace(',', '.').replace(/\s/g, ''));
 const r2 = x => Math.round(x * 100) / 100;

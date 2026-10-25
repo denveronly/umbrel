@@ -205,6 +205,8 @@ def build_act(tenant_id, period):
         warnings.append("Не вказано компанію-отримувача")
     elif pt == "bank_vat" and not company["vat_payer"]:
         warnings.append(f"Оплата з ПДВ, але «{company['name']}» не платник ПДВ")
+    elif company["pay_types"] and pt not in company["pay_types"].split(","):
+        warnings.append(f"«{company['name']}» не приймає форму оплати «{PAYMENT_TYPES.get(pt, pt)}»")
     if not whs and not uwhs:
         warnings.append("За орендарем не закріплено жодного складу")
     elif not whs:

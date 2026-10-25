@@ -673,8 +673,9 @@ def companies_page():
                 flash(_("Компания удалена"))
         else:
             vals = [request.form.get(f, "").strip() for f in COMPANY_FIELDS]
-            vals += [1 if request.form.get("vat_payer") else 0, 1 if request.form.get("active") else 0]
-            cols = COMPANY_FIELDS + ["vat_payer", "active"]
+            pts = ",".join(k for k in PAYMENT_TYPES if request.form.get(f"pt_{k}"))
+            vals += [1 if request.form.get("vat_payer") else 0, 1 if request.form.get("active") else 0, pts]
+            cols = COMPANY_FIELDS + ["vat_payer", "active", "pay_types"]
             if not vals[0]:
                 abort(400, _("Название обязательно"))
             if cid:

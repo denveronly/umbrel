@@ -3,7 +3,7 @@
 {% block content %}
 <h1>{{ _("Настройки") }}</h1>
 {% include "_settings_tabs.html" %}
-<p class="muted">{{ _("Компании, на которые идут деньги от аренды. В карточке контакта выбирается, какой компании он платит, — акт печатается с её реквизитами и в её нумерации. Задайте каждой компании свой префикс номера акта, чтобы номера не пересекались") }}.</p>
+<p class="muted">{{ _("Компании, на которые идут деньги от аренды. В карточке контакта выбирается, какой компании он платит, — акт печатается с её реквизитами и в её нумерации. Задайте каждой компании свой префикс номера акта, чтобы номера не пересекались") }}. {{ _("Отметьте, какие формы оплаты принимает компания: в карточке контакта при выборе формы оплаты компания подставится сама.") }}</p>
 
 {% macro company_form(c) %}
 <form method="post" class="grid">
@@ -20,6 +20,10 @@
   <label>{{ _("Префикс номера акта") }}<input name="act_prefix" value="{{ c.act_prefix or '' if c else '' }}" placeholder="{{ _("А-") }}"></label>
   <label class="full">{{ _("Заметка") }}<input name="note" value="{{ c.note or '' if c else '' }}"></label>
   <div class="full row">
+    {% set pts = ((c.pay_types or '') if c else '').split(',') %}
+    <span class="muted">{{ _("Принимает") }}:</span>
+    {% for k, val in PAYMENT_TYPES.items() %}<label class="check"><input type="checkbox" name="pt_{{ k }}" value="1" {{ 'checked' if k in pts }}> {{ _(val) }}</label>{% endfor %}
+    <span style="width:12px"></span>
     <label class="check"><input type="checkbox" name="vat_payer" value="1" {{ 'checked' if c and c.vat_payer }}> {{ _("платник ПДВ") }}</label>
     <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if not c or c.active }}> {{ _("активна") }}</label>
     <span class="spacer"></span>
@@ -34,6 +38,7 @@
   <summary class="row">
     <b>{{ c.name }}</b>
     {% if c.vat_payer %}<span class="badge">{{ _("платник ПДВ") }}</span>{% else %}<span class="badge off">{{ _("без ПДВ") }}</span>{% endif %}
+    {% for k in (c.pay_types or '').split(',') if k in PAYMENT_TYPES %}<span class="badge pt-{{ k }}">{{ _(PAYMENT_TYPES[k]) }}</span>{% endfor %}
     {% if not c.active %}<span class="badge off">{{ _("отключена") }}</span>{% endif %}
     <span class="spacer"></span>
     <span class="muted">{{ c.used }} {{ _("контакт(ов") }}){% if c.act_prefix %} · {{ _("акты") }} {{ c.act_prefix }}…{% endif %}</span>
