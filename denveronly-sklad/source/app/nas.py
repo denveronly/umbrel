@@ -69,6 +69,31 @@ def _write_status(**kw):
         pass
 
 
+def _ensure_dir(smb, path):
+    """Створити папку, лише якщо її ще немає. Synology на спробу створити наявну папку в місці, де користувачу
+    не можна створювати (корінь спільної папки, права лише на підпапку), відповідає ACCESS_DENIED — тому спершу stat."""
+    try:
+        smb.stat(path)
+        return
+    except OSError:
+        pass
+    parent = path.rsplit("\\", 1)[0]
+    if parent.count("\\") > 3:                       # \\server\share — корінь, далі не піднімаємось
+        _ensure_dir(smb, parent)
+    smb.mkdir(path)
+
+
+def _hint(e):
+    s = str(e)
+    if "ACCESS_DENIED" in s or "0xc0000022" in s:
+        return s + " — немає права на запис у цю папку: на Synology дайте користувачу «Читання/запис» саме на неї"
+    if "LOGON_FAILURE" in s:
+        return s + " — невірний користувач або пароль"
+    if "BAD_NETWORK_NAME" in s:
+        return s + " — немає такої спільної папки (перевірте назву)"
+    return s
+
+
 def _prune(smb, d, keep, name_re):
     files = sorted(f for f in smb.listdir(d) if name_re.match(f))
     for f in files[:-keep] if len(files) > keep else []:
@@ -83,7 +108,7 @@ def upload(c, items):
     try:
         for local, site in items:
             d = _dir(c, site)
-            smb.makedirs(d, exist_ok=True)
+            _ensure_dir(smb, d)
             name = os.path.basename(local)
             tmp, final = d + "\\" + name + ".part", d + "\\" + name
             with open(local, "rb") as src, smb.open_file(tmp, mode="wb") as dst:
@@ -130,7 +155,7 @@ def send_async(items, who="система"):
                 _write_status(ok=True, time=datetime.now().isoformat(timespec="seconds"), error="", sent=sent, who=who)
                 _audit(app, "Бэкап скопирован на сетевую папку", ", ".join(sent))
             except Exception as e:
-                err = f"{type(e).__name__}: {e}"[:400]
+                err = f"{type(e).__name__}: {_hint(e)}"[:500]
                 _write_status(ok=False, time=datetime.now().isoformat(timespec="seconds"), error=err, who=who)
                 _audit(app, "Ошибка копирования бэкапа на сетевую папку", err)
     threading.Thread(target=run, daemon=True).start()
@@ -145,14 +170,15 @@ def test_connection():
     try:
         smb = _session(c)
         d = _base(c)
-        smb.makedirs(d, exist_ok=True)
+        if c["path"]:
+            _ensure_dir(smb, d)
         p = d + "\\.sklad-test"
         with smb.open_file(p, mode="wb") as f:
             f.write(b"ok")
         smb.remove(p)
         return True, d
     except Exception as e:
-        return False, f"{type(e).__name__}: {e}"[:400]
+        return False, f"{type(e).__name__}: {_hint(e)}"[:500]
     finally:
         _close(c)
 
