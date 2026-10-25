@@ -151,9 +151,9 @@ def build_act(tenant_id, period):
                 elif rq > 0:
                     lines.append({
                         "group": "util",
-                        "name": f"Реактивна електроенергія ({wh['name']}{serial}), частка лінії {fmt_num(share * 100, 1)}%",
+                        "name": f"Реактивна електроенергія та втрати на лінії ({wh['name']}{serial}), частка лінії {fmt_num(share * 100, 1)}%",
                         "unit": "кВт·год", "qty": rq, "price": pr, "sum": r2(rq * pr),
-                        "service": "Реактивна електроенергія", "wh": wh["name"], "serial": m["serial"] or "",
+                        "service": "Реактивна електроенергія та втрати на лінії", "wh": wh["name"], "serial": m["serial"] or "",
                         "rnote": f"{fmt_num(share * 100, 1)}% від {fmt_num(rtot)}"})
 
     # --- підключені послуги: кількість / площа / фіксовано ---
