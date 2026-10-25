@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}YASNO{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>⚡ YASNO</h1><span class="spacer"></span>
+  <form method="post" action="{{ url_for('yasno.run_now') }}"><button {{ 'disabled' if st.running or not (c.login and c.has_password) }}>{{ _("Проверить кабинет сейчас") }}</button></form>
+</div>
+<p class="muted">{{ _("Каждый день программа заходит в кабинет поставщика электроэнергии, забирает новые счета (PDF), задолженность и предупреждения об отключении и присылает уведомления в Telegram.") }}
+  {% if c.url %}<a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.url|replace('https://', '') }}</a>{% endif %}</p>
+
+{% if key_lost %}<div class="warn" style="margin-bottom:12px">{{ _("Пароль кабинета или токен бота не расшифровываются (база восстановлена на другом сервере или удалён ключ). Введите их заново в настройках ниже.") }}</div>{% endif %}
+
+<div class="kpis">
+  <div class="kpi"><small class="muted">{{ _("Последняя проверка") }}</small>
+    <b>{% if st.running %}⏳ {{ _("идёт…") }}{% elif st.time %}{{ st.time[8:10] }}.{{ st.time[5:7] }} {{ st.time[11:16] }}{% else %}—{% endif %}</b>
+    <small class="{{ 'muted' if st.ok else 'warnt' }}">{% if st.time and not st.running %}{{ '✓ ' ~ _("успешно") if st.ok else '✗ ' ~ (st.error or _("ошибка")) }}{% endif %}</small></div>
+  <div class="kpi {{ 'kbad' if (st.debt or 0) > 0 }}"><small class="muted">{{ _("Задолженность") }}</small><b>{{ money(st.debt or 0) }} {{ _("грн") }}</b>
+    {% for d in st.debts or [] if d.saved %}<small class="muted">{{ d.type }}: {{ _("накоплено") }} {{ money(d.saved) }}</small>{% endfor %}</div>
+  <div class="kpi"><small class="muted">{{ _("Автопроверка") }}</small>
+    <b>{% if c.enabled %}{{ _("ежедневно с") }} {{ '%02d'|format(c.hour) }}:00{% else %}{{ _("выключена") }}{% endif %}</b>
+    <small class="muted">Telegram: {{ '✓' if c.has_tg_token and c.tg_chat else _("не настроен") }}</small></div>
+</div>
+
+{% if st.unpaid or st.topay %}
+<div class="card">
+  {% for title, rows in [(_("Неоплаченные счета"), st.unpaid), (_("Всё к оплате"), st.topay)] if rows %}
+  <h2 style="margin-top:0">{{ title }}</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>{{ _("Тип") }}</th><th>{{ _("Номер") }}</th><th class="n">{{ _("Сумма с ПДВ") }}</th><th>{{ _("Оплатить до") }}</th></tr></thead>
+    <tbody>{% for u in rows %}<tr><td>{{ u.type }}</td><td>{{ u.number }}</td><td class="n">{{ money(u.amount) if u.amount is not none else '—' }}</td>
+      <td class="{{ 'warnt' if u.due and u.due < today_iso }}">{{ u.due|dmy if u.due else '—' }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Счета") }}</h2>
+  {% if bills %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>{{ _("Номер") }}</th><th>{{ _("Месяц") }}</th><th>{{ _("Получен") }}</th><th>{{ _("Оплатить до") }}</th>
+      <th class="n">{{ _("кВт·г") }}</th><th class="n">{{ _("Начислено, грн") }}</th><th class="n">{{ _("грн/кВт·г") }}</th><th class="n">{{ _("Оплачено") }}</th><th class="n">{{ _("К оплате") }}</th><th></th></tr></thead>
+    <tbody>{% for b in bills %}
+      <tr><td><b>{{ b.number }}</b>{% if b.planned %} <span class="badge off">{{ _("плановый") }}</span>{% endif %}</td>
+        <td>{{ period_label(b.period) if b.period else '—' }}</td><td>{{ b.received|dmy if b.received else '—' }}</td>
+        <td class="{{ 'warnt' if (b.to_pay or 0) > 0 and b.due and b.due < today_iso }}">{{ b.due|dmy if b.due else '—' }}</td>
+        <td class="n">{{ b.kwh|kwh if b.kwh is not none else '—' }}</td><td class="n">{{ money(b.amount) if b.amount is not none else '—' }}</td>
+        <td class="n muted">{{ '%.2f'|format(b.amount / b.kwh)|replace('.', ',') if b.kwh and b.amount else '' }}</td>
+        <td class="n">{{ money(b.paid) if b.paid is not none else '—' }}</td>
+        <td class="n">{% if (b.to_pay or 0) > 0 %}<b>{{ money(b.to_pay) }}</b>{% else %}<span class="muted">0,00</span>{% endif %}</td>
+        <td class="n">{% if b.pdf %}<a href="{{ url_for('yasno.pdf', number=b.number) }}" target="_blank">PDF</a> · <a href="{{ url_for('yasno.pdf', number=b.number, dl=1) }}">⬇</a>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="muted">{{ _("грн/кВт·г — начислено ÷ кВт·год, с ПДВ.") }}</p>
+  {% else %}<p class="muted">{{ _("Счетов ещё нет — настройте вход и нажмите «Проверить кабинет сейчас».") }}</p>{% endif %}
+</div>
+
+{% if warns %}
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Предупреждения об отключении") }}</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>{{ _("Номер") }}</th><th>{{ _("Дата") }}</th><th>{{ _("Отключение") }}</th><th>{{ _("Причина") }}</th></tr></thead>
+    <tbody>{% for w in warns %}<tr style="{{ 'opacity:.6' if w.resolved }}"><td>{{ w.number }}</td><td>{{ w.warn_date|dmy if w.warn_date else '—' }}</td>
+      <td>{{ w.off_date|dmy if w.off_date else '—' }}</td>
+      <td>{% if w.resolved %}<span class="badge off">{{ _("снято") }}</span>{% else %}<span class="badge warnb">{{ _("активно") }}</span>{% endif %} <span class="muted">{{ w.reason }}</span></td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+{% if is_admin %}
+<div class="card" id="settings">
+  <h2 style="margin-top:0">{{ _("Настройки") }}</h2>
+  <form method="post" action="{{ url_for('yasno.save_settings') }}" class="grid" autocomplete="off">
+    <label class="check full"><input type="checkbox" name="enabled" value="1" {{ 'checked' if c.enabled }}> {{ _("проверять кабинет автоматически каждый день") }}</label>
+    <label class="full">{{ _("Адрес кабинета") }}<input name="url" value="{{ c.url }}"></label>
+    <label>{{ _("Логин") }}<input name="login" value="{{ c.login }}" autocomplete="off"></label>
+    <label>{{ _("Пароль") }}<input type="password" name="password" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_password else '' }}"></label>
+    <label>{{ _("Проверять с (час)") }}<input name="hour" type="number" min="0" max="23" value="{{ c.hour }}"></label>
+    <label>{{ _("Напоминать об оплате за (дней)") }}<input name="remind_days" type="number" min="0" max="10" value="{{ c.remind_days }}"></label>
+    <div class="full row" style="gap:8px;flex-wrap:wrap">
+      <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
+      <button class="sm ghost" name="action" value="test">{{ _("Проверить вход") }}</button>
+      <a class="btn sm ghost" href="{{ url_for('yasno.debug_zip') }}" title="{{ _("Последние страницы кабинета (без пароля) — если YASNO изменит сайт и счета перестанут читаться, пришлите этот файл разработчику") }}">{{ _("Скачать страницы для диагностики") }}</a>
+    </div>
+
+    <h3 class="full" style="margin:14px 0 0">Telegram</h3>
+    <p class="full muted" style="margin:0">{{ _("1) В Telegram откройте @BotFather → /newbot, скопируйте токен. 2) Откройте своего бота и нажмите «Start». 3) Вставьте токен сюда и нажмите «Найти chat_id». Для группы — добавьте бота в группу и напишите там сообщение.") }}</p>
+    <label>{{ _("Токен бота") }}<input type="password" name="tg_token" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_tg_token else '123456:ABC…' }}"></label>
+    <label>chat_id<input name="tg_chat" value="{{ c.tg_chat }}" placeholder="123456789"></label>
+    <div class="full perms">
+      <label class="check"><input type="checkbox" name="notify_bills" value="1" {{ 'checked' if c.notify_bills }}> {{ _("новые счета (с PDF)") }}</label>
+      <label class="check"><input type="checkbox" name="notify_debt" value="1" {{ 'checked' if c.notify_debt }}> {{ _("задолженность, просрочка и напоминание об оплате") }}</label>
+      <label class="check"><input type="checkbox" name="notify_warnings" value="1" {{ 'checked' if c.notify_warnings }}> {{ _("предупреждения об отключении") }}</label>
+    </div>
+    <div class="full row" style="gap:8px;flex-wrap:wrap">
+      <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
+      <button class="sm ghost" name="action" value="tg_chat">{{ _("Найти chat_id") }}</button>
+      <button class="sm ghost" name="action" value="tg_test">{{ _("Отправить тестовое сообщение") }}</button>
+    </div>
+    <p class="full muted" style="margin:0">🔒 {{ _("Пароль и токен хранятся зашифрованными; ключ лежит отдельно от базы и не попадает в бэкапы. Программа только читает кабинет — оплат и подписей не делает.") }}</p>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if st.running %}<script>
+(async function poll() {
+  try { const r = await fetch({{ url_for('yasno.status')|tojson }}); const j = await r.json(); if (!j.running) return location.reload(); } catch (e) {}
+  setTimeout(poll, 3000);
+})();
+</script>{% endif %}
+{% endblock %}

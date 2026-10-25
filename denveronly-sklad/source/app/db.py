@@ -200,6 +200,31 @@ CREATE TABLE IF NOT EXISTS tenant_shares (
     UNIQUE (tenant_id, service_id, from_period)
 );
 
+-- YASNO: рахунки постачальника електроенергії з кабінету (лише «База»)
+CREATE TABLE IF NOT EXISTS yasno_bills (
+    number TEXT PRIMARY KEY,
+    planned INTEGER NOT NULL DEFAULT 0,
+    period TEXT,                 -- YYYY-MM з колонки «Дата формування» («Жовтень 2026»)
+    received TEXT,               -- ISO дата
+    due TEXT,
+    kwh REAL, amount REAL, paid REAL, to_pay REAL,
+    pdf TEXT,                    -- ім'я файлу в data/yasno/
+    pdf_url TEXT,
+    first_seen TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS yasno_warnings (
+    number TEXT PRIMARY KEY,
+    contract TEXT, warn_date TEXT, recv_date TEXT, off_date TEXT, reason TEXT,
+    resolved INTEGER NOT NULL DEFAULT 0,
+    first_seen TEXT DEFAULT (datetime('now', 'localtime'))
+);
+-- що вже надіслано в Telegram (щоб не дублювати)
+CREATE TABLE IF NOT EXISTS yasno_notified (
+    key TEXT PRIMARY KEY,
+    at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 -- ціна послуги за конкретний місяць (без ПДВ)
 CREATE TABLE IF NOT EXISTS service_prices (
     service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
@@ -658,7 +683,7 @@ def _seed_from_main(con):
         for row in main.execute(f"SELECT {', '.join(cols)} FROM companies"):
             con.execute(f"INSERT OR IGNORE INTO companies({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", row)
         for k, v in main.execute("SELECT key, value FROM settings"):
-            if k not in SEED_SKIP_SETTINGS:
+            if k not in SEED_SKIP_SETTINGS and not k.startswith(("yasno_", "tg_")):
                 con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?,?)", (k, v))
     finally:
         main.close()

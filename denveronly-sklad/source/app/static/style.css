@@ -445,3 +445,6 @@ pre.diagout { margin-top: 14px; padding: 12px 14px; border-radius: 8px; backgrou
 .phist td.err input.pcell { border-color: var(--warn); }
 .sharebox { border-left: 3px solid var(--accent-soft); padding-left: 10px; }
 .badge.pt-cash { background: color-mix(in srgb, #2e9e66 18%, transparent); color: #2e9e66; }
+.warnt { color: var(--warn); }
+.kpi.kbad { background: var(--warn-soft); border-color: var(--warn); }
+.kpi.kbad b { color: var(--warn); }

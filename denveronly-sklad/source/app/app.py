@@ -22,6 +22,7 @@ import tenant_files
 import diag
 import lines
 import sheet
+import yasno
 from audit import log
 from i18n import _
 
@@ -38,6 +39,7 @@ diag.init_app(app)
 economics.init_app(app)
 ai.init_app(app)
 lines.init_app(app)
+yasno.init_app(app)
 sheet.init_app(app)
 
 
