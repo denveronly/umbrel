@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.23.1"
+version: "1.24.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,9 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  ⚙ у таблиці показників відкриває редагування лічильника (склад, послуга, назва, номер, лінія, коефіцієнт,
-  початковий показник, реактивна) з кнопкою «Видалити» за PIN. Виправлено кнопки «Перевірити з'єднання» й
-  «Надіслати зараз» для NAS; результати перевірки й надсилання — у журналі дій.
+  Реактив на вводі лінії вписується одразу кількістю кВт·г за місяць (одна колонка «реактив кВт·г»), а не
+  показником лічильника. Уже внесені показники реактиву автоматично перераховано у кількість за місяць.
 dependencies: []
 path: ""
 defaultUsername: ""

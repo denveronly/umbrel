@@ -104,7 +104,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 {% if line and (line.note or line.parent_id) %}<p class="muted" style="margin-top:-4px">{{ line.note or '' }}{% if line.parent_id %}{% for p in all_lines if p.id == line.parent_id %}{{ ' · ' if line.note }}{{ _("Подлиния, питается от") }} «{{ p.name }}» — {{ _("её ввод там учитывается как потребитель") }}{% endfor %}{% endif %}</p>{% endif %}
 
 {% for w in warns %}<div class="warn" style="margin-bottom:8px">⚠ {{ w }} <a href="{{ url_for('lines.manage') }}">{{ _("Настроить линии") }}</a></div>{% endfor %}
-{% macro width(c) %}{{ 2 + (2 if c.rmode == 'input' else 1 if c.rmode == 'alloc' else 0) }}{% endmacro %}
+{% macro width(c) %}{{ 2 + (1 if c.rmode in ('input', 'alloc') else 0) }}{% endmacro %}
 {% if not groups %}
   <div class="warn">{% if line %}{{ _("На этой линии ещё нет счётчиков.") }} {{ _("Добавьте счётчик кнопкой «＋ Счётчик» или привяжите существующие в") }} <a href="{{ url_for('lines.manage') }}">{{ _("Настроить линии") }}</a>.{% else %}{{ _("Все счётчики привязаны к линиям.") }}{% endif %}</div>
 {% else %}
@@ -142,7 +142,7 @@ dialog.qm .full { grid-column: 1 / -1; }
     <tr class="h3">
       {% for g in groups %}{% for c in g.cols %}
         <th class="{{ 'first' if loop.first }} r-{{ c.role }}">{{ _("показание") }}</th><th class="r-{{ c.role }}">{{ _("расход") }}</th>
-        {% if c.rmode == 'input' %}<th class="r-{{ c.role }}">{{ _("реакт.") }}</th><th class="r-{{ c.role }}">{{ _("реакт. расход кВт·ч") }}</th>
+        {% if c.rmode == 'input' %}<th class="r-{{ c.role }}" title="{{ _("Реактив за месяц — вписывается сразу количеством, не показанием счётчика") }}">{{ _("реактив кВт·ч") }}</th>
         {% elif c.rmode == 'alloc' %}<th class="r-{{ c.role }}" title="{{ _("Реактив линии, распределённый пропорционально активному расходу") }} {{ _("кВт·ч") }}">{{ _("реактив") }}</th>{% endif %}
       {% endfor %}{% endfor %}
       {% if bal %}{% if line.has_solar %}<th class="r-solar first solarc">{{ _("выработано кВт·ч") }}</th><th class="r-solar" title="{{ _("Учитывается в балансе с потерями") }}">−{{ solar_loss|plain }}% {{ _("потерь") }}</th>{% endif %}
@@ -160,7 +160,6 @@ dialog.qm .full { grid-column: 1 / -1; }
           <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }} {{ 'pastt' if pastn }}">{{ (d.cons|kwh) if d.cons is not none else '' }}</td>
           {% if c.rmode == 'input' %}
             <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
-            <td class="c rx r-{{ c.role }}">{{ (d.rcons|kwh) if d.rcons is not none else '' }}</td>
           {% elif c.rmode == 'alloc' %}
             <td class="c al rnar r-{{ c.role }} {{ 'pastt' if pastn }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ (d.ralloc|kwh) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
           {% endif %}
@@ -182,7 +181,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 </div>
 <div class="savebar"><span class="muted" id="dirtyinfo">{{ _("Показания на конец месяца. Расход считается от предыдущего показания.") }}</span><span class="spacer"></span>
   <button id="savebtn" onclick="saveCells()" disabled>{{ _("Сохранить") }}</button></div>
-<p class="muted">{% if line %}{{ _("Реактив вносится только на вводном счётчике линии. Счётчикам с галочкой «реактивная энергия» он распределяется пропорционально их активному расходу.") }} {{ _("Доля реактива выставляется в акте отдельной строкой в кВт·год по цене электроэнергии.") }} {% if line.has_solar %}{{ _("Солнце вносится сразу выработанными кВт·год и учитывается в балансе с потерями") }} {{ solar_loss|plain }}% ({{ _("меняется в «Настроить линии»") }}).{% endif %} {{ _("Разница = ввод + солнечная генерация − сумма всех счётчиков линии (потери в сети и неучтённое потребление). Отрицательная разница подсвечена — проверьте показания.") }}{% else %}{{ _("Здесь — счётчики без линии и арендаторы, у которых ещё нет счётчиков.") }}{% endif %}
+<p class="muted">{% if line %}{{ _("Реактив вносится на вводном счётчике линии сразу количеством кВт·ч за месяц. Счётчикам с галочкой «реактивная энергия» он распределяется пропорционально их активному расходу.") }} {{ _("Доля реактива выставляется в акте отдельной строкой в кВт·год по цене электроэнергии.") }} {% if line.has_solar %}{{ _("Солнце вносится сразу выработанными кВт·год и учитывается в балансе с потерями") }} {{ solar_loss|plain }}% ({{ _("меняется в «Настроить линии»") }}).{% endif %} {{ _("Разница = ввод + солнечная генерация − сумма всех счётчиков линии (потери в сети и неучтённое потребление). Отрицательная разница подсвечена — проверьте показания.") }}{% else %}{{ _("Здесь — счётчики без линии и арендаторы, у которых ещё нет счётчиков.") }}{% endif %}
   {{ _("Дату снятия можно вписать коротко: 26.10.") }}</p>
 {% endif %}
 

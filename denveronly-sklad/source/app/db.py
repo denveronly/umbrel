@@ -525,6 +525,16 @@ def _migrate(con, site=MAIN_SITE):
         if iso and iso != st:
             con.execute("UPDATE warehouse_tenancy SET started=? WHERE id=?", (iso, hid))
 
+    # 1.24: реактив вводу лінії — тепер кількість за місяць, а не накопичувальний показник: перерахувати один раз
+    if not con.execute("SELECT 1 FROM settings WHERE key='reactive_direct'").fetchone():
+        for lm_id, init_r in con.execute("SELECT id, initial_reactive FROM line_meters").fetchall():
+            prev = init_r or 0
+            for rid, rv in con.execute("SELECT id, reactive FROM line_readings WHERE line_meter_id=? AND reactive IS NOT NULL "
+                                       "ORDER BY period", (lm_id,)).fetchall():
+                con.execute("UPDATE line_readings SET reactive=? WHERE id=?", (round(rv - prev, 3), rid))
+                prev = rv
+        con.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('reactive_direct', '1')")
+
     # реквізити з налаштувань першої версії -> компанія
     st = dict(con.execute("SELECT key, value FROM settings").fetchall())
     if st.get("company_name") and not con.execute("SELECT 1 FROM companies").fetchone() \

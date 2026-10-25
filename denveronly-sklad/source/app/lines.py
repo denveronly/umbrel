@@ -143,6 +143,9 @@ def line_data(line_id, periods):
     # розподіляється пропорційно їхній активній витраті й округлюється вгору до цілих кВт·год
     for c in cols:
         c["rmode"] = ("input" if c["role"] in ("input", "solar") else "alloc") if c["reactive"] else None
+        if c["rmode"] == "input":                     # реактив вводу вноситься одразу кількістю за місяць (не показник)
+            for p in periods:
+                c["data"][p]["rcons"] = c["data"][p]["reactive"]
     for p in periods:
         total = [c["data"][p]["rcons"] for c in cols if c["rmode"] == "input" and c["role"] == "input"
                  and c["data"][p]["rcons"] is not None]
