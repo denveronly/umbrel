@@ -76,6 +76,11 @@ dialog.qm .full { grid-column: 1 / -1; }
 .gearrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .gearrow .gn { flex: 1; min-width: 0; }
 .gearrow .gn small { display: block; color: var(--muted); }
+.rgrid .diffc { background: color-mix(in srgb, #8b1c2c 30%, var(--card)); border-left-color: #8b1c2c; }
+.rgrid .diffc.first { border-left: 2px solid #8b1c2c; }
+.rgrid td.diffc.neg { color: #ffb4b4; }
+:root:not([data-theme="dark"]) .rgrid td.diffc.neg { color: #8b1c2c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rgrid td.diffc.neg { color: #ffb4b4; } }
 .rgrid td.rnar { width: 1%; min-width: 0; padding-left: 8px; padding-right: 8px; }
 .rgrid th.ten.solarg { background: color-mix(in srgb, #eda100 26%, var(--card)); border-left-color: #eda100; }
 .rgrid .r-solar { background: color-mix(in srgb, #eda100 16%, var(--card)); }
@@ -136,7 +141,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 {% if line.has_solar %}        <th class="mt r-solar first solarc" colspan="2">{{ _("Солнечная генерация") }}<small>{{ _("сразу выработанные кВт·ч за месяц") }}</small></th>{% endif %}
         <th class="mt sum first" colspan="2">{{ _("Сумма счётчиков") }}<small>{{ _("потребители линии") }}</small></th>
         <th class="mt sum" rowspan="2">{{ _("Ввод + солнце") if line.has_solar else _("Ввод") }}</th>
-        <th class="mt sum" colspan="2">{{ _("Разница") }}<small>{{ _("потери / общее") }}</small></th>
+        <th class="mt sum diffc first" colspan="2">{{ _("Разница") }}<small>{{ _("потери / общее") }}</small></th>
       {% endif %}
     </tr>
     <tr class="h3">
@@ -146,7 +151,7 @@ dialog.qm .full { grid-column: 1 / -1; }
         {% elif c.rmode == 'alloc' %}<th class="r-{{ c.role }}" title="{{ _("Реактив линии, распределённый пропорционально активному расходу") }} {{ _("кВт·ч") }}">{{ _("реактив") }}</th>{% endif %}
       {% endfor %}{% endfor %}
       {% if bal %}{% if line.has_solar %}<th class="r-solar first solarc">{{ _("выработано кВт·ч") }}</th><th class="r-solar" title="{{ _("Учитывается в балансе с потерями") }}">−{{ solar_loss|plain }}% {{ _("потерь") }}</th>{% endif %}
-        <th class="sum first">{{ _("кВт·ч") }}</th><th class="sum">{{ _("реакт. кВт·ч") }}</th><th class="sum">{{ _("кВт·ч") }}</th><th class="sum">%</th>{% endif %}
+        <th class="sum first">{{ _("кВт·ч") }}</th><th class="sum">{{ _("реакт. кВт·ч") }}</th><th class="sum diffc first">{{ _("кВт·ч") }}</th><th class="sum diffc">%</th>{% endif %}
     </tr>
   </thead>
   <tbody>
@@ -171,8 +176,8 @@ dialog.qm .full { grid-column: 1 / -1; }
         <td class="c sum first">{{ (b.users|kwh) if b.users is not none else '' }}</td>
         <td class="c sum rx">{{ (b.ureact|kwh) if b.ureact is not none else '' }}</td>
         <td class="c sum">{{ (b.supply|kwh) if b.supply is not none else '' }}</td>
-        <td class="c sum {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ (b.diff|kwh) if b.diff is not none else '' }}</td>
-        <td class="c sum">{{ '%.1f'|format(b.pct) if b.pct is not none else '' }}</td>
+        <td class="c sum diffc first {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ (b.diff|kwh) if b.diff is not none else '' }}</td>
+        <td class="c sum diffc">{{ '%.1f'|format(b.pct) if b.pct is not none else '' }}</td>
       {% endif %}
     </tr>
   {% endfor %}

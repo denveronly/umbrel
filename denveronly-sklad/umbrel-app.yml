@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.25.1"
+version: "1.25.2"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  SMB: працює, коли користувач NAS має права лише на підпапку (не на всю спільну папку) — наявні папки більше
-  не «створюються» повторно. Зрозуміліші підказки до помилок доступу. З 1.25.0: діагностика мережі.
+  Колонки «Різниця» в балансі лінії — з бордовою заливкою. З 1.25.1: SMB з правами лише на підпапку.
 dependencies: []
 path: ""
 defaultUsername: ""
