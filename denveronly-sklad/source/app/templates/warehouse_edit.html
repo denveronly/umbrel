@@ -103,7 +103,7 @@
   {% for m in meters %}
   <form method="post" action="{{ url_for('meter_save', wid=wh.id) }}" class="grid" style="padding:10px 0;border-bottom:1px solid var(--line)">
     <input type="hidden" name="meter_id" value="{{ m.id }}">
-    <label>{{ _("Услуга") }}<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}" {{ 'selected' if m.service_id == sv.id }}>{{ sv.name }}</option>{% endfor %}</select></label>
+    <label>{{ _("Услуга") }}<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}" {{ 'selected' if m.service_id == sv.id }}>{{ sv.name }}{{ " (" ~ _("контрольный") ~ ")" if sv.mode == "share" }}</option>{% endfor %}</select></label>
     <label>{{ _("Номер счётчика") }}<input name="serial" value="{{ m.serial or '' }}"></label>
     <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="{{ m.coef|plain }}"></label>
     <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="{{ m.initial_value|plain }}"></label>
@@ -118,7 +118,7 @@
   </form>
   {% endfor %}
   <form method="post" action="{{ url_for('meter_save', wid=wh.id) }}" class="grid" style="padding-top:12px">
-    <label>{{ _("Услуга") }}<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}">{{ sv.name }}</option>{% endfor %}</select></label>
+    <label>{{ _("Услуга") }}<select name="service_id">{% for sv in meter_services %}<option value="{{ sv.id }}">{{ sv.name }}{{ " (" ~ _("контрольный") ~ ")" if sv.mode == "share" }}</option>{% endfor %}</select></label>
     <label>{{ _("Номер счётчика") }}<input name="serial"></label>
     <label>{{ _("Коэффициент") }}<input name="coef" inputmode="decimal" value="1"></label>
     <label>{{ _("Начальное показание") }}<input name="initial_value" inputmode="decimal" value="0"></label>

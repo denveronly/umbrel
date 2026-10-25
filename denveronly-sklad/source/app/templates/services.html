@@ -8,7 +8,8 @@
   <b>{{ _("по счётчику") }}</b> — {{ _("расход по показаниям × цена месяца (электричество, вода, газ);") }}
   <b>{{ _("кол-во за месяц") }}</b> — {{ _("вносите количество каждый месяц (вывоз мусора: 3 вывоза × цена);") }}
   <b>{{ _("за м²") }}</b> — {{ _("площадь складов контакта × цена (охрана, уборка территории);") }}
-  <b>{{ _("фиксированно") }}</b> — {{ _("одна сумма в месяц.") }} {{ _("Услуги «не по счётчику» подключаются каждому контакту в его карточке") }}.</p>
+  <b>{{ _("фиксированно") }}</b> — {{ _("одна сумма в месяц;") }}
+  <b>{{ _("доля") }}</b> — {{ _("общая сумма за месяц делится по % арендаторов из их карточек (вода по общему счётчику, мусор, благоустройство).") }} {{ _("Услуги «не по счётчику» подключаются каждому контакту в его карточке") }}.</p>
 
 <div class="tablewrap"><table>
   <thead><tr><th>{{ _("Услуга") }}</th><th>{{ _("Тип") }}</th><th>{{ _("Ед") }}.</th><th class="n">{{ _("Используется") }}</th><th></th></tr></thead>
@@ -21,7 +22,7 @@
             <span><b>{{ s.name }}</b>{% if not s.active %} <span class="badge off">{{ _("выключена") }}</span>{% endif %}</span>
             <span class="muted">{{ _(SERVICE_MODES[s.mode]) }}</span>
             <span class="muted">{{ s.unit }}</span>
-            <span class="muted n">{% if s.mode == 'meter' %}{{ s.meters }} {{ _("счётч") }}.{% else %}{{ s.subs }} {{ _("контакт") }}.{% endif %}</span>
+            <span class="muted n">{% if s.mode == 'meter' %}{{ s.meters }} {{ _("счётч") }}.{% elif s.mode == 'share' %}<span class="{{ 'warn' if (s.share_sum - 100)|abs > 0.01 }}" title="{{ _("Сумма % активных арендаторов в этом месяце") }}">Σ {{ num(s.share_sum) }}%</span>{% else %}{{ s.subs }} {{ _("контакт") }}.{% endif %}</span>
             <span class="muted n">{{ _("изменить ▾") }}</span>
           </summary>
           <form method="post" class="grid" style="padding:10px 12px 14px">
@@ -30,6 +31,15 @@
             <label>{{ _("Единица") }}<input name="unit" value="{{ s.unit }}"></label>
             <label>{{ _("Тип") }}<select name="mode">{% for k, v in SERVICE_MODES.items() %}<option value="{{ k }}" {{ 'selected' if s.mode == k }}>{{ _(v) }}</option>{% endfor %}</select></label>
             <label>{{ _("Порядок в акте") }}<input name="sort" type="number" value="{{ s.sort }}"></label>
+            <div class="full sharebox" data-for-mode="share" {{ 'hidden' if s.mode != 'share' }}>
+              <p class="muted" style="margin:0 0 6px">{{ _("Доля: сумма услуги за месяц делится между арендаторами по % из их карточек. Без общего счётчика сумма = цена месяца (напр. вывоз мусора 9000 грн). С общим счётчиком сумма = расход общего счётчика × цена (вода).") }}</p>
+              <label class="check"><input type="checkbox" name="has_main" value="1" {{ 'checked' if s.has_main }}> {{ _("есть общий счётчик (показания вносятся во вкладке «Цены и количества»)") }}</label>
+              <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px">
+                <label>{{ _("Номер общего счётчика") }}<input name="main_serial" value="{{ s.main_serial or '' }}"></label>
+                <label>{{ _("Коэффициент") }}<input name="main_coef" inputmode="decimal" value="{{ (s.main_coef or 1)|plain }}" style="width:90px"></label>
+                <label>{{ _("Начальное показание") }}<input name="main_initial" inputmode="decimal" value="{{ (s.main_initial or 0)|plain }}" style="width:120px"></label>
+              </div>
+            </div>
             <div class="full row">
               <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if s.active }}> {{ _("включена") }}</label>
               <span class="spacer"></span>
@@ -55,10 +65,26 @@
   <label>{{ _("Единица") }}<input name="unit" placeholder="{{ _("вивіз / кВт·год / міс.") }}"></label>
   <label>{{ _("Тип") }}<select name="mode">{% for k, v in SERVICE_MODES.items() %}<option value="{{ k }}">{{ _(v) }}</option>{% endfor %}</select></label>
   <label>{{ _("Порядок в акте") }}<input name="sort" type="number" value="100"></label>
+  <div class="full sharebox" data-for-mode="share" hidden>
+    <label class="check"><input type="checkbox" name="has_main" value="1"> {{ _("есть общий счётчик (показания вносятся во вкладке «Цены и количества»)") }}</label>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px">
+      <label>{{ _("Номер общего счётчика") }}<input name="main_serial"></label>
+      <label>{{ _("Коэффициент") }}<input name="main_coef" inputmode="decimal" value="1" style="width:90px"></label>
+      <label>{{ _("Начальное показание") }}<input name="main_initial" inputmode="decimal" value="0" style="width:120px"></label>
+    </div>
+  </div>
   <div class="full row">
     <input type="hidden" name="active" value="1">
     <label class="check"><input type="checkbox" name="subscribe_all" value="1"> {{ _("сразу подключить всем активным контактам (кроме «по счётчику") }}»)</label>
     <span class="spacer"></span><button>+ {{ _("Добавить") }}</button>
   </div>
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('select[name=mode]').forEach(sel => {
+  const box = sel.form.querySelector('[data-for-mode=share]');
+  if (box) sel.addEventListener('change', () => box.hidden = sel.value !== 'share');
+});
+</script>
 {% endblock %}

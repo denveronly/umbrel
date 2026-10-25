@@ -149,6 +149,37 @@ def warehouses_of(tenant_id, period, db=None):
     return out
 
 
+# ---------- послуги «частка від загальної суми» ----------
+
+def tenant_share(tenant_id, service_id, period, db=None):
+    """% орендаря в послузі на місяць: останнє значення, що діє з місяця <= period (переходить на наступні)."""
+    db = db or get_db()
+    r = db.execute("SELECT pct FROM tenant_shares WHERE tenant_id=? AND service_id=? AND from_period<=? "
+                   "ORDER BY from_period DESC, id DESC LIMIT 1", (tenant_id, service_id, period)).fetchone()
+    return r["pct"] if r else 0
+
+
+def share_total(svc, period, db=None):
+    """Сума послуги за місяць, що ділиться за %. -> (сума або None, пояснення, витрата або None, ціна або None).
+    Із загальним лічильником: витрата × ціна; без нього — ціна місяця і є вся сума."""
+    db = db or get_db()
+    p, _pp = price_for(svc["id"], period)
+    if not svc["has_main"]:
+        return (r2(p) if p is not None else None), (f"{fmt_money(p)} грн" if p is not None else ""), None, p
+    cur = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period=?", (svc["id"], period)).fetchone()
+    if not cur or cur["value"] is None:
+        return None, "", None, p
+    prev = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period<? AND value IS NOT NULL "
+                      "ORDER BY period DESC LIMIT 1", (svc["id"], period)).fetchone()
+    pv = prev["value"] if prev else (svc["main_initial"] or 0)
+    cons = r2((cur["value"] - pv) * (svc["main_coef"] or 1))
+    if is_kwh(svc["unit"]):
+        cons = kwh_round(cons)
+    if p is None:
+        return None, "", cons, None
+    return r2(cons * p), f"{fmt_num(cons)} {svc['unit']} × {fmt_money(p)}", cons, p
+
+
 def build_act(tenant_id, period):
     """Повертає (lines, totals, warnings) для орендаря за місяць акта.
 
@@ -201,7 +232,8 @@ def build_act(tenant_id, period):
     for wh in uwhs:
         meters = db.execute("SELECT m.*, s.name AS svc_name, s.unit, s.id AS sid, s.active AS svc_active "
                             "FROM meters m JOIN services s ON s.id=m.service_id "
-                            "WHERE m.warehouse_id=? AND m.active=1 ORDER BY s.sort, s.name", (wh["id"],)).fetchall()
+                            "WHERE m.warehouse_id=? AND m.active=1 AND s.mode='meter' ORDER BY s.sort, s.name",
+                            (wh["id"],)).fetchall()
         for m in meters:
             if not m["svc_active"]:
                 continue
@@ -244,7 +276,7 @@ def build_act(tenant_id, period):
 
     # --- підключені послуги: кількість / площа / фіксовано ---
     subs = db.execute("SELECT s.* FROM tenant_services ts JOIN services s ON s.id=ts.service_id "
-                      "WHERE ts.tenant_id=? AND s.active=1 AND s.mode<>'meter' ORDER BY s.sort, s.name",
+                      "WHERE ts.tenant_id=? AND s.active=1 AND s.mode NOT IN ('meter', 'share') ORDER BY s.sort, s.name",
                       (tenant_id,)).fetchall()
     for svc in subs:
         if svc["mode"] == "qty":
@@ -263,6 +295,22 @@ def build_act(tenant_id, period):
         lines.append({"group": "service", "name": f"{svc['name']} за {ulabel}",
                       "unit": svc["unit"], "qty": qty, "price": pr, "sum": r2(qty * pr),
                       "service": svc["name"], "wh": "", "serial": ""})
+
+    # --- частки від загальної суми (вода за загальним лічильником, сміття, охорона…): % з картки орендаря ---
+    if uwhs:
+        for svc in db.execute("SELECT * FROM services WHERE mode='share' AND active=1 ORDER BY sort, name").fetchall():
+            pct = tenant_share(tenant_id, svc["id"], uperiod, db)
+            if not pct:
+                continue
+            total, how, cons, p = share_total(svc, uperiod, db)
+            if total is None:
+                warnings.append(f"«{svc['name']}» за {ulabel}: " + ("немає показника загального лічильника"
+                                if svc["has_main"] and cons is None else "не задано ціну"))
+                continue
+            lines.append({"group": "service", "name": f"{svc['name']} за {ulabel} — {fmt_num(pct)}% від {how}",
+                          "unit": "%", "qty": pct, "price": r2(total / 100), "sum": r2(total * pct / 100),
+                          "service": svc["name"], "wh": "", "serial": "",
+                          "rnote": f"{fmt_num(pct)}% від {how}" + (f" = {fmt_money(total)} грн" if svc["has_main"] else "")})
 
     net = r2(sum(l["sum"] for l in lines))
     vat_sum = r2(net * vat)

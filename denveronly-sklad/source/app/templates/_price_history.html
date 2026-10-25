@@ -11,7 +11,8 @@
       {% for c in r.cells|reverse %}
         <td class="n {{ 'curm' if c.period == cur }} {{ 'own' if c.own else 'carry' }}"
             title="{{ (_('цена этого месяца') if c.own else _('цена не вносилась — в акте будет последняя известная')) if c.price is not none else _('цены ещё не было') }}">
-          {% if c.price is not none %}{{ money(c.price) }}{% else %}—{% endif %}
+          <input class="pcell" data-sid="{{ r.s.id }}" data-period="{{ c.period }}" inputmode="decimal"
+                 value="{{ money(c.price) if c.own else '' }}" placeholder="{{ money(c.price) if c.price is not none else '—' }}" data-orig="{{ c.price|plain if c.own else '' }}">
           {% if c.delta %}<span class="dl {{ 'up' if c.delta > 0 else 'down' }}">{{ '↑' if c.delta > 0 else '↓' }}</span>{% endif %}
         </td>
       {% endfor %}
@@ -19,6 +20,27 @@
   {% endfor %}
   </tbody>
 </table></div>
-<p class="muted" style="margin-top:6px">{{ _("Жирным — цена внесена за этот месяц; серым — не вносилась, берётся последняя известная. ↑↓ — изменение цены. Клик по месяцу открывает его показания и цены.") }}</p>
+<p class="muted" style="margin-top:6px">{{ _("Жирным — цена внесена за этот месяц; серым — не вносилась, берётся последняя известная. ↑↓ — изменение цены. Клик по ячейке — вписать или исправить цену месяца (сохраняется сразу, пустое — удалить). Клик по месяцу открывает его показания и цены.") }}</p>
+<script>
+document.querySelectorAll('input.pcell:not([data-bound])').forEach(inp => {
+  inp.dataset.bound = 1;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } if (e.key === 'Escape') { inp.value = inp.dataset.orig; inp.blur(); } });
+  const fmt = v => v === '' ? '' : Number(v).toLocaleString('uk-UA', {minimumFractionDigits: 2, maximumFractionDigits: 4});
+  inp.addEventListener('focus', () => { inp.value = inp.dataset.orig; inp.select(); });
+  inp.addEventListener('blur', async () => {
+    if (inp.value.trim() === inp.dataset.orig) { inp.value = fmt(inp.dataset.orig); return; }
+    const td = inp.closest('td');
+    try {
+      const r = await fetch({{ url_for('price_cell')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sid: inp.dataset.sid, period: inp.dataset.period, value: inp.value})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || r.status);
+      inp.dataset.orig = j.price === null ? '' : String(j.price); inp.value = fmt(inp.dataset.orig);
+      td.classList.toggle('own', j.price !== null); td.classList.toggle('carry', j.price === null);
+      td.classList.add('saved'); setTimeout(() => td.classList.remove('saved'), 1200);
+    } catch (e) { td.classList.add('err'); inp.title = String(e.message || e); }
+  });
+});
+</script>
 {% else %}<p class="muted">{{ _("Услуг пока нет") }}.</p>{% endif %}
 {% endmacro %}

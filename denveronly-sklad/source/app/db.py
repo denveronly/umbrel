@@ -180,6 +180,26 @@ CREATE TABLE IF NOT EXISTS services (
     active INTEGER NOT NULL DEFAULT 1
 );
 
+-- загальний лічильник послуги «частка» (напр. вода): витрата × ціна = сума, що ділиться між орендарями за %
+CREATE TABLE IF NOT EXISTS service_readings (
+    service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    period TEXT NOT NULL,
+    value REAL,
+    PRIMARY KEY (service_id, period)
+);
+
+-- частка орендаря в послузі «частка», %; діє з місяця from_period і далі, доки не змінять
+CREATE TABLE IF NOT EXISTS tenant_shares (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    pct REAL NOT NULL,
+    from_period TEXT NOT NULL,
+    username TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE (tenant_id, service_id, from_period)
+);
+
 -- ціна послуги за конкретний місяць (без ПДВ)
 CREATE TABLE IF NOT EXISTS service_prices (
     service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
@@ -398,6 +418,7 @@ SERVICE_MODES = {
     "qty": "кол-во за месяц (вносим вручную)",
     "area": "за м² площади",
     "fixed": "фиксированно в месяц",
+    "share": "доля от общей суммы (% в карточке арендатора)",
 }
 
 PAYMENT_TYPES = {
@@ -483,6 +504,8 @@ END;
 
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
+    "services": {"has_main": "INTEGER NOT NULL DEFAULT 0", "main_serial": "TEXT", "main_coef": "REAL NOT NULL DEFAULT 1",
+                 "main_initial": "REAL NOT NULL DEFAULT 0"},   # загальний лічильник для послуги «частка»
     "line_meters": {"src": "TEXT"},   # ввідний = наявний лічильник іншої лінії: "m:<id>" | "l:<id>"
     "power_lines": {"has_solar": "INTEGER NOT NULL DEFAULT 1",
                     "parent_id": "INTEGER"},   # сублінія: живиться від іншої лінії, її ввід — споживач на тій лінії   # сонячна генерація на лінії (для субліній — вимкнути)

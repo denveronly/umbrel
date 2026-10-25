@@ -436,3 +436,11 @@ dialog.pindlg::backdrop { background: rgba(0,0,0,.45); }
 pre.diagout { margin-top: 14px; padding: 12px 14px; border-radius: 8px; background: #111418; color: #d7e3dc; font-size: 12.5px;
   white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
 .flash { white-space: pre-line; }
+.phist input.pcell { width: 86px; padding: 3px 6px; text-align: right; border: 1px solid transparent; background: transparent; font: inherit; color: inherit; font-variant-numeric: tabular-nums; }
+.phist input.pcell:hover { border-color: var(--line); }
+.phist input.pcell:focus { border-color: var(--accent); background: var(--card); outline: none; }
+.phist td.carry input.pcell::placeholder { color: var(--muted); opacity: 1; }
+.phist td.own input.pcell { font-weight: 600; }
+.phist td.saved { background: var(--accent-soft); transition: background .3s; }
+.phist td.err input.pcell { border-color: var(--warn); }
+.sharebox { border-left: 3px solid var(--accent-soft); padding-left: 10px; }
