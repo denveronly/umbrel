@@ -3,7 +3,16 @@
 {% block title %}{{ t.name if t else _("Новый арендатор") }}{% endblock %}
 {% block content %}
 {% macro v(field) %}{{ (t[field] if t and t[field] is not none else '') }}{% endmacro %}
-<p><a href="{{ url_for('tenants') }}">← {{ _("Арендаторы") }}</a></p>
+<div class="row tnav-top"><a href="{{ url_for('tenants') }}">← {{ _("Арендаторы") }}</a><span class="spacer"></span>
+  {% if t %}
+  {% if nav_prev %}<a class="btn sm ghost tnav" href="{{ url_for('tenant_edit', tid=nav_prev.id) }}" title="{{ nav_prev.name }}">← {{ _("Предыдущий") }}</a>{% else %}<span class="btn sm ghost" aria-disabled="true" style="opacity:.4">← {{ _("Предыдущий") }}</span>{% endif %}
+  {% if nav_next %}<a class="btn sm ghost tnav" href="{{ url_for('tenant_edit', tid=nav_next.id) }}" title="{{ nav_next.name }}">{{ _("Следующий") }} →</a>{% else %}<span class="btn sm ghost" aria-disabled="true" style="opacity:.4">{{ _("Следующий") }} →</span>{% endif %}
+  {% endif %}
+</div>
+{% if t %}
+{% if nav_prev %}<a class="tnav tnav-side left" href="{{ url_for('tenant_edit', tid=nav_prev.id) }}" aria-label="{{ _("Предыдущий") }}"><span>‹</span><small>{{ nav_prev.name }}</small></a>{% endif %}
+{% if nav_next %}<a class="tnav tnav-side right" href="{{ url_for('tenant_edit', tid=nav_next.id) }}" aria-label="{{ _("Следующий") }}"><span>›</span><small>{{ nav_next.name }}</small></a>{% endif %}
+{% endif %}
 <h1>{{ t.name if t else _("Новый арендатор") }}{% if t and not t.active %} <span class="badge off">{{ _("выехал") }}{% if t.moved_out %} {{ t.moved_out }}{% endif %}</span>{% endif %}</h1>
 
 <form method="post" class="card grid">
@@ -246,6 +255,20 @@
 {% endblock %}
 {% block scripts %}
 <script>
+// перехід між орендарями: попередження, якщо форму змінено й не збережено; ← → на клавіатурі
+(() => {
+  let dirty = false;
+  const main = document.querySelector('form.card.grid');
+  if (main) { main.addEventListener('input', () => dirty = true); main.addEventListener('submit', () => dirty = false); }
+  const leave = e => { if (dirty && !confirm(t('Есть несохранённые изменения. Перейти без сохранения?'))) e.preventDefault(); };
+  document.querySelectorAll('a.tnav').forEach(a => a.addEventListener('click', leave));
+  document.addEventListener('keydown', e => {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.target.closest('input, textarea, select, [contenteditable], dialog')) return;
+    const a = document.querySelector(e.key === 'ArrowLeft' ? 'a.tnav-side.left' : e.key === 'ArrowRight' ? 'a.tnav-side.right' : null);
+    if (a) { leave(e); if (!e.defaultPrevented) location.href = a.href; }
+  });
+})();
 // форма оплати -> компанія, що приймає цю форму (якщо обрана не приймає)
 (() => {
   const pt = document.querySelector('select[name=payment_type]'), co = document.querySelector('select[name=company_id]');

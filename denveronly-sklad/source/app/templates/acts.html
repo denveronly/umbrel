@@ -17,7 +17,14 @@
 
 <div class="kpis">
   <div class="kpi"><small class="muted">{{ _("Всего за месяц") }}</small><b>{{ money(grand) }}</b></div>
-  {% for grp in groups %}<div class="kpi"><small class="muted">{{ grp.c.name if grp.c else _("Без компании") }}</small><b>{{ money(grp.tot.total) }}</b></div>{% endfor %}
+  {% for grp in groups %}<div class="kpi {{ 'kpi-noco' if not grp.c }}"><small class="muted">{{ grp.c.name if grp.c else _("Без компании") }}</small><b>{{ money(grp.tot.total) }}</b>
+    {% if not grp.c %}<details class="kmore"><summary title="{{ _("Кого не отнесли к компании") }}">⋯</summary>
+      <div class="kpop"><div class="kpop-h">{{ _("Без компании-получателя") }}</div>
+        <p class="muted" style="margin:4px 0 8px">{{ _("Выберите компанию в карточке арендатора — акт напечатается с её реквизитами.") }}</p>
+        <ul>{% for r in grp.rows %}<li><a href="{{ url_for('tenant_edit', tid=r.t.id) }}">{{ r.t.name }}</a>
+          <span class="muted">· {{ PAYMENT_TYPES[r.t.payment_type] }} · {{ money(r.totals.total) }}</span>{% if not r.t.active %} <span class="badge off">{{ _("выехал") }}</span>{% endif %}</li>{% endfor %}</ul></div>
+    </details>{% endif %}</div>{% endfor %}
+<script>document.addEventListener('click', e => document.querySelectorAll('details.kmore[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));</script>
 </div>
 
 {% for grp in groups %}

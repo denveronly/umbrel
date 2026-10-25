@@ -597,7 +597,14 @@ def tenant_edit(tid=None):
     tenancy = db.execute("SELECT h.*, w.name AS wh_name FROM warehouse_tenancy h LEFT JOIN warehouses w "
                          "ON w.id=h.warehouse_id WHERE h.tenant_id=? ORDER BY COALESCE(h.ended, '') DESC, h.id DESC",
                          (tid,)).fetchall() if tid else []
-    return render_template("tenant_edit.html", t=t, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
+    nav_prev = nav_next = None
+    if t:                                   # сусіди в тому ж порядку, що й список орендарів
+        ids = db.execute("SELECT id, name FROM tenants ORDER BY active DESC, name").fetchall()
+        pos = next((i for i, r in enumerate(ids) if r["id"] == t["id"]), None)
+        if pos is not None:
+            nav_prev = ids[pos - 1] if pos > 0 else None
+            nav_next = ids[pos + 1] if pos + 1 < len(ids) else None
+    return render_template("tenant_edit.html", t=t, nav_prev=nav_prev, nav_next=nav_next, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
                            subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs, tenancy=tenancy, share_svcs=share_svcs,
                            cur_period=current_period(),
                            tot=tot, companies=companies(), vat=float(st["vat_rate"]), free_prices=free_prices)

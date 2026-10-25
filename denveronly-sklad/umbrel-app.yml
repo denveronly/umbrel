@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.28.0"
+version: "1.29.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,10 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Новий модуль ⚡ YASNO: щодня заходить у бізнес-кабінет постачальника електроенергії, забирає нові рахунки (PDF),
-  заборгованість, неоплачені рахунки та попередження про відключення і надсилає сповіщення в Telegram
-  (новий рахунок з PDF, борг, прострочка, нагадування про оплату, попередження).
-  Пароль кабінету та токен бота зберігаються зашифрованими, ключ — поза базою і бекапами.
+  Картка орендаря: кнопки «Попередній / Наступний» і великі стрілки з боків (та ← → на клавіатурі), з попередженням про незбережені зміни.
+  Акти: у плитці «Без компанії» — «⋯» зі списком орендарів, яких не віднесли до компанії-отримувача.
+  Модуль ⚡ YASNO: рахунки, заборгованість і попередження з кабінету + сповіщення в Telegram.
 dependencies: []
 path: ""
 defaultUsername: ""
