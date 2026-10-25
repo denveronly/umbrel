@@ -194,6 +194,11 @@ def database():
     db = get_db()
     if request.method == "POST":
         action = request.form.get("action")
+        if action in ("delete", "restore", "upload"):      # видалення бекапу і відкат — лише з PIN адміністратора
+            err = auth.check_pin(request.form.get("pin"))
+            if err:
+                flash(err)
+                return redirect(url_for("logs.database"))
         if action == "backup":
             name = create_backup("manual")
             log("Бэкап создан вручную", name)

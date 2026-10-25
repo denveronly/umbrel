@@ -376,6 +376,36 @@ def table_order():
     return jsonify(ok=True)
 
 
+def line_warnings(line_id):
+    """Типові помилки налаштування субліній — показуємо над таблицею."""
+    if not line_id:
+        return []
+    db = get_db()
+    out = []
+    ln = db.execute("SELECT * FROM power_lines WHERE id=?", (line_id,)).fetchone()
+    subs = db.execute("SELECT id, name FROM power_lines WHERE parent_id=? AND active=1", (line_id,)).fetchall()
+    for sl in subs:
+        ins = db.execute("SELECT * FROM line_meters WHERE line_id=? AND role='input' AND active=1", (sl["id"],)).fetchall()
+        if not ins:
+            out.append(_("Подлиния «{s}» без вводного счётчика — добавьте его на вкладке «{s}» (роль «Вводный», свои показания), "
+                         "и он появится здесь как потребитель.").format(s=sl["name"]))
+        for m in ins:
+            src = resolve_src(m["src"]) if m["src"] else None
+            if src and src[2]["line_id"] == line_id:
+                out.append(_("Вводный счётчик «{m}» подлинии «{s}» берёт показания со счётчика «{x}» этой же линии — "
+                             "поэтому здесь его нет. В «Настроить линии» поставьте ему «Показания берутся с» → «свои показания».")
+                           .format(m=m["name"], s=sl["name"], x=src[3]))
+    if ln and ln["parent_id"]:
+        for m in db.execute("SELECT * FROM line_meters WHERE line_id=? AND role='input' AND active=1 AND src IS NOT NULL",
+                            (line_id,)).fetchall():
+            src = resolve_src(m["src"])
+            if src and src[2]["line_id"] == ln["parent_id"]:
+                out.append(_("Вводный счётчик «{m}» берёт показания с «{x}» родительской линии — так подлиния повторяет "
+                             "чужие показания. Поставьте «свои показания»: он сам появится на родительской линии как потребитель.")
+                           .format(m=m["name"], x=src[3]))
+    return out
+
+
 @bp.route("/readings/table")
 def table():
     from app import this_month
@@ -391,11 +421,18 @@ def table():
         line = all_lines[0] if all_lines else None
     sid = request.args.get("service", type=int) if not line else None
     groups, bal = table_view(line["id"] if line else None, periods, sid)
+    for g in groups:                                  # для шестерні: що можна видалити в групі
+        g["gear"] = [{"kind": c.get("dkind", c["kind"]), "id": c.get("did", c["id"]),
+                      "label": c["title"] + (f" · {c['svc']}" if c.get("svc") else ""),
+                      "sub": " · ".join(x for x in (c.get("name"), f"№{c['serial']}" if c.get("serial") else "",
+                                                     c.get("sub") if c["kind"] == "l" or c.get("linked") else "") if x)}
+                     for c in g["cols"]]
     dates = {r["period"]: r["taken"] for r in db.execute("SELECT period, taken FROM reading_dates")}
     msvcs = db.execute("SELECT id, name FROM services WHERE mode='meter' AND active=1 ORDER BY sort, name").fetchall()
     owners = _owners()
     from db import settings as _settings
     return render_template("readings_table.html", groups=groups, bal=bal, line=line, all_lines=all_lines,
+                           warns=line_warnings(line["id"] if line else None),
                            solar_loss=float(_settings().get("solar_loss_pct") or 5),
                            dates=dates, periods=periods, months=n, end=end, service=sid, msvcs=msvcs,
                            owners=[{"tid": t, "name": nm, "whs": w} for t, nm, w in owners], srcs=src_options(),
@@ -449,11 +486,48 @@ def quick_meter():
     return jsonify(ok=True, id=mid)
 
 
+@bp.route("/readings/table/meter/delete", methods=["POST"])
+def delete_meter():
+    """Видалення лічильника з таблиці (шестерня) — лише з PIN адміністратора."""
+    import auth
+    db = get_db()
+    d = request.get_json(force=True) or {}
+    err = auth.check_pin(d.get("pin"))
+    if err:
+        return jsonify(ok=False, error=err), 403
+    kind, mid = d.get("kind"), int(d.get("id") or 0)
+    if kind == "m":
+        m = db.execute("SELECT m.serial, w.name FROM meters m JOIN warehouses w ON w.id=m.warehouse_id WHERE m.id=?",
+                       (mid,)).fetchone()
+        if not m:
+            abort(404)
+        db.execute("DELETE FROM readings WHERE meter_id=?", (mid,))
+        db.execute("DELETE FROM meters WHERE id=?", (mid,))
+        log("Счётчик удалён", f"{m['name']}" + (f" №{m['serial']}" if m["serial"] else ""), commit=False)
+    elif kind == "l":
+        m = db.execute("SELECT name FROM line_meters WHERE id=?", (mid,)).fetchone()
+        if not m:
+            abort(404)
+        db.execute("DELETE FROM line_readings WHERE line_meter_id=?", (mid,))
+        db.execute("DELETE FROM line_meters WHERE id=?", (mid,))
+        log("Счётчик линии удалён", m["name"], commit=False)
+    else:
+        abort(400)
+    db.commit()
+    return jsonify(ok=True)
+
+
 @bp.route("/lines/manage", methods=["GET", "POST"])
 def manage():
     db = get_db()
     if request.method == "POST":
         a = request.form.get("action")
+        if request.form.get("delete") and a in ("line", "lmeter"):
+            import auth
+            err = auth.check_pin(request.form.get("pin"))
+            if err:
+                flash(err)
+                return redirect(url_for("lines.manage"))
         if a == "line":
             lid = request.form.get("lid", type=int)
             name = request.form.get("name", "").strip()

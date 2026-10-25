@@ -33,7 +33,7 @@
   <div class="full row">
     <button>{{ _("Сохранить") }}</button>
     {% if wh %}<span class="spacer"></span>
-    <button class="danger" name="delete" value="1" onclick="return confirm({{ _("Удалить склад вместе со счётчиками и показаниями?")|tojson|forceescape }})">{{ _("Удалить") }}</button>{% endif %}
+    <button class="danger" name="delete" value="1" data-pin="{{ _("Удалить склад вместе со счётчиками и показаниями?") }}">{{ _("Удалить") }}</button>{% endif %}
   </div>
 </form>
 </div>
@@ -113,7 +113,7 @@
       <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if m.active }}> {{ _("активен") }}</label>
       <span class="spacer"></span>
       <button class="sm ghost">{{ _("Сохранить") }}</button>
-      <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить счётчик и все его показания?")|tojson|forceescape }})">{{ _("Удалить") }}</button>
+      <button class="sm danger" name="delete" value="1" data-pin="{{ _("Удалить счётчик и все его показания?") }}">{{ _("Удалить") }}</button>
     </div>
   </form>
   {% endfor %}

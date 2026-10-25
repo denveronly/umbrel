@@ -312,6 +312,10 @@ def warehouse_edit(wid=None):
         abort(404)
     if request.method == "POST":
         if request.form.get("delete"):
+            err = auth.check_pin(request.form.get("pin"))
+            if err:
+                flash(err)
+                return redirect(url_for("warehouse_edit", wid=wid))
             photos.remove_warehouse_photos(wid)
             db.execute("DELETE FROM warehouses WHERE id=?", (wid,))
             db.commit()
@@ -442,7 +446,13 @@ def meter_save(wid):
     db = get_db()
     mid = request.form.get("meter_id")
     if request.form.get("delete") and mid:
+        err = auth.check_pin(request.form.get("pin"))
+        if err:
+            flash(err)
+            return redirect(url_for("warehouse_edit", wid=wid) + "#meters")
+        m_ = db.execute("SELECT serial FROM meters WHERE id=?", (mid,)).fetchone()
         db.execute("DELETE FROM meters WHERE id=? AND warehouse_id=?", (mid, wid))
+        log("Счётчик удалён", f"склад {wid}" + (f", №{m_['serial']}" if m_ and m_["serial"] else ""), commit=False)
     elif mid:
         db.execute("UPDATE meters SET service_id=?, serial=?, coef=?, initial_value=?, active=?, line_id=?, "
                    "has_reactive=? WHERE id=? AND warehouse_id=?",

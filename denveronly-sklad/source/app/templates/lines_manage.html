@@ -19,7 +19,7 @@
       <select name="parent_id" style="width:auto"><option value="">—</option>{% for p in all_lines if p.id != l.id %}<option value="{{ p.id }}" {{ 'selected' if l.parent_id == p.id }}>{{ p.name }}</option>{% endfor %}</select></label>
     <label class="check" title="{{ _("Для подлиний (например, офис) снимите галочку — колонки «Солнце» не будет") }}"><input type="checkbox" name="has_solar" value="1" {{ 'checked' if l.has_solar }}> ☀ {{ _("Солнечная генерация") }}</label>
     <button class="sm ghost">{{ _("Сохранить") }}</button>
-    <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить линию вместе с её вводными счётчиками и их показаниями? Счётчики складов останутся, только отвяжутся от линии.")|tojson|forceescape }})">{{ _("Удалить") }}</button>
+    <button class="sm danger" name="delete" value="1" data-pin="{{ _("Удалить линию вместе с её вводными счётчиками и их показаниями? Счётчики складов останутся, только отвяжутся от линии.") }}">{{ _("Удалить") }}</button>
   </form>
   {% endfor %}
   <form method="post" class="row" style="padding-top:10px;gap:8px;flex-wrap:wrap">
@@ -60,7 +60,7 @@
       <label class="check"><input type="checkbox" name="has_reactive" value="1" {{ 'checked' if m.has_reactive }}> {{ _("реактивная энергия") }}</label>
       <span class="spacer"></span>
       <button class="sm ghost">{{ _("Сохранить") }}</button>
-      <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить счётчик и все его показания?")|tojson|forceescape }})">{{ _("Удалить") }}</button>
+      <button class="sm danger" name="delete" value="1" data-pin="{{ _("Удалить счётчик и все его показания?") }}">{{ _("Удалить") }}</button>
     </div>
   </form>
   {% endfor %}

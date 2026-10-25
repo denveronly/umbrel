@@ -486,7 +486,7 @@ MIGRATIONS = {
     "line_meters": {"src": "TEXT"},   # ввідний = наявний лічильник іншої лінії: "m:<id>" | "l:<id>"
     "power_lines": {"has_solar": "INTEGER NOT NULL DEFAULT 1",
                     "parent_id": "INTEGER"},   # сублінія: живиться від іншої лінії, її ввід — споживач на тій лінії   # сонячна генерація на лінії (для субліній — вимкнути)
-    "users": {"perms": "TEXT NOT NULL DEFAULT 'economics'"},   # права оператора (через кому); раніше Економіку бачили всі
+    "users": {"perms": "TEXT NOT NULL DEFAULT 'economics'", "pin_hash": "TEXT"},   # pin_hash — PIN адміністратора для видалення   # права оператора (через кому); раніше Економіку бачили всі
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
                    "row_no": "TEXT", "description": "TEXT", "tenant_since": "TEXT"},
     "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",

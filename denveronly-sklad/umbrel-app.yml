@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.22.0"
+version: "1.23.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,9 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Копія бекапів на мережеву папку (Synology, SMB): кожен бекап автоматично копіюється на NAS, задається
-  кількість копій, що зберігаються. Перевірка з'єднання й ручне надсилання. Без Google/OAuth — лише окремий
-  користувач NAS.
+  PIN адміністратора: видалення лічильників, ліній, складів і бекапів, відновлення з бекапу та відкат ШІ — лише з PIN
+  (задається адміністраторам у Налаштування → Користувачі). У таблиці показників замість «＋» біля орендаря — ⚙:
+  додати або видалити лічильники. Підказки, якщо сублінію налаштовано так, що її ввід не видно на батьківській лінії.
 dependencies: []
 path: ""
 defaultUsername: ""

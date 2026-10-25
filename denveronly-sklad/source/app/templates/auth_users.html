@@ -23,6 +23,13 @@
         </form>
       </td>
       <td>{% if u.role == 'admin' %}<span class="muted">{{ _("все права") }}</span>
+        <form method="post" class="row" style="gap:6px;margin-top:6px">
+          <input type="hidden" name="uid" value="{{ u.id }}"><input type="hidden" name="action" value="pin">
+          <span class="muted">🔒 PIN {{ _("для удаления") }}: {{ _("задан") if u.pin_hash else _("не задан") }}</span>
+          <input type="password" name="pin" inputmode="numeric" maxlength="8" placeholder="{{ _("4–8 цифр") }}" autocomplete="new-password" style="width:110px">
+          <button class="sm ghost">{{ _("Задать") }}</button>
+          {% if u.pin_hash %}<button class="sm ghost" name="clear" value="1">{{ _("Убрать") }}</button>{% endif %}
+        </form>
         {% else %}{% set up = (u.perms or '').split(',') %}
         <form method="post" class="perms">
           <input type="hidden" name="uid" value="{{ u.id }}"><input type="hidden" name="action" value="perms">

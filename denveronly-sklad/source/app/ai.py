@@ -861,6 +861,10 @@ def undo(job_id):
     j = db.execute("SELECT * FROM ai_jobs WHERE id=?", (job_id,)).fetchone()
     if not j or not j["backup"] or j["status"] != "done":
         abort(400)
+    err = auth.check_pin(request.form.get("pin"))      # відкат до бекапу — лише з PIN адміністратора
+    if err:
+        flash(err)
+        return redirect(url_for("ai.chat", sid=j["session_id"]))
     import os
 
     import backup as bk

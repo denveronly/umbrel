@@ -84,8 +84,8 @@
         <td class="n"><form method="post" class="row" style="justify-content:flex-end;gap:6px">
           <input type="hidden" name="name" value="{{ b.name }}">
           <a class="btn sm ghost" href="{{ url_for('logs.download', name=b.name) }}">{{ _("Скачать") }}</a>
-          <button class="sm ghost" name="action" value="restore" onclick="return confirm({{ (_("Восстановить базу из бэкапа") ~ ' ' ~ b.time.strftime('%d.%m.%Y %H:%M') ~ '?\n\n' ~ _("Всё, что изменено после этого момента, будет заменено. Текущее состояние предварительно сохранится отдельным бэкапом."))|tojson|forceescape }})">{{ _("Восстановить") }}</button>
-          <button class="sm danger" name="action" value="delete" onclick="return confirm({{ _("Удалить этот бэкап?")|tojson|forceescape }})">×</button>
+          <button class="sm ghost" name="action" value="restore" data-pin="{{ _("Восстановить базу из бэкапа") ~ ' ' ~ b.time.strftime('%d.%m.%Y %H:%M') ~ '? ' ~ _("Всё, что изменено после этого момента, будет заменено. Текущее состояние предварительно сохранится отдельным бэкапом.") }}">{{ _("Восстановить") }}</button>
+          <button class="sm danger" name="action" value="delete" data-pin="{{ _("Удалить этот бэкап?") }}">×</button>
         </form></td></tr>
     {% else %}<tr><td colspan="4" class="muted">{{ _("Бэкапов пока нет") }}.</td></tr>{% endfor %}
     </tbody>
@@ -94,7 +94,7 @@
   <form method="post" enctype="multipart/form-data" class="row">
     <input type="hidden" name="action" value="upload">
     <input type="file" name="file" accept=".zip" required style="max-width:340px">
-    <button class="sm danger" onclick="return confirm({{ _("Заменить текущую базу данными из файла? Текущее состояние предварительно сохранится.")|tojson|forceescape }})">{{ _("Загрузить и восстановить") }}</button>
+    <button class="sm danger" data-pin="{{ _("Заменить текущую базу данными из файла? Текущее состояние предварительно сохранится.") }}">{{ _("Загрузить и восстановить") }}</button>
   </form>
 </div>
 {% endblock %}

@@ -83,6 +83,38 @@ function cycleTheme() {
 }
 showTheme();
 document.addEventListener('click', e => { const d = document.getElementById('sitesw'); if (d && d.open && !d.contains(e.target)) d.open = false; });
+// PIN адміністратора для видалення: askPin(текст) -> Promise<pin|null>; кнопки з data-pin у формах — автоматично
+function askPin(msg) {
+  return new Promise(res => {
+    let d = document.getElementById('pindlg');
+    if (!d) {
+      d = document.createElement('dialog'); d.id = 'pindlg'; d.className = 'pindlg';
+      d.innerHTML = `<form method="dialog"><h3 style="margin:0 0 6px">🔒 ${t('Нужен PIN администратора')}</h3>
+        <p class="muted pinmsg" style="margin:0 0 10px"></p>
+        <input type="password" inputmode="numeric" autocomplete="off" maxlength="8" class="pinin" style="font-size:18px;letter-spacing:4px;text-align:center">
+        <div class="row" style="margin-top:12px;justify-content:flex-end;gap:8px">
+          <button type="button" class="ghost pincancel">${t('Отмена')}</button><button class="danger pinok">${t('Удалить')}</button></div></form>`;
+      document.body.appendChild(d);
+    }
+    const inp = d.querySelector('.pinin'); inp.value = '';
+    d.querySelector('.pinmsg').textContent = msg || '';
+    const done = v => { d.close(); res(v); };
+    d.querySelector('.pincancel').onclick = () => done(null);
+    d.querySelector('form').onsubmit = e => { e.preventDefault(); done(inp.value.trim() || null); };
+    d.oncancel = () => res(null);
+    d.showModal(); inp.focus();
+  });
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-pin]');
+  if (!b || b.dataset.pinOk) return;
+  e.preventDefault();
+  const pin = await askPin(b.dataset.pin);
+  if (!pin) return;
+  const f = b.form, add = (n, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = n; i.value = v; f.appendChild(i); };
+  add('pin', pin); if (b.name) add(b.name, b.value);
+  f.requestSubmit ? f.requestSubmit() : f.submit();
+});
 function switchLang() {
   const next = document.documentElement.lang === 'uk' ? 'ru' : 'uk';
   document.cookie = 'lang=' + next + ';path=/;max-age=31536000;SameSite=Lax';

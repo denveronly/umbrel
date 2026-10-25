@@ -72,6 +72,10 @@ dialog.qm .full { grid-column: 1 / -1; }
   animation: glow 2.4s ease-in-out infinite; }
 @keyframes glow { 50% { box-shadow: 0 0 0 1px var(--accent), 0 0 3px 0 color-mix(in srgb, var(--accent) 30%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .rgrid tr.curp input.todo { animation: none; } }
+.rgrid th.ten .gear { font-size: 13px; padding: 0 7px; }
+.gearrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.gearrow .gn { flex: 1; min-width: 0; }
+.gearrow .gn small { display: block; color: var(--muted); }
 .rgrid td.rnar { width: 1%; min-width: 0; padding-left: 8px; padding-right: 8px; }
 .rgrid th.ten.solarg { background: color-mix(in srgb, #eda100 26%, var(--card)); border-left-color: #eda100; }
 .rgrid .r-solar { background: color-mix(in srgb, #eda100 16%, var(--card)); }
@@ -99,6 +103,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 </div>
 {% if line and (line.note or line.parent_id) %}<p class="muted" style="margin-top:-4px">{{ line.note or '' }}{% if line.parent_id %}{% for p in all_lines if p.id == line.parent_id %}{{ ' · ' if line.note }}{{ _("Подлиния, питается от") }} «{{ p.name }}» — {{ _("её ввод там учитывается как потребитель") }}{% endfor %}{% endif %}</p>{% endif %}
 
+{% for w in warns %}<div class="warn" style="margin-bottom:8px">⚠ {{ w }} <a href="{{ url_for('lines.manage') }}">{{ _("Настроить линии") }}</a></div>{% endfor %}
 {% macro width(c) %}{{ 2 + (2 if c.rmode == 'input' else 1 if c.rmode == 'alloc' else 0) }}{% endmacro %}
 {% if not groups %}
   <div class="warn">{% if line %}{{ _("На этой линии ещё нет счётчиков.") }} {{ _("Добавьте счётчик кнопкой «＋ Счётчик» или привяжите существующие в") }} <a href="{{ url_for('lines.manage') }}">{{ _("Настроить линии") }}</a>.{% else %}{{ _("Все счётчики привязаны к линиям.") }}{% endif %}</div>
@@ -114,8 +119,7 @@ dialog.qm .full { grid-column: 1 / -1; }
             {% if g.cols %}draggable="true" data-kind="{{ g.cols[0].dkind or g.cols[0].kind }}" data-ids="{% for c in g.cols %}{{ c.did or c.id }}{{ ',' if not loop.last }}{% endfor %}"{% endif %}>
           {% set tw = [ns.w * 72, 150]|max %}
           <span class="tn" style="max-width:{{ tw }}px" data-full="{{ g.title or '' }}">{% if g.kind == 'line' %}⚡ {{ _("Счётчики линии") }}{% elif g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.title }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}</span>
-          {% if g.kind == 'tenant' %}<button type="button" class="sm ghost addm" onclick="openQM({{ g.tid|tojson }})" title="{{ _("Добавить счётчик") }}">＋</button>
-          {% elif g.kind == 'line' %}<button type="button" class="sm ghost addm" onclick="openQM('line')" title="{{ _("Добавить счётчик") }}">＋</button>{% endif %}</th>
+          <button type="button" class="sm ghost addm gear" onclick="openGear({{ loop.index0 }})" title="{{ _("Счётчики: добавить или удалить") }}">⚙</button></th>
       {% endfor %}
       {% if bal %}{% if line.has_solar %}<th class="ten solarg" colspan="2">☀ {{ _("Солнце") }}</th>{% endif %}<th class="ten bal" colspan="5">{{ _("Баланс линии") }}</th>{% endif %}
     </tr>
@@ -182,6 +186,14 @@ dialog.qm .full { grid-column: 1 / -1; }
   {{ _("Дату снятия можно вписать коротко: 26.10.") }}</p>
 {% endif %}
 
+<dialog class="qm" id="gear">
+  <h2 style="margin-top:0" id="geartitle"></h2>
+  <div id="gearlist"></div>
+  <p class="muted" style="margin:8px 0 0">{{ _("Удаление счётчика вместе со всеми его показаниями — только с PIN администратора.") }}</p>
+  <div class="row" style="margin-top:12px;gap:8px"><span class="muted" id="gearerr"></span><span class="spacer"></span>
+    <button type="button" class="ghost" onclick="document.getElementById('gear').close()">{{ _("Закрыть") }}</button>
+    <button type="button" id="gearadd">＋ {{ _("Добавить счётчик") }}</button></div>
+</dialog>
 <dialog class="qm" id="qm">
   <form method="dialog" id="qmform">
     <h2 style="margin-top:0">{{ _("Новый счётчик") }}</h2>
@@ -316,6 +328,30 @@ async function saveCells() {
 }
 window.addEventListener('beforeunload', e => { if (Object.keys(changed).length) { e.preventDefault(); e.returnValue = ''; } });
 
+const GROUPS_DATA = {{ groups|map(attribute='gear')|list|tojson }};
+const GROUPS_META = {{ groups|map(attribute='kind')|list|tojson }}.map((k, i) => ({kind: k}));
+{% for g in groups %}GROUPS_META[{{ loop.index0 }}].tid = {{ g.tid|tojson }}; GROUPS_META[{{ loop.index0 }}].title = {{ g.title|tojson }};
+{% endfor %}
+function openGear(gi) {
+  const g = GROUPS_META[gi], d = document.getElementById('gear');
+  document.getElementById('geartitle').textContent = g.kind === 'line' ? t('Счётчики линии') : (g.title || t('Свободные склады'));
+  document.getElementById('gearerr').textContent = '';
+  const items = GROUPS_DATA[gi], esc = s => String(s || '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  document.getElementById('gearlist').innerHTML = items.length ? items.map((m, i) => `<div class="gearrow"><div class="gn"><b>${esc(m.label)}</b><small>${esc(m.sub)}</small></div>
+      ${m.kind === 'sub' ? `<span class="muted">${t('настраивается на подлинии')}</span>` : `<button type="button" class="sm danger" data-i="${i}">${t('Удалить')}</button>`}</div>`).join('')
+    : `<p class="muted">${t('Счётчиков пока нет.')}</p>`;
+  document.querySelectorAll('#gearlist button[data-i]').forEach(b => b.onclick = async () => {
+    const m = items[+b.dataset.i];
+    const pin = await askPin(t('Удалить счётчик и все его показания?') + ' — ' + m.label);
+    if (!pin) return;
+    const r = await fetch({{ url_for('lines.delete_meter')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kind: m.kind, id: m.id, pin})});
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.ok) location.reload(); else document.getElementById('gearerr').textContent = j.error || t('Ошибка сохранения');
+  });
+  document.getElementById('gearadd').onclick = () => { d.close(); g.kind === 'line' ? openQM('line') : openQM(g.tid); };
+  d.showModal();
+}
 function fillWh() {
   const f = document.getElementById('qmform'), o = OWNERS.find(x => String(x.tid || 'free') === f.owner.value);
   f.warehouse_id.innerHTML = (o ? o.whs : []).map(w => `<option value="${w.id}">${w.name.replace(/</g, '&lt;')}</option>`).join('');

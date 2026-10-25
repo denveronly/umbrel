@@ -66,7 +66,7 @@
         {% if loop.last %}
         <form method="post" action="{{ url_for('ai.undo', job_id=jid) }}" class="row" style="align-self:flex-start">
           <span class="muted">{{ _("Изменений") }}: {{ j.changes }}</span>
-          <button class="sm ghost" onclick="return confirm({{ _("Откатить все изменения последнего запроса ИИ? База вернётся к состоянию перед запросом (изменения, сделанные людьми после него, тоже откатятся).")|tojson|forceescape }})">↶ {{ _("Откатить") }}</button>
+          <button class="sm ghost" data-pin="{{ _("Откатить все изменения последнего запроса ИИ? База вернётся к состоянию перед запросом (изменения, сделанные людьми после него, тоже откатятся).") }}">↶ {{ _("Откатить") }}</button>
         </form>
         {% endif %}
       {% endfor %}

@@ -79,7 +79,8 @@ def init_app(app):
 
     @app.context_processor
     def user_ctx():
-        return {"current_user": g.get("user"), "ROLES": ROLES, "PERMS": PERMS, "can": can, "csrf_token": csrf_token}
+        return {"current_user": g.get("user"), "ROLES": ROLES, "PERMS": PERMS, "can": can, "csrf_token": csrf_token,
+                "pin_configured": pin_configured}
 
 
 def csrf_token():
@@ -138,6 +139,36 @@ def perm_required(perm):
 
 def _form_perms():
     return ",".join(p for p in PERMS if request.form.get("perm_" + p))
+
+
+# ---------- PIN адміністратора (видалення лічильників, складів) ----------
+_PIN_FAILS = {}
+
+
+def pin_configured():
+    return get_main_db().execute("SELECT 1 FROM users WHERE role='admin' AND active=1 AND pin_hash IS NOT NULL "
+                                 "LIMIT 1").fetchone() is not None
+
+
+def check_pin(pin):
+    """None — PIN вірний (будь-якого активного адміністратора), інакше текст помилки. Не більше 5 спроб за 5 хв."""
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+    fails, since = _PIN_FAILS.get(ip, (0, time.time()))
+    if time.time() - since > LOCK_SECONDS:
+        fails, since = 0, time.time()
+    if fails >= MAX_FAILS:
+        return _("Слишком много неверных PIN. Подождите 5 минут.")
+    rows = get_main_db().execute("SELECT pin_hash FROM users WHERE role='admin' AND active=1 AND pin_hash IS NOT NULL"
+                                 ).fetchall()
+    if not rows:
+        return _("PIN не задан. Администратор задаёт его в Настройки → Пользователи.")
+    if pin and any(check_password_hash(r["pin_hash"], str(pin)) for r in rows):
+        _PIN_FAILS.pop(ip, None)
+        return None
+    _PIN_FAILS[ip] = (fails + 1, since)
+    log("Неверный PIN при удалении", request.path)
+    time.sleep(0.4)
+    return _("Неверный PIN")
 
 
 def admin_required(f):
@@ -316,6 +347,21 @@ def users():
             db.execute("UPDATE users SET perms=? WHERE id=?", (perms, uid))
             log("Права пользователя изменены", f"{target['username']}: {perms or '—'}", commit=False)
             flash(_("Права сохранены") + f": {target['username']}")
+
+        elif target and action == "pin":
+            pin = request.form.get("pin", "").strip()
+            if target["role"] != "admin":
+                error = _("PIN бывает только у администратора")
+            elif request.form.get("clear"):
+                db.execute("UPDATE users SET pin_hash=NULL WHERE id=?", (uid,))
+                log("PIN администратора удалён", target["username"], commit=False)
+                flash(_("PIN удалён") + f": {target['username']}")
+            elif not (pin.isdigit() and 4 <= len(pin) <= 8):
+                error = _("PIN — от 4 до 8 цифр")
+            else:
+                db.execute("UPDATE users SET pin_hash=? WHERE id=?", (generate_password_hash(pin), uid))
+                log("PIN администратора задан", target["username"], commit=False)
+                flash(_("PIN задан") + f": {target['username']}")
 
         elif target and action == "toggle":
             if uid == g.user["id"]:

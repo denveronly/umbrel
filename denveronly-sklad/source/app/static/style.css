@@ -431,3 +431,5 @@ details.addsvc[open] > summary { margin-bottom: 8px; }
 .addsvc-grid .full { grid-column: 1 / -1; }
 .settabs { align-items: center; }
 .settabs .ver { font-size: 12px; padding: 0 6px; }
+dialog.pindlg { border: 1px solid var(--line); border-radius: 12px; padding: 18px; background: var(--card); color: var(--ink); width: min(360px, 92vw); }
+dialog.pindlg::backdrop { background: rgba(0,0,0,.45); }
