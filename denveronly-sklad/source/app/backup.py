@@ -188,6 +188,17 @@ def logs():
                            pages=max(1, (total + per - 1) // per), total=total, tab="journal")
 
 
+def _save_nas_form():
+    with using_site(MAIN_SITE):
+        set_setting("nas_enabled", "1" if request.form.get("nas_enabled") else "0")
+        for k in ("nas_server", "nas_share", "nas_path", "nas_user"):
+            set_setting(k, request.form.get(k, "").strip())
+        if request.form.get("nas_password"):          # порожнє поле — пароль не змінюється
+            set_setting("nas_password", request.form["nas_password"])
+        set_setting("nas_keep", str(max(1, request.form.get("nas_keep", 30, type=int))))
+        get_db().commit()
+
+
 @bp.route("/logs/db", methods=["GET", "POST"])
 @auth.perm_required("logs")
 def database():
@@ -205,15 +216,10 @@ def database():
             flash(_("Бэкап создан") + f": {name}")
             if nas.send_async([(os.path.join(backup_dir(), name), current_site())], who="вручну"):
                 flash(_("Копия отправляется на сетевую папку — статус ниже"))
-        elif action == "nas_settings":
-            with using_site(MAIN_SITE):
-                set_setting("nas_enabled", "1" if request.form.get("nas_enabled") else "0")
-                for k in ("nas_server", "nas_share", "nas_path", "nas_user"):
-                    set_setting(k, request.form.get(k, "").strip())
-                if request.form.get("nas_password"):          # порожнє поле — пароль не змінюється
-                    set_setting("nas_password", request.form["nas_password"])
-                set_setting("nas_keep", str(max(1, request.form.get("nas_keep", 30, type=int))))
-                get_db().commit()
+        if action in ("nas_test", "nas_send") and "nas_server" in request.form:
+            _save_nas_form()                        # перевіряємо/надсилаємо з тим, що зараз у полях
+        if action == "nas_settings":
+            _save_nas_form()
             log("Настройки копии на сетевую папку изменены", request.form.get("nas_server", ""))
             flash(_("Настройки сохранены"))
         elif action == "nas_test":

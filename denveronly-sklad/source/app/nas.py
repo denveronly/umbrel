@@ -100,20 +100,39 @@ def upload(c, items):
     return sent
 
 
+def _audit(app, action, details):
+    """Запис у журнал дій з фонового потоку."""
+    if app is None:
+        return
+    try:
+        from audit import log
+        with app.app_context(), using_site(MAIN_SITE):
+            log(action, details, username="система")
+    except Exception:
+        pass
+
+
 def send_async(items, who="система"):
     """Відправити у фоні. Повертає False, якщо NAS не налаштовано."""
     c = config()
     if not ready(c) or not items:
         return False
+    try:
+        from flask import current_app
+        app = current_app._get_current_object()
+    except Exception:
+        app = None
 
     def run():
         with _lock:
             try:
                 sent = upload(c, items)
                 _write_status(ok=True, time=datetime.now().isoformat(timespec="seconds"), error="", sent=sent, who=who)
+                _audit(app, "Бэкап скопирован на сетевую папку", ", ".join(sent))
             except Exception as e:
-                _write_status(ok=False, time=datetime.now().isoformat(timespec="seconds"),
-                              error=f"{type(e).__name__}: {e}"[:400], who=who)
+                err = f"{type(e).__name__}: {e}"[:400]
+                _write_status(ok=False, time=datetime.now().isoformat(timespec="seconds"), error=err, who=who)
+                _audit(app, "Ошибка копирования бэкапа на сетевую папку", err)
     threading.Thread(target=run, daemon=True).start()
     return True
 

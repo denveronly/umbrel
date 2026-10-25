@@ -196,7 +196,8 @@ dialog.qm .full { grid-column: 1 / -1; }
 </dialog>
 <dialog class="qm" id="qm">
   <form method="dialog" id="qmform">
-    <h2 style="margin-top:0">{{ _("Новый счётчик") }}</h2>
+    <input type="hidden" name="id" value="">
+    <h2 style="margin-top:0" id="qmtitle">{{ _("Новый счётчик") }}</h2>
     <div class="seg qmtype">
       <label><input type="radio" name="type" value="tenant" checked onchange="qmType()"> {{ _("Счётчик арендатора") }}</label>
       <label><input type="radio" name="type" value="line" onchange="qmType()"> {{ _("Счётчик линии (без арендатора)") }}</label>
@@ -219,8 +220,9 @@ dialog.qm .full { grid-column: 1 / -1; }
       <p class="muted full" style="margin:0" data-for="tenant">{{ _("Реактив такому счётчику не вносится — он получает долю реактива линии пропорционально активному расходу.") }}</p>
       <p class="muted full" style="margin:0" data-for="line">{{ _("Вводный счётчик — общий учёт линии (реактив вносится на нём). Собственный потребитель — охрана, котельная, офис без арендатора: входит в сумму счётчиков линии.") }} {{ _("«Показания берутся с» — если этот счётчик уже есть на другой линии (например, ввод офиса там — потребитель здесь): показания вносятся один раз.") }}</p>
       <div class="full row"><span class="muted" id="qmerr"></span><span class="spacer"></span>
+        <button type="button" class="danger" id="qmdel" style="display:none">{{ _("Удалить") }}</button>
         <button type="button" class="ghost" onclick="document.getElementById('qm').close()">{{ _("Отмена") }}</button>
-        <button type="button" onclick="saveQM()">{{ _("Добавить счётчик") }}</button></div>
+        <button type="button" onclick="saveQM()" id="qmsave">{{ _("Добавить счётчик") }}</button></div>
     </div>
   </form>
 </dialog>
@@ -337,20 +339,41 @@ function openGear(gi) {
   document.getElementById('geartitle').textContent = g.kind === 'line' ? t('Счётчики линии') : (g.title || t('Свободные склады'));
   document.getElementById('gearerr').textContent = '';
   const items = GROUPS_DATA[gi], esc = s => String(s || '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const editable = items.filter(m => m.kind !== 'sub' && m.edit);
+  if (editable.length === 1 && items.length === 1) { openEdit(editable[0], g); return; }   // один лічильник — одразу редагування
   document.getElementById('gearlist').innerHTML = items.length ? items.map((m, i) => `<div class="gearrow"><div class="gn"><b>${esc(m.label)}</b><small>${esc(m.sub)}</small></div>
-      ${m.kind === 'sub' ? `<span class="muted">${t('настраивается на подлинии')}</span>` : `<button type="button" class="sm danger" data-i="${i}">${t('Удалить')}</button>`}</div>`).join('')
+      ${m.kind === 'sub' || !m.edit ? `<span class="muted">${t('настраивается на подлинии')}</span>`
+        : `<button type="button" class="sm ghost" data-e="${i}">✎ ${t('Изменить')}</button><button type="button" class="sm danger" data-i="${i}">${t('Удалить')}</button>`}</div>`).join('')
     : `<p class="muted">${t('Счётчиков пока нет.')}</p>`;
-  document.querySelectorAll('#gearlist button[data-i]').forEach(b => b.onclick = async () => {
-    const m = items[+b.dataset.i];
-    const pin = await askPin(t('Удалить счётчик и все его показания?') + ' — ' + m.label);
-    if (!pin) return;
-    const r = await fetch({{ url_for('lines.delete_meter')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({kind: m.kind, id: m.id, pin})});
-    const j = await r.json().catch(() => ({}));
-    if (r.ok && j.ok) location.reload(); else document.getElementById('gearerr').textContent = j.error || t('Ошибка сохранения');
-  });
+  document.querySelectorAll('#gearlist button[data-e]').forEach(b => b.onclick = () => { d.close(); openEdit(items[+b.dataset.e], g); });
+  document.querySelectorAll('#gearlist button[data-i]').forEach(b => b.onclick = () => delMeter(items[+b.dataset.i], 'gearerr'));
   document.getElementById('gearadd').onclick = () => { d.close(); g.kind === 'line' ? openQM('line') : openQM(g.tid); };
   d.showModal();
+}
+async function delMeter(m, errId) {
+  const pin = await askPin(t('Удалить счётчик и все его показания?') + ' — ' + m.label);
+  if (!pin) return;
+  const r = await fetch({{ url_for('lines.delete_meter')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({kind: m.kind, id: m.id, pin})});
+  const j = await r.json().catch(() => ({}));
+  if (r.ok && j.ok) location.reload(); else document.getElementById(errId).textContent = j.error || t('Ошибка сохранения');
+}
+// редагування лічильника (⚙): те саме вікно, що й додавання, з поточними значеннями
+function openEdit(m, g) {
+  const f = document.getElementById('qmform'), v = m.edit;
+  f.querySelector(`input[name=type][value=${v.type}]`).checked = true;
+  f.querySelectorAll('input[name=type]').forEach(r => r.disabled = true);
+  if (v.type === 'tenant') { f.owner.value = v.owner; fillWh(); f.warehouse_id.value = v.warehouse_id; f.service_id.value = v.service_id; }
+  else { f.role.value = v.role; }
+  f.line_id.value = v.line_id; qmType();
+  if (v.type === 'line') f.src.value = v.src;
+  ['name', 'serial', 'coef', 'initial_value'].forEach(k => f[k].value = v[k]);
+  f.has_reactive.checked = v.has_reactive; f.id.value = m.id;
+  document.getElementById('qmtitle').textContent = t('Счётчик') + ': ' + m.label;
+  document.getElementById('qmsave').textContent = t('Сохранить');
+  const del = document.getElementById('qmdel'); del.style.display = ''; del.onclick = () => delMeter(m, 'qmerr');
+  document.getElementById('qmerr').textContent = '';
+  document.getElementById('qm').showModal();
 }
 function fillWh() {
   const f = document.getElementById('qmform'), o = OWNERS.find(x => String(x.tid || 'free') === f.owner.value);
@@ -368,6 +391,11 @@ function qmType() {
 }
 function openQM(tid) {
   const f = document.getElementById('qmform');
+  f.id.value = ''; f.querySelectorAll('input[name=type]').forEach(r => r.disabled = false);
+  document.getElementById('qmtitle').textContent = t('Новый счётчик');
+  document.getElementById('qmsave').textContent = t('Добавить счётчик');
+  document.getElementById('qmdel').style.display = 'none';
+  ['name', 'serial'].forEach(k => f[k].value = ''); f.coef.value = '1'; f.initial_value.value = '0'; f.has_reactive.checked = false;
   if (tid === 'line') { f.querySelector('input[name=type][value=line]').checked = true; tid = undefined; }
   else if (arguments.length) f.querySelector('input[name=type][value=tenant]').checked = true;
   if (tid !== null && tid !== undefined) f.owner.value = String(tid);
@@ -378,13 +406,14 @@ function openQM(tid) {
   (f.warehouse_id.options.length > 1 ? f.warehouse_id : f.serial).focus();
 }
 async function saveQM() {
-  if (Object.keys(changed).length && !confirm(t('Есть несохранённые показания. Сохранить их перед добавлением счётчика?'))) return;
+  if (Object.keys(changed).length && !confirm(t('Есть несохранённые показания. Сохранить их перед изменением счётчиков?'))) return;
   if (Object.keys(changed).length) {
     const r0 = await fetch({{ url_for('lines.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({cells: changed, table: 1})});
     if (!r0.ok) { alert(t('Ошибка сохранения')); return; }
     Object.keys(changed).forEach(k => delete changed[k]);
   }
   const f = document.getElementById('qmform'), data = Object.fromEntries(new FormData(f));
+  data.type = f.querySelector('input[name=type]:checked').value;
   data.has_reactive = f.has_reactive.checked;
   const r = await fetch({{ url_for('lines.quick_meter')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
   const j = await r.json().catch(() => ({}));

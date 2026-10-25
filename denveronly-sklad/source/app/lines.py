@@ -406,6 +406,27 @@ def line_warnings(line_id):
     return out
 
 
+def _edit_values(kind, mid):
+    """Поточні налаштування лічильника для вікна редагування (⚙)."""
+    db = get_db()
+    plain = lambda v: ("%g" % v) if isinstance(v, float) else (v if v is not None else "")
+    if kind == "m":
+        m = db.execute("SELECT m.*, w.tenant_id FROM meters m JOIN warehouses w ON w.id=m.warehouse_id WHERE m.id=?",
+                       (mid,)).fetchone()
+        if m:
+            return {"type": "tenant", "owner": str(m["tenant_id"]) if m["tenant_id"] else "free",
+                    "warehouse_id": str(m["warehouse_id"]), "service_id": str(m["service_id"]), "name": m["name"] or "",
+                    "serial": m["serial"] or "", "line_id": str(m["line_id"] or ""), "coef": plain(m["coef"]),
+                    "initial_value": plain(m["initial_value"]), "has_reactive": bool(m["has_reactive"])}
+    elif kind == "l":
+        m = db.execute("SELECT * FROM line_meters WHERE id=?", (mid,)).fetchone()
+        if m:
+            return {"type": "line", "line_id": str(m["line_id"]), "name": m["name"] or "", "role": m["role"],
+                    "src": m["src"] or "", "serial": m["serial"] or "", "coef": plain(m["coef"]),
+                    "initial_value": plain(m["initial_value"]), "has_reactive": bool(m["has_reactive"])}
+    return None
+
+
 @bp.route("/readings/table")
 def table():
     from app import this_month
@@ -425,7 +446,8 @@ def table():
         g["gear"] = [{"kind": c.get("dkind", c["kind"]), "id": c.get("did", c["id"]),
                       "label": c["title"] + (f" · {c['svc']}" if c.get("svc") else ""),
                       "sub": " · ".join(x for x in (c.get("name"), f"№{c['serial']}" if c.get("serial") else "",
-                                                     c.get("sub") if c["kind"] == "l" or c.get("linked") else "") if x)}
+                                                     c.get("sub") if c["kind"] == "l" or c.get("linked") else "") if x),
+                      "edit": _edit_values(c.get("dkind", c["kind"]), c.get("did", c["id"]))}
                      for c in g["cols"]]
     dates = {r["period"]: r["taken"] for r in db.execute("SELECT period, taken FROM reading_dates")}
     msvcs = db.execute("SELECT id, name FROM services WHERE mode='meter' AND active=1 ORDER BY sort, name").fetchall()
@@ -459,11 +481,20 @@ def quick_meter():
             vals = (_num(d.get("coef")) or 1, _num(d.get("initial_value")) or 0, _num(d.get("initial_reactive")) or 0)
         except ValueError:
             return jsonify(ok=False, error=_("Неверное число")), 400
-        mid = db.execute("INSERT INTO line_meters(line_id, name, role, serial, coef, initial_value, initial_reactive, "
-                         "has_reactive, src) VALUES (?,?,?,?,?,?,?,?,?)",
-                         (lid, name, role, (d.get("serial") or "").strip(), *vals, 1 if d.get("has_reactive") else 0,
-                          src)).lastrowid
-        log("Счётчик линии добавлен", f"{name} ({_(ROLES[role]).split(' (')[0]})", commit=False)
+        if src and src == f"l:{d.get('id')}":
+            return jsonify(ok=False, error=_("Нельзя взять показания со счётчика этой же линии")), 400
+        if str(d.get("id") or "").isdigit():            # редагування (⚙)
+            mid = int(d["id"])
+            db.execute("UPDATE line_meters SET line_id=?, name=?, role=?, serial=?, coef=?, initial_value=?, has_reactive=?, "
+                       "src=? WHERE id=?", (lid, name, role, (d.get("serial") or "").strip(), vals[0], vals[1],
+                                            1 if d.get("has_reactive") else 0, src, mid))
+            log("Счётчик линии изменён", name, commit=False)
+        else:
+            mid = db.execute("INSERT INTO line_meters(line_id, name, role, serial, coef, initial_value, initial_reactive, "
+                             "has_reactive, src) VALUES (?,?,?,?,?,?,?,?,?)",
+                             (lid, name, role, (d.get("serial") or "").strip(), *vals, 1 if d.get("has_reactive") else 0,
+                              src)).lastrowid
+            log("Счётчик линии добавлен", f"{name} ({_(ROLES[role]).split(' (')[0]})", commit=False)
         db.commit()
         return jsonify(ok=True, id=mid)
     wh = db.execute("SELECT id, name FROM warehouses WHERE id=?", (d.get("warehouse_id"),)).fetchone()
@@ -477,6 +508,15 @@ def quick_meter():
     except ValueError:
         return jsonify(ok=False, error=_("Неверное число")), 400
     line_id = int(d["line_id"]) if str(d.get("line_id") or "").isdigit() else None
+    if str(d.get("id") or "").isdigit():                # редагування (⚙)
+        mid = int(d["id"])
+        db.execute("UPDATE meters SET warehouse_id=?, service_id=?, name=?, serial=?, coef=?, initial_value=?, line_id=?, "
+                   "has_reactive=? WHERE id=?", (wh["id"], svc["id"], (d.get("name") or "").strip() or None,
+                                                (d.get("serial") or "").strip(), coef, init, line_id,
+                                                1 if d.get("has_reactive") else 0, mid))
+        log("Счётчик изменён", f"{wh['name']}: {svc['name']} {d.get('serial') or ''}".strip(), commit=False)
+        db.commit()
+        return jsonify(ok=True, id=mid)
     mid = db.execute("INSERT INTO meters(warehouse_id, service_id, resource, name, serial, coef, initial_value, line_id, "
                      "has_reactive, initial_reactive) VALUES (?,?,'svc',?,?,?,?,?,?,?)",
                      (wh["id"], svc["id"], (d.get("name") or "").strip() or None, (d.get("serial") or "").strip(),

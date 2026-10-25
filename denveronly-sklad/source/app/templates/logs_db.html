@@ -49,7 +49,6 @@
   <h2 style="margin-top:0">🗄 {{ _("Копия на сетевую папку (Synology, SMB)") }}</h2>
   <p class="muted">{{ _("Каждый бэкап (автоматический и ручной) копируется в общую папку NAS. Для безопасности создайте на Synology отдельного пользователя с доступом только к этой папке — в программе хранится только его пароль, ни почты, ни остального NAS он не открывает.") }}</p>
   <form method="post" class="grid" style="display:grid">
-    <input type="hidden" name="action" value="nas_settings">
     <label class="check full"><input type="checkbox" name="nas_enabled" value="1" {{ 'checked' if nas.enabled }}> {{ _("копировать бэкапы на NAS") }}</label>
     <label>{{ _("Сервер (IP или имя)") }}<input name="nas_server" value="{{ nas.server }}" placeholder="192.168.1.20"></label>
     <label>{{ _("Общая папка") }}<input name="nas_share" value="{{ nas.share }}" placeholder="backup"></label>
@@ -58,7 +57,7 @@
     <label>{{ _("Пароль") }}<input type="password" name="nas_password" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if nas.password else '' }}"></label>
     <label>{{ _("Хранить на NAS копий (каждого объекта)") }}<input name="nas_keep" type="number" min="1" value="{{ nas.keep }}"></label>
     <div class="full row" style="gap:8px;flex-wrap:wrap">
-      <button class="sm">{{ _("Сохранить") }}</button>
+      <button class="sm" name="action" value="nas_settings">{{ _("Сохранить") }}</button>
       <button class="sm ghost" name="action" value="nas_test" formnovalidate>{{ _("Проверить соединение") }}</button>
       <button class="sm ghost" name="action" value="nas_send" formnovalidate>{{ _("Отправить последние бэкапы сейчас") }}</button>
     </div>
