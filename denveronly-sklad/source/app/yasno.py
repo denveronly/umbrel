@@ -118,7 +118,7 @@ class Page(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.forms, self.tables, self._tstack, self._form = [], [], [], None
+        self.forms, self.tables, self._tstack, self._form, self.meta = [], [], [], None, {}
         self._recent = ""          # останній видимий текст поза таблицями
         self._skip = 0             # script/style
 
@@ -126,6 +126,8 @@ class Page(HTMLParser):
         a = dict(attrs)
         if tag in ("script", "style"):
             self._skip += 1
+        elif tag == "meta" and a.get("name"):
+            self.meta[a["name"].lower()] = a.get("content") or ""
         elif tag == "form":
             self._form = {"action": a.get("action") or "", "method": (a.get("method") or "get").lower(), "inputs": []}
             self.forms.append(self._form)
@@ -277,32 +279,40 @@ class Cabinet:
         self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
         self.pages = {}
 
-    def get(self, path, data=None, binary=False, referer=None):
+    def get(self, path, data=None, binary=False, referer=None, headers=None, json_body=False, keep_errors=False):
         url = urllib.parse.urljoin(self.base + "/", path)
-        body = urllib.parse.urlencode(data).encode() if data is not None else None
-        req = urllib.request.Request(url, data=body, headers={
-            "User-Agent": UA, "Accept-Language": "uk-UA,uk;q=0.9",
-            "Accept": "application/pdf,*/*" if binary else "text/html,application/xhtml+xml,*/*;q=0.8",
-            **({"Referer": referer} if referer else {}),
-            **({"Content-Type": "application/x-www-form-urlencoded"} if body else {})})
-        with self.op.open(req, timeout=TIMEOUT) as r:
-            raw = r.read()
-            final = r.geturl()
-            ctype = r.headers.get("Content-Type", "")
+        if data is None:
+            body = None
+        elif json_body:
+            body = json.dumps(data).encode()
+        else:
+            body = urllib.parse.urlencode(data).encode()
+        h = {"User-Agent": UA, "Accept-Language": "uk-UA,uk;q=0.9",
+             "Accept": "application/pdf,*/*" if binary else "text/html,application/xhtml+xml,*/*;q=0.8"}
+        if referer:
+            h["Referer"] = referer
+        if body:
+            h["Content-Type"] = "application/json" if json_body else "application/x-www-form-urlencoded"
+            p = urllib.parse.urlsplit(self.base)
+            h["Origin"] = f"{p.scheme}://{p.netloc}"
+        h.update(headers or {})
+        req = urllib.request.Request(url, data=body, headers=h)
+        try:
+            with self.op.open(req, timeout=TIMEOUT) as r:
+                raw = r.read()
+                final = r.geturl()
+                ctype = r.headers.get("Content-Type", "")
+                self.status = r.status
+        except urllib.error.HTTPError as e:
+            if not keep_errors:
+                raise
+            raw, final, ctype, self.status = e.read(), url, e.headers.get("Content-Type", ""), e.code
         if binary:
             return final, raw, ctype
         cs = re.search(r"charset=([\w-]+)", ctype)
         return final, raw.decode(cs.group(1) if cs else "utf-8", errors="replace"), ctype
 
-    def login(self, login, password):
-        final, html, _ct = self.get("/")
-        self.pages["login"] = html
-        p = parse(html)
-        form = next((f for f in p.forms if any(i["type"] == "password" for i in f["inputs"])), None)
-        if not form:
-            if self._logged_in(html):
-                return final
-            raise LoginError("на сторінці входу не знайдено форму з паролем")
+    def _form_data(self, form, login, password):
         data, user_done = {}, False
         for i in form["inputs"]:
             if not i["name"]:
@@ -316,21 +326,59 @@ class Cabinet:
                 continue
             else:
                 data[i["name"]] = i["value"]
-        if not user_done:
-            raise LoginError("не знайдено поле логіна")
-        action = urllib.parse.urljoin(final, form["action"] or final)
-        try:
-            final, html, _ct = self.get(action, data=data, referer=final)
-        except urllib.error.HTTPError as e:
-            if e.code in (401, 403, 422):
-                raise LoginError(f"кабінет відхилив вхід (HTTP {e.code}) — перевірте логін і пароль")
-            raise
-        self.pages["after_login"] = html
-        if not self._logged_in(html):
-            msg = re.search(r"(невірн[^<.]{0,80}|неправильн[^<.]{0,80}|помилк[^<.]{0,80})", html, re.I)
-            raise LoginError(("кабінет: " + msg.group(1).strip()) if msg else
-                             "після входу знову сторінка входу — перевірте логін і пароль")
-        return final
+        return data, user_done
+
+    def login(self, login, password):
+        """Кілька способів по черзі (звичайна форма; форма з CSRF-заголовком як у Rails UJS/Turbo; AJAX),
+        бо сайт може приймати вхід лише одним із них. Кожна відповідь зберігається для діагностики."""
+        last_err = None
+        for n, mode in enumerate(("form", "ujs", "xhr"), 1):
+            final, html, _ct = self.get("/")
+            self.pages[f"login_{n}"] = html
+            p = parse(html)
+            form = next((f for f in p.forms if any(i["type"] == "password" for i in f["inputs"])), None)
+            if not form:
+                if self._logged_in(html):
+                    return final
+                raise LoginError("на сторінці входу не знайдено форму з паролем")
+            data, user_done = self._form_data(form, login, password)
+            if not user_done:
+                raise LoginError("не знайдено поле логіна")
+            token = p.meta.get("csrf-token")
+            param = p.meta.get("csrf-param") or "authenticity_token"
+            if token and param not in data:
+                data[param] = token
+            headers = {}
+            if mode in ("ujs", "xhr") and token:
+                headers["X-CSRF-Token"] = token
+            if mode == "xhr":
+                headers.update({"X-Requested-With": "XMLHttpRequest",
+                                "Accept": "text/javascript, application/json, text/html, */*; q=0.01"})
+            action = urllib.parse.urljoin(final, form["action"] or final)
+            final, html, ctype = self.get(action, data=data, referer=final, headers=headers, keep_errors=True)
+            self.pages[f"after_login_{n}"] = f"<!-- HTTP {self.status} {ctype} {final} -->\n" + html
+            # AJAX-відповідь з адресою переходу
+            if "json" in ctype or "javascript" in ctype:
+                loc = re.search(r'(?:location|redirect(?:_to|_url)?|url)"?\s*[:=]\s*"([^"]+)"', html) or \
+                    re.search(r"(?:location\.href|window\.location|Turbo\.visit)\s*(?:=|\()\s*['\"]([^'\"]+)", html)
+                if loc:
+                    final, html, ctype = self.get(loc.group(1), keep_errors=True)
+                    self.pages[f"after_login_{n}_next"] = html
+            if self.status < 400 and self._logged_in(html):
+                return final
+            # перевірити сесію: чи відкривається кабінет
+            if self.status < 400:
+                f2, h2, _c = self.get("/", keep_errors=True)
+                if self._logged_in(h2):
+                    return f2
+            msg = re.search(r"(невірн[^<.]{0,80}|неправильн[^<.]{0,80}|не знайден[^<.]{0,60}|заблоковано[^<.]{0,60})",
+                            html, re.I)
+            last_err = ("кабінет: " + msg.group(1).strip()) if msg else \
+                f"кабінет не прийняв вхід (HTTP {self.status})"
+            if msg:          # сайт прямо написав, що не так — інші способи не допоможуть
+                break
+        raise LoginError(last_err + ". Якщо логін і пароль вірні — натисніть «Завантажити сторінки для діагностики» "
+                                    "і надішліть файл розробнику")
 
     @staticmethod
     def _logged_in(html):
