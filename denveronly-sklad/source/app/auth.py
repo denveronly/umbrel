@@ -20,7 +20,7 @@ ROLES = {"admin": "Администратор", "user": "Оператор"}
 PERMS = {"economics": "Экономика", "logs": "Логи и бэкапы", "settings": "Настройки и компании", "ai": "ИИ-помощник",
          "yasno": "YASNO (счета за электричество)"}
 MIN_PASSWORD = 8
-PUBLIC_ENDPOINTS = {"static", "auth.login", "auth.setup"}
+PUBLIC_ENDPOINTS = {"static", "auth.login", "auth.setup", "favicon"}
 
 # блокировка подбора пароля: ip -> [число неудач, время первой неудачи]
 _FAILS = {}

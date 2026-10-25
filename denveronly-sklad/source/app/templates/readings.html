@@ -43,6 +43,24 @@
   </details>
 </div>
 
+{% if main_rows %}
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Общие счётчики услуг") }}</h2>
+  <p class="muted">{{ _("Расход общего счётчика × цена месяца = сумма, которая делится между арендаторами по их % (карточка арендатора → «Доли услуг»). Счётчики арендаторов на эти услуги — только для контроля, в акт не идут.") }}</p>
+  {% for r in main_rows %}
+    <div class="rd">
+      <div class="who"><b>{{ r.s.name }}</b> · {{ _("общий") }}{% if r.s.main_serial %} <span class="muted">№{{ r.s.main_serial }}</span>{% endif %}
+        <div class="muted"><a href="{{ url_for('services_page') }}#svc{{ r.s.id }}" title="{{ _("Доли арендаторов") }}">Σ {{ num(r.sum_pct) }}% {{ _("арендаторов") }}</a>{% if (r.sum_pct - 100)|abs > 0.01 %} <span class="badge warnb">≠ 100%</span>{% endif %}</div></div>
+      <div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>
+      <input name="sm_{{ r.s.id }}" inputmode="decimal" value="{{ r.cur|plain }}" placeholder="—"
+             data-prev="{{ r.prev }}" data-coef="{{ r.s.main_coef or 1 }}" data-unit="{{ r.s.unit }}" oninput="upd(this)">
+      <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ num(r.cons) }} {{ r.s.unit }}</span>{% endif %}
+        {% if r.total is not none %}<div class="muted">= {{ money(r.total) }} {{ _("грн") }}</div>{% endif %}</div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <!-- історія цін -->
 <div class="card">
   <div class="row"><h2 style="margin:0">{{ _("Цены по месяцам") }}</h2><span class="spacer"></span>
@@ -74,23 +92,7 @@
   {% if rows %}<p class="muted">{{ _("Внесено") }} {{ ns.filled }} {{ _("из") }} {{ rows|length }}</p>{% endif %}
 </div>
 
-{% if main_rows %}
-<div class="card">
-  <h2 style="margin-top:0">{{ _("Общие счётчики услуг") }}</h2>
-  <p class="muted">{{ _("Расход общего счётчика × цена месяца = сумма, которая делится между арендаторами по их % (карточка арендатора → «Доли услуг»). Счётчики арендаторов на эти услуги — только для контроля, в акт не идут.") }}</p>
-  {% for r in main_rows %}
-    <div class="rd">
-      <div class="who"><b>{{ r.s.name }}</b> · {{ _("общий") }}{% if r.s.main_serial %} <span class="muted">№{{ r.s.main_serial }}</span>{% endif %}
-        <div class="muted">Σ {{ num(r.sum_pct) }}% {{ _("арендаторов") }}{% if (r.sum_pct - 100)|abs > 0.01 %} <span class="badge warnb">≠ 100%</span>{% endif %}</div></div>
-      <div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>
-      <input name="sm_{{ r.s.id }}" inputmode="decimal" value="{{ r.cur|plain }}" placeholder="—"
-             data-prev="{{ r.prev }}" data-coef="{{ r.s.main_coef or 1 }}" data-unit="{{ r.s.unit }}" oninput="upd(this)">
-      <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ num(r.cons) }} {{ r.s.unit }}</span>{% endif %}
-        {% if r.total is not none %}<div class="muted">= {{ money(r.total) }} {{ _("грн") }}</div>{% endif %}</div>
-    </div>
-  {% endfor %}
-</div>
-{% endif %}
+
 
 <!-- 3. количества (вывоз мусора и т.п.) -->
 {% if qty_svcs %}

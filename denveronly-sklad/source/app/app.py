@@ -100,6 +100,11 @@ def switch_site(sid):
     return resp
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.ico")
+
+
 def is_embed():
     """Сторінка відкрита у вікні поверх іншої (⚙ орендаря в Актах): без меню."""
     return request.args.get("embed") == "1" or (request.method == "POST" and request.form.get("_embed") == "1")
