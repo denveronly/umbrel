@@ -110,7 +110,25 @@ def save():
     n = 0
     cells = sorted((data.get("cells") or {}).items(), key=lambda kv: "|reactive|" in kv[0])   # спершу активна
     for key, val in cells:
-        kind, mid, field, period = key.split("|")       # m|12|value|2026-09
+        kind, mid, field, period = key.split("|")       # m|12|value|2026-09 ; d|0|taken|2026-09 — дата зйому
+        if kind == "d":
+            from db import to_iso
+            import re as _re
+            sm = _re.fullmatch(r"\s*(\d{1,2})[./](\d{1,2})\.?\s*", val or "")      # «26.10» — рік з місяця
+            if sm:
+                y, pm = int(period[:4]), int(period[5:7])
+                y += 1 if int(sm.group(2)) < pm - 6 else 0                   # грудень → зйом 02.01 наступного року
+                val = f"{sm.group(1)}.{sm.group(2)}.{y}"
+            iso = to_iso(val)
+            if val and not iso:
+                abort(400, _("Неверная дата") + f": {val}")
+            if iso:
+                db.execute("INSERT INTO reading_dates(period, taken) VALUES (?,?) "
+                           "ON CONFLICT(period) DO UPDATE SET taken=excluded.taken", (period, iso))
+            else:
+                db.execute("DELETE FROM reading_dates WHERE period=?", (period,))
+            n += 1
+            continue
         if field not in ("value", "reactive") or kind not in ("m", "l"):
             abort(400)
         v = _num(val)
@@ -129,8 +147,83 @@ def save():
         n += 1
     db.commit()
     if n:
-        log("Показания линии сохранены", f"{data.get('line_name', '')}: {n}")
+        log("Показания сохранены" if data.get("table") else "Показания линии сохранены",
+            f"{data.get('line_name', '') or _('таблица показаний')}: {n}")
     return jsonify(ok=True, saved=n)
+
+
+# ---------------- таблиця показників: колонки — лічильники орендарів, рядки — місяці / дати зйому ----------------
+
+def table_data(periods, service_id=None):
+    db = get_db()
+    groups = []          # [{tenant, tid, whs:[...], cols:[...]}]
+    q = ("SELECT m.*, w.name AS wh, w.id AS wid, s.name AS svc, s.unit, l.name AS line FROM meters m "
+         "JOIN warehouses w ON w.id=m.warehouse_id JOIN services s ON s.id=m.service_id "
+         "LEFT JOIN power_lines l ON l.id=m.line_id WHERE m.active=1 AND s.active=1 AND w.id=?"
+         + (" AND m.service_id=?" if service_id else "") + " ORDER BY s.sort, m.serial")
+
+    def cols_for(wh_ids):
+        cols = []
+        for wid in wh_ids:
+            for m in db.execute(q, (wid, service_id) if service_id else (wid,)).fetchall():
+                rows = db.execute("SELECT period, value, reactive FROM readings WHERE meter_id=?", (m["id"],)).fetchall()
+                cols.append({"id": m["id"], "wh": m["wh"], "svc": m["svc"], "unit": m["unit"], "serial": m["serial"],
+                             "name": m["name"], "line": m["line"], "reactive": bool(m["has_reactive"]),
+                             "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
+        return cols
+    for t in db.execute("SELECT id, name FROM tenants WHERE active=1 ORDER BY name COLLATE NOCASE").fetchall():
+        whs = db.execute("SELECT id, name FROM warehouses WHERE tenant_id=? ORDER BY name", (t["id"],)).fetchall()
+        if not whs:
+            continue
+        groups.append({"tid": t["id"], "tenant": t["name"], "whs": [dict(w) for w in whs],
+                       "cols": cols_for([w["id"] for w in whs])})
+    free = db.execute("SELECT id, name FROM warehouses WHERE tenant_id IS NULL ORDER BY name").fetchall()
+    fcols = cols_for([w["id"] for w in free])
+    if fcols:
+        groups.append({"tid": None, "tenant": None, "whs": [dict(w) for w in free], "cols": fcols})
+    dates = {r["period"]: r["taken"] for r in db.execute("SELECT period, taken FROM reading_dates")}
+    return groups, dates
+
+
+@bp.route("/readings/table")
+def table():
+    from app import this_month
+    db = get_db()
+    n = request.args.get("months", 12, type=int)
+    n = n if n in (6, 12, 24, 36) else 12
+    end = request.args.get("to") or this_month()
+    sid = request.args.get("service", type=int)
+    periods = periods_range(end, n)
+    groups, dates = table_data(periods, sid)
+    msvcs = db.execute("SELECT id, name FROM services WHERE mode='meter' AND active=1 ORDER BY sort, name").fetchall()
+    plines = db.execute("SELECT id, name FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
+    return render_template("readings_table.html", groups=groups, dates=dates, periods=periods, months=n, end=end,
+                           service=sid, msvcs=msvcs, plines=plines)
+
+
+@bp.route("/readings/table/meter", methods=["POST"])
+def quick_meter():
+    """Швидке додавання лічильника з таблиці показників."""
+    db = get_db()
+    d = request.get_json(force=True) or {}
+    wh = db.execute("SELECT id, name FROM warehouses WHERE id=?", (d.get("warehouse_id"),)).fetchone()
+    svc = db.execute("SELECT id, name FROM services WHERE id=? AND mode='meter'", (d.get("service_id"),)).fetchone()
+    if not wh or not svc:
+        return jsonify(ok=False, error=_("Выберите склад и услугу")), 400
+    try:
+        coef = _num(d.get("coef")) or 1
+        init = _num(d.get("initial_value")) or 0
+        init_r = _num(d.get("initial_reactive")) or 0
+    except ValueError:
+        return jsonify(ok=False, error=_("Неверное число")), 400
+    line_id = int(d["line_id"]) if str(d.get("line_id") or "").isdigit() else None
+    mid = db.execute("INSERT INTO meters(warehouse_id, service_id, resource, name, serial, coef, initial_value, line_id, "
+                     "has_reactive, initial_reactive) VALUES (?,?,'svc',?,?,?,?,?,?,?)",
+                     (wh["id"], svc["id"], (d.get("name") or "").strip() or None, (d.get("serial") or "").strip(),
+                      coef, init, line_id, 1 if d.get("has_reactive") else 0, init_r)).lastrowid
+    log("Счётчик добавлен", f"{wh['name']}: {svc['name']} {d.get('serial') or ''}".strip(), commit=False)
+    db.commit()
+    return jsonify(ok=True, id=mid)
 
 
 @bp.route("/lines/manage", methods=["GET", "POST"])

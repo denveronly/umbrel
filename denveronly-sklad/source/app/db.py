@@ -215,6 +215,12 @@ CREATE TABLE IF NOT EXISTS meters (
     active INTEGER NOT NULL DEFAULT 1
 );
 
+-- дата фактичного зйому показників за місяць (одна на всю базу), для таблиці показників
+CREATE TABLE IF NOT EXISTS reading_dates (
+    period TEXT PRIMARY KEY,
+    taken TEXT
+);
+
 CREATE TABLE IF NOT EXISTS readings (
     id INTEGER PRIMARY KEY,
     meter_id INTEGER NOT NULL REFERENCES meters(id) ON DELETE CASCADE,
@@ -479,7 +485,7 @@ MIGRATIONS = {
     "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT"},
     "acts": {"company_id": "INTEGER"},
-    "meters": {"service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",
+    "meters": {"name": "TEXT", "service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",
                "initial_reactive": "REAL NOT NULL DEFAULT 0"},
 }
 OLD_RESOURCES = {"electricity": "Електроенергія", "water": "Водопостачання та водовідведення",

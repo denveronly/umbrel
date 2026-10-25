@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Показания") }}{% endblock %}
+{% block head %}
+<style>
+main { max-width: none; }
+.gridwrap { overflow: auto; max-height: calc(100vh - 250px); border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+table.rgrid { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: max-content; min-width: 100%; }
+.rgrid th, .rgrid td { padding: 4px 6px; vertical-align: middle; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; }
+.rgrid thead th { position: sticky; background: var(--card); z-index: 2; text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+.rgrid thead tr.h3 th { font-weight: 500; color: var(--muted); }
+.rgrid .pcol { position: sticky; left: 0; background: var(--card); z-index: 1; font-weight: 600; min-width: 96px; width: 110px; }
+.rgrid .dcol { position: sticky; left: 100px; background: var(--card); z-index: 1; border-right: 2px solid var(--line); }
+.rgrid thead .pcol, .rgrid thead .dcol { z-index: 4; }
+.rgrid th.ten { text-align: left; font-size: 12.5px; color: var(--ink); background: var(--accent-soft); border-left: 2px solid var(--accent); }
+.rgrid th.ten.free { background: color-mix(in srgb, var(--muted) 12%, var(--card)); border-left-color: var(--muted); }
+.rgrid th.ten .addm { margin-left: 8px; padding: 1px 8px; font-size: 12px; vertical-align: 1px; }
+.rgrid th.mt { text-align: center; white-space: normal; max-width: 190px; line-height: 1.25; font-weight: 600; }
+.rgrid th.mt small { display: block; color: var(--muted); font-weight: 400; }
+.rgrid .first { border-left: 2px solid var(--accent); }
+.rgrid .first.freec { border-left-color: var(--muted); }
+.rgrid td.nom { text-align: center; color: var(--muted); }
+.rgrid td.nom button { font-size: 12px; }
+.rgrid input { width: 86px; padding: 3px 5px; font-size: 12.5px; text-align: right; border-radius: 5px; background: transparent; border-color: transparent; }
+.rgrid input.dt { width: 84px; text-align: left; }
+.rgrid input:hover { border-color: var(--line); }
+.rgrid input:focus { background: var(--bg); border-color: var(--accent); outline: none; }
+.rgrid input.dirty { background: var(--warn-soft); border-color: var(--warn); }
+.rgrid td.c { text-align: right; font-variant-numeric: tabular-nums; }
+.rgrid td.c.neg { color: var(--warn); font-weight: 600; }
+.rgrid td.rx { color: var(--muted); }
+.rgrid tr.curp td { background-image: linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent), color-mix(in srgb, var(--accent) 7%, transparent)); }
+.rgrid tbody tr:hover td { background-image: linear-gradient(rgba(127,127,127,.06), rgba(127,127,127,.06)); }
+dialog.qm { border: 1px solid var(--line); border-radius: 12px; padding: 18px; background: var(--card); color: var(--ink); width: min(560px, 94vw); }
+dialog.qm::backdrop { background: rgba(0,0,0,.4); }
+dialog.qm .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+dialog.qm .full { grid-column: 1 / -1; }
+.filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.filters select { width: auto; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="row"><h1 style="margin:0">{{ _("Показания") }}</h1><span class="spacer"></span></div>
+{% include "_readings_tabs.html" %}
+
+<form method="get" class="filters">
+  <span class="muted">{{ _("Услуга") }}:</span>
+  <select name="service" onchange="this.form.submit()"><option value="">{{ _("все счётчики") }}</option>
+    {% for s in msvcs %}<option value="{{ s.id }}" {{ 'selected' if service == s.id }}>{{ s.name }}</option>{% endfor %}</select>
+  <span class="muted">{{ _("Период") }}:</span>
+  <select name="months" onchange="this.form.submit()">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select>
+  <span class="spacer"></span>
+  <span class="muted">{{ _("Цены и количества (вывоз мусора и т.п.) — во вкладке") }} <a href="{{ url_for('readings') }}">{{ _("Цены и количества") }}</a></span>
+</form>
+
+{% if not groups %}
+  <div class="warn">{{ _("Нет арендаторов со складами.") }}</div>
+{% else %}
+<div class="gridwrap">
+<table class="rgrid">
+  <thead>
+    <tr class="h1">
+      <th class="pcol" rowspan="3">{{ _("Месяц") }}</th>
+      <th class="dcol" rowspan="3">{{ _("Дата снятия") }}</th>
+      {% for g in groups %}{% set span = (g.cols|sum(attribute='reactive') * 2 + g.cols|length * 2) if g.cols else 1 %}
+        <th class="ten {{ 'free' if not g.tid }}" colspan="{{ span }}">{% if g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.tenant }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}
+          <button type="button" class="sm ghost addm" onclick="openQM({{ loop.index0 }})" title="{{ _("Добавить счётчик") }}">＋</button></th>
+      {% endfor %}
+    </tr>
+    <tr class="h2">
+      {% for g in groups %}{% set gl = loop %}
+        {% for c in g.cols %}
+          <th class="mt {{ 'first' if loop.first }} {{ 'freec' if not g.tid }}" colspan="{{ 4 if c.reactive else 2 }}">{{ c.wh }} · {{ c.svc }}
+            <small>{% if c.name %}{{ c.name }} · {% endif %}{% if c.serial %}№{{ c.serial }}{% endif %}{% if c.line %} · ⚡ {{ c.line }}{% endif %}</small></th>
+        {% else %}
+          <th class="mt first" rowspan="2"><button type="button" class="sm" onclick="openQM({{ gl.index0 }})">＋ {{ _("счётчик") }}</button></th>
+        {% endfor %}
+      {% endfor %}
+    </tr>
+    <tr class="h3">
+      {% for g in groups %}{% for c in g.cols %}
+        <th class="{{ 'first' if loop.first }} {{ 'freec' if not g.tid }}">{{ _("показание") }}</th><th>{{ _("расход") }}</th>
+        {% if c.reactive %}<th>{{ _("реакт.") }}</th><th>{{ _("реакт. расход") }}</th>{% endif %}
+      {% endfor %}{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+  {% for p in periods %}
+    <tr class="{{ 'curp' if loop.first }}">
+      <td class="pcol">{{ period_label(p) }}</td>
+      <td class="dcol"><input class="dt" data-key="d|0|taken|{{ p }}" value="{{ dates.get(p)|dmy if dates.get(p) else '' }}" placeholder="{{ _("дд.мм") }}" inputmode="numeric"></td>
+      {% for g in groups %}
+        {% for c in g.cols %}{% set d = c.data[p] %}
+          <td class="{{ 'first' if loop.first }} {{ 'freec' if not g.tid }}"><input data-key="m|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
+          <td class="c {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
+          {% if c.reactive %}
+            <td><input data-key="m|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
+            <td class="c rx">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
+          {% endif %}
+        {% else %}<td class="nom first">{% if loop.first %}—{% endif %}</td>{% endfor %}
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="savebar"><span class="muted" id="dirtyinfo">{{ _("Показания на конец месяца. Расход считается от предыдущего показания.") }}</span><span class="spacer"></span>
+  <button id="savebtn" onclick="saveCells()" disabled>{{ _("Сохранить") }}</button></div>
+<p class="muted">{{ _("Арендаторы без складов не показаны. Дату снятия можно вписать коротко: 26.10.") }}</p>
+{% endif %}
+
+<dialog class="qm" id="qm">
+  <form method="dialog" id="qmform">
+    <h2 style="margin-top:0">{{ _("Новый счётчик") }}<br><small class="muted" id="qmten"></small></h2>
+    <div class="grid">
+      <label>{{ _("Склад") }}<select name="warehouse_id" required></select></label>
+      <label>{{ _("Услуга") }}<select name="service_id">{% for s in msvcs %}<option value="{{ s.id }}" {{ 'selected' if service == s.id }}>{{ s.name }}</option>{% endfor %}</select></label>
+      <label>{{ _("Название") }}<input name="name" placeholder="{{ _("напр. Офис, Цех, Ввод 2") }}"></label>
+      <label>{{ _("Номер счётчика") }}<input name="serial"></label>
+      <label>{{ _("Линия электроэнергии") }}<select name="line_id"><option value="">—</option>{% for l in plines %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label>
+      <label>{{ _("Коэффициент") }}<input name="coef" value="1" inputmode="decimal"></label>
+      <label>{{ _("Начальное показание") }}<input name="initial_value" value="0" inputmode="decimal"></label>
+      <label class="check" style="align-self:end"><input type="checkbox" name="has_reactive" value="1" onchange="document.getElementById('qmrx').style.display = this.checked ? '' : 'none'"> {{ _("реактивная энергия") }}</label>
+      <label id="qmrx" style="display:none">{{ _("Начальное реакт.") }}<input name="initial_reactive" value="0" inputmode="decimal"></label>
+      <div class="full row"><span class="muted" id="qmerr"></span><span class="spacer"></span>
+        <button type="button" class="ghost" onclick="document.getElementById('qm').close()">{{ _("Отмена") }}</button>
+        <button type="button" onclick="saveQM()">{{ _("Добавить счётчик") }}</button></div>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+const GROUPS = {{ groups|map(attribute='whs')|list|tojson }};
+const TENANTS = {{ groups|map(attribute='tenant')|list|tojson }};
+// липкі рядки шапки й перші дві колонки: відступи за фактичними розмірами
+function stick() {
+  let top = 0;
+  document.querySelectorAll('.rgrid thead tr').forEach(tr => {
+    const h = Math.max(...[...tr.children].map(th => th.rowSpan === 1 ? th.getBoundingClientRect().height : 0));
+    tr.querySelectorAll('th').forEach(th => th.style.top = top + 'px');
+    top += h;
+  });
+  const p = document.querySelector('.rgrid thead .pcol');
+  if (p) document.querySelectorAll('.rgrid .dcol').forEach(d => d.style.left = p.getBoundingClientRect().width + 'px');
+}
+stick(); window.addEventListener('resize', stick);
+const changed = {};
+document.querySelectorAll('.rgrid input').forEach(i => {
+  i.dataset.orig = i.value;
+  i.addEventListener('input', () => {
+    if (i.value !== i.dataset.orig) { changed[i.dataset.key] = i.value; i.classList.add('dirty'); }
+    else { delete changed[i.dataset.key]; i.classList.remove('dirty'); }
+    const n = Object.keys(changed).length;
+    document.getElementById('savebtn').disabled = !n;
+    document.getElementById('dirtyinfo').textContent = n ? t('Изменено ячеек') + ': ' + n : '';
+  });
+  i.addEventListener('keydown', e => {                    // Enter — вниз по колонці, як у таблиці
+    if (e.key !== 'Enter') return; e.preventDefault();
+    const td = i.closest('td'), idx = [...td.parentNode.children].indexOf(td);
+    td.parentNode.nextElementSibling?.children[idx]?.querySelector('input')?.focus();
+  });
+});
+async function saveCells() {
+  const r = await fetch({{ url_for('lines.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({cells: changed, table: 1})});
+  if (r.ok) { Object.keys(changed).forEach(k => delete changed[k]); location.reload(); }
+  else alert(t('Ошибка сохранения') + ': ' + (await r.text()).replace(/<[^>]+>/g, ' ').slice(0, 200));
+}
+window.addEventListener('beforeunload', e => { if (Object.keys(changed).length) { e.preventDefault(); e.returnValue = ''; } });
+
+function openQM(gi) {
+  const f = document.getElementById('qmform'), sel = f.warehouse_id;
+  sel.innerHTML = GROUPS[gi].map(w => `<option value="${w.id}">${w.name.replace(/</g, '&lt;')}</option>`).join('');
+  document.getElementById('qmten').textContent = TENANTS[gi] || t('Свободные склады');
+  document.getElementById('qmerr').textContent = '';
+  document.getElementById('qm').showModal();
+  (sel.options.length > 1 ? sel : f.serial).focus();
+}
+async function saveQM() {
+  if (Object.keys(changed).length && !confirm(t('Есть несохранённые показания. Сохранить их перед добавлением счётчика?'))) return;
+  if (Object.keys(changed).length) {
+    const r0 = await fetch({{ url_for('lines.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({cells: changed, table: 1})});
+    if (!r0.ok) { alert(t('Ошибка сохранения')); return; }
+    Object.keys(changed).forEach(k => delete changed[k]);
+  }
+  const f = document.getElementById('qmform'), data = Object.fromEntries(new FormData(f));
+  data.has_reactive = f.has_reactive.checked;
+  const r = await fetch({{ url_for('lines.quick_meter')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
+  const j = await r.json().catch(() => ({}));
+  if (r.ok && j.ok) location.reload(); else document.getElementById('qmerr').textContent = j.error || t('Ошибка сохранения');
+}
+</script>
+{% endblock %}
