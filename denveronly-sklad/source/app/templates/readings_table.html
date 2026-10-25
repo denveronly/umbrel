@@ -47,6 +47,11 @@ dialog.qm .full { grid-column: 1 / -1; }
 .rgrid th.ten.bal { background: var(--accent-soft); border-left-color: var(--accent); }
 .rgrid td.al { color: var(--muted); font-style: italic; }
 .rgrid th[draggable] { cursor: grab; }
+.rgrid th.ten { white-space: nowrap; }
+.rgrid th.ten .tn { display: inline-block; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgrid th.mt { overflow: hidden; text-overflow: ellipsis; }
+.tipbox { position: fixed; z-index: 5000; max-width: 420px; padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.35;
+  background: var(--ink); color: var(--card); box-shadow: 0 6px 24px rgba(0,0,0,.25); pointer-events: none; white-space: normal; }
 .rgrid th.dragging { opacity: .45; }
 .rgrid th.drop-l { box-shadow: inset 3px 0 0 var(--accent); }
 .rgrid th.drop-r { box-shadow: inset -3px 0 0 var(--accent); }
@@ -89,8 +94,9 @@ dialog.qm .full { grid-column: 1 / -1; }
       <th class="dcol" rowspan="3">{{ _("Дата снятия") }}</th>
       {% for g in groups %}{% set ns = namespace(w=0) %}{% for c in g.cols %}{% set ns.w = ns.w + width(c)|int %}{% endfor %}
         <th class="ten {{ 'free' if g.kind == 'tenant' and not g.tid }} {{ 'lineg' if g.kind == 'line' }}" colspan="{{ ns.w or 1 }}"
-            {% if g.cols %}draggable="true" data-kind="{{ g.cols[0].kind }}" data-ids="{{ g.cols|map(attribute='id')|join(',') }}" title="{{ _("Перетащите, чтобы переместить всю группу") }}"{% endif %}>
-          {% if g.kind == 'line' %}⚡ {{ _("Счётчики линии") }}{% elif g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.title }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}
+            {% if g.cols %}draggable="true" data-kind="{{ g.cols[0].kind }}" data-ids="{{ g.cols|map(attribute='id')|join(',') }}"{% endif %}>
+          {% set tw = [ns.w * 72, 150]|max %}
+          <span class="tn" style="max-width:{{ tw }}px" data-full="{{ g.title or '' }}">{% if g.kind == 'line' %}⚡ {{ _("Счётчики линии") }}{% elif g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.title }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}</span>
           {% if g.kind == 'tenant' %}<button type="button" class="sm ghost addm" onclick="openQM({{ g.tid|tojson }})" title="{{ _("Добавить счётчик") }}">＋</button>{% endif %}</th>
       {% endfor %}
       {% if bal %}<th class="ten solarg" colspan="2">☀ {{ _("Солнце") }}</th><th class="ten bal" colspan="5">{{ _("Баланс линии") }}</th>{% endif %}
@@ -216,6 +222,20 @@ const OWNERS = {{ owners|tojson }};
         body: JSON.stringify({kind, ids: order})});
       if (r.ok) location.reload(); else alert(t('Ошибка сохранения'));
     });
+  });
+})();
+// довгі назви обрізаються «…»; при наведенні — повна назва у спливаючому боксі
+(() => {
+  const box = document.createElement('div'); box.className = 'tipbox'; box.hidden = true; document.body.appendChild(box);
+  document.querySelectorAll('.rgrid .tn').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      if (el.scrollWidth <= el.clientWidth + 1 || !el.dataset.full) return;
+      box.textContent = el.dataset.full; box.hidden = false;
+      const r = el.getBoundingClientRect();
+      box.style.left = Math.min(r.left, window.innerWidth - box.offsetWidth - 8) + 'px';
+      box.style.top = (r.bottom + 6) + 'px';
+    });
+    el.addEventListener('mouseleave', () => { box.hidden = true; });
   });
 })();
 // липкі рядки шапки й перші дві колонки: відступи за фактичними розмірами

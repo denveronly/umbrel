@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.17.0"
+version: "1.17.1"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Таблиця показників: колонки лічильників можна перетягувати мишкою вліво/вправо (за заголовок лічильника
-  або всю групу орендаря за його ім'я); порядок зберігається. Лічильники лінії — так само у своїй групі.
+  Таблиця показників: довгі назви орендарів скорочуються «…», повна назва — у спливаючому боксі при наведенні.
+  З 1.17.0: перетягування колонок лічильників мишкою.
 dependencies: []
 path: ""
 defaultUsername: ""
