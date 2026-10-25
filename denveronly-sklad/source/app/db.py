@@ -221,6 +221,14 @@ CREATE TABLE IF NOT EXISTS reading_dates (
     taken TEXT
 );
 
+-- сонячна генерація лінії за місяць: одразу вироблені кВт·год (не накопичувальний показник)
+CREATE TABLE IF NOT EXISTS line_solar (
+    line_id INTEGER NOT NULL REFERENCES power_lines(id) ON DELETE CASCADE,
+    period TEXT NOT NULL,
+    kwh REAL,
+    PRIMARY KEY (line_id, period)
+);
+
 CREATE TABLE IF NOT EXISTS readings (
     id INTEGER PRIMARY KEY,
     meter_id INTEGER NOT NULL REFERENCES meters(id) ON DELETE CASCADE,
@@ -363,6 +371,7 @@ CREATE INDEX IF NOT EXISTS audit_ts ON audit(ts);
 """
 
 DEFAULT_SETTINGS = {
+    "solar_loss_pct": "5",                       # втрати сонячної генерації в балансі лінії, %
     "vat_rate": "20",
     "cash_coef": "1.0",
     "include_rent": "1",

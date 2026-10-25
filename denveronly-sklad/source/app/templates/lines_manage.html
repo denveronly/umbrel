@@ -27,6 +27,14 @@
 </div>
 
 {% if all_lines %}
+<form method="post" class="card row" style="gap:10px;flex-wrap:wrap">
+  <input type="hidden" name="action" value="solar_loss">
+  <b>☀ {{ _("Потери солнечной генерации в балансе линии") }}</b>
+  <input name="solar_loss_pct" value="{{ solar_loss|plain }}" inputmode="decimal" style="width:80px"> %
+  <button class="sm ghost">{{ _("Сохранить") }}</button>
+  <span class="muted">{{ _("Солнце вносится на вкладке линии сразу выработанными кВт·год за месяц.") }}</span>
+</form>
+
 <div class="card">
   <h2 style="margin-top:0">2. {{ _("Счётчики линии") }}</h2>
   <p class="muted">{{ _("Вводный счётчик линии, солнечная генерация и собственные потребители базы (охрана, котельня, освещение территории) — то, что не выставляется арендаторам.") }}</p>

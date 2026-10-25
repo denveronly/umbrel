@@ -85,7 +85,11 @@ def line_data(line_id, periods):
                 c["data"][p]["ralloc"] = calc.r2(total * v / base) if total is not None and base and v and v > 0 else \
                     (0 if total is not None and v is not None else None)
         # stored reactive of consumers is ignored now
-    # баланс по місяцях
+    # баланс по місяцях; сонце — з втратами (налаштування solar_loss_pct, типово 5%)
+    from db import settings as _settings
+    loss = float(_settings().get("solar_loss_pct") or 5)
+    solar_kwh = {r["period"]: r["kwh"] for r in db.execute("SELECT period, kwh FROM line_solar WHERE line_id=?",
+                                                              (line_id,))}
     bal = {}
     for p in periods:
         def s(role, key="cons"):
@@ -95,10 +99,14 @@ def line_data(line_id, periods):
         al = [c["data"][p].get("ralloc") for c in cols if c["rmode"] == "alloc" and c["data"][p].get("ralloc") is not None]
         ureact = calc.r2(sum(al)) if al else None
         inp = s(("input",))
-        solar = s(("solar",))
-        supply = (inp or 0) + (solar or 0) if inp is not None or solar is not None else None
+        solar_m = s(("solar",))                              # сонячні лічильники (накопичувальні), якщо є
+        sk = solar_kwh.get(p)                                # вироблено за місяць, внесено напряму
+        solar_raw = None if solar_m is None and sk is None else (solar_m or 0) + (sk or 0)
+        solar = calc.r2(solar_raw * (1 - loss / 100)) if solar_raw is not None else None
+        supply = calc.r2((inp or 0) + (solar or 0)) if inp is not None or solar is not None else None
         diff = calc.r2(supply - (users or 0)) if supply is not None and users is not None else None
-        bal[p] = {"users": users, "ureact": ureact, "input": inp, "solar": solar, "supply": supply, "diff": diff,
+        bal[p] = {"users": users, "ureact": ureact, "input": inp, "solar": solar, "solar_raw": solar_raw, "solar_kwh": sk,
+                  "supply": supply, "diff": diff,
                   "pct": calc.r2(diff / supply * 100) if diff is not None and supply else None}
     return cols, bal
 
@@ -152,6 +160,15 @@ def save():
                            "ON CONFLICT(period) DO UPDATE SET taken=excluded.taken", (period, iso))
             else:
                 db.execute("DELETE FROM reading_dates WHERE period=?", (period,))
+            n += 1
+            continue
+        if kind == "s":                                       # s|<line_id>|kwh|2026-09 — сонце за місяць
+            v = _num(val)
+            if v is None:
+                db.execute("DELETE FROM line_solar WHERE line_id=? AND period=?", (int(mid), period))
+            else:
+                db.execute("INSERT INTO line_solar(line_id, period, kwh) VALUES (?,?,?) "
+                           "ON CONFLICT(line_id, period) DO UPDATE SET kwh=excluded.kwh", (int(mid), period, v))
             n += 1
             continue
         if field not in ("value", "reactive") or kind not in ("m", "l"):
@@ -270,7 +287,9 @@ def table():
     dates = {r["period"]: r["taken"] for r in db.execute("SELECT period, taken FROM reading_dates")}
     msvcs = db.execute("SELECT id, name FROM services WHERE mode='meter' AND active=1 ORDER BY sort, name").fetchall()
     owners = _owners()
+    from db import settings as _settings
     return render_template("readings_table.html", groups=groups, bal=bal, line=line, all_lines=all_lines,
+                           solar_loss=float(_settings().get("solar_loss_pct") or 5),
                            dates=dates, periods=periods, months=n, end=end, service=sid, msvcs=msvcs,
                            owners=[{"tid": t, "name": nm, "whs": w} for t, nm, w in owners])
 
@@ -336,6 +355,11 @@ def manage():
             elif vals[1]:
                 db.execute("INSERT INTO line_meters(line_id, name, role, serial, coef, initial_value, initial_reactive, "
                            "has_reactive) VALUES (?,?,?,?,?,?,?,?)", vals)
+        elif a == "solar_loss":
+            from db import set_setting
+            v = _num(request.form.get("solar_loss_pct"))
+            if v is not None and 0 <= v < 100:
+                set_setting("solar_loss_pct", str(v))
         elif a == "assign":
             for k, v in request.form.items():
                 if k.startswith("ml_"):
@@ -351,7 +375,9 @@ def manage():
     tmeters = db.execute("SELECT m.*, w.name AS wh, t.name AS tenant, s.name AS svc FROM meters m "
                          "JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN tenants t ON t.id=w.tenant_id "
                          "JOIN services s ON s.id=m.service_id WHERE m.active=1 ORDER BY s.sort, w.name").fetchall()
-    return render_template("lines_manage.html", all_lines=all_lines, lmeters=lmeters, tmeters=tmeters, LROLES=ROLES)
+    from db import settings as _settings
+    return render_template("lines_manage.html", all_lines=all_lines, lmeters=lmeters, tmeters=tmeters, LROLES=ROLES,
+                           solar_loss=float(_settings().get("solar_loss_pct") or 5))
 
 
 def init_app(app):
