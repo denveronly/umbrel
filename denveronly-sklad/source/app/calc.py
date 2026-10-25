@@ -271,10 +271,10 @@ def build_act(tenant_id, period):
                 elif rq > 0:
                     lines.append({
                         "group": "util",
-                        "name": f"Реактивна електроенергія та втрати на лінії ({wh['name']}{serial}), частка лінії {fmt_num(share * 100, 1)}%",
+                        "name": f"Реактивна електроенергія та втрати на лінії ({wh['name']}{serial})",
                         "unit": "кВт·год", "qty": rq, "price": pr, "sum": r2(rq * pr),
                         "service": "Реактивна електроенергія та втрати на лінії", "wh": wh["name"], "serial": m["serial"] or "",
-                        "rnote": f"{fmt_num(share * 100, 1)}% від {fmt_num(kwh_round(rtot))}"})
+                        "rnote": ""})
 
     # --- підключені послуги: кількість / площа / фіксовано ---
     subs = db.execute("SELECT s.* FROM tenant_services ts JOIN services s ON s.id=ts.service_id "
@@ -310,10 +310,11 @@ def build_act(tenant_id, period):
                                 if svc["has_main"] and cons is None else "не задано ціну"))
                 continue
             pct_s = f"{pct:g}".replace(".", ",")
+            # кількість — частка орендаря: м³ від загального лічильника (вода) або частка однієї послуги (сміття)
+            qty = round((cons if svc["has_main"] else 1) * pct / 100, 3)
             lines.append({"group": "service", "name": f"{svc['name']} за {ulabel} — {pct_s}% × {fmt_money(p)}",
-                          "unit": "%", "qty": pct, "price": r2(total / 100), "sum": r2(total * pct / 100),
-                          "service": svc["name"], "wh": "", "serial": "",
-                          "rnote": f"{pct_s}% від {how}" + (f" = {fmt_money(total)} грн" if svc["has_main"] else "")})
+                          "unit": svc["unit"] or "послуга", "qty": qty, "price": p, "sum": r2(total * pct / 100),
+                          "service": svc["name"], "wh": "", "serial": "", "rnote": f"{pct_s}%"})
 
     net = r2(sum(l["sum"] for l in lines))
     vat_sum = r2(net * vat)

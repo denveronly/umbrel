@@ -64,7 +64,7 @@
       <tr><td>{{ loop.index }}</td>
         <td>{{ l.service or l.name }}</td>
         <td>{{ l.wh or '—' }}{% if l.serial %}, №{{ l.serial }}{% endif %}</td>
-        <td>{% if l.cur is defined %}{{ num(l.prev) }} → {{ num(l.cur) }}{% if l.coef and l.coef != 1 %} ×{{ num(l.coef) }}{% endif %}{% elif l.rnote %}{{ l.rnote }}{% else %}—{% endif %}</td>
+        <td>{% if l.cur is defined %}{{ num(l.prev) }} → {{ num(l.cur) }}{% if l.coef and l.coef != 1 %} ×{{ num(l.coef) }}{% endif %}{% elif l.rnote is defined %}{{ l.rnote }}{% else %}—{% endif %}</td>
         <td>{{ l.unit }}</td><td class="n">{{ num(l.qty) }}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
     {% endfor %}</tbody>
     <tfoot>

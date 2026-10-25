@@ -171,7 +171,7 @@ def _detail_rows(lay):
                 readings = f"{fmt_num(l['prev'])} → {fmt_num(l['cur'])}"
                 if (l.get("coef") or 1) != 1:
                     readings += f" ×{fmt_num(l['coef'])}"
-            elif l.get("rnote"):
+            elif "rnote" in l:                                # порожньо — свідомо нічого (реактив)
                 readings = l["rnote"]
             else:
                 readings = "—"
