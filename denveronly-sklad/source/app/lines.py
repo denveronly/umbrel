@@ -401,7 +401,6 @@ def quick_meter():
             r = resolve_src(src)
             if not r or (r[0] == "m" and r[2]["line_id"] == lid) or (r[0] == "l" and r[2]["line_id"] == lid):
                 return jsonify(ok=False, error=_("Нельзя взять показания со счётчика этой же линии")), 400
-            role = "input"
         try:
             vals = (_num(d.get("coef")) or 1, _num(d.get("initial_value")) or 0, _num(d.get("initial_reactive")) or 0)
         except ValueError:
@@ -469,8 +468,6 @@ def manage():
                     "SELECT 1 FROM line_meters WHERE id=? AND line_id=?", (int(src[2:]), vals[0])).fetchone())):
                 flash(_("Нельзя взять показания со счётчика этой же линии"))
                 return redirect(url_for("lines.manage"))
-            if src:
-                vals[2] = "input"
             if request.form.get("delete") and mid:
                 db.execute("DELETE FROM line_readings WHERE line_meter_id=?", (mid,))
                 db.execute("DELETE FROM line_meters WHERE id=?", (mid,))

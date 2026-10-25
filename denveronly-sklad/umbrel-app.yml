@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.20.1"
+version: "1.20.2"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  «＋ Лічильник» у таблиці показників: можна додати лічильник лінії без орендаря (ввідний, власний споживач,
-  сонце), у т.ч. ввідний з показниками іншого лічильника. «＋» також у групі «Лічильники лінії».
+  Лічильник лінії з показниками іншого лічильника може бути не лише ввідним, а й власним споживачем
+  (ввід офісу на лінії «Офіс» = споживач на Лінії 1). Після додавання таблиця прокручується до нового
+  лічильника й підсвічує його.
 dependencies: []
 path: ""
 defaultUsername: ""

@@ -52,6 +52,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 .rgrid th.ten.bal { background: var(--accent-soft); border-left-color: var(--accent); }
 .rgrid td.al { color: var(--muted); font-style: italic; }
 .rgrid th[draggable] { cursor: grab; }
+.rgrid th.newcol { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); transition: background .6s; }
 .rgrid th.ten { white-space: nowrap; }
 .rgrid th.ten .tn { display: inline-block; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rgrid th.mt { overflow: hidden; text-overflow: ellipsis; }
@@ -189,8 +190,9 @@ dialog.qm .full { grid-column: 1 / -1; }
       <label><input type="radio" name="type" value="line" onchange="qmType()"> {{ _("Счётчик линии (без арендатора)") }}</label>
     </div>
     <div class="grid">
-      <label class="full" data-for="line">{{ _("Роль") }}<select name="role" onchange="qmType()">{% for k, v in LROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'input' }}>{{ _(v) }}</option>{% endfor %}</select></label>
-      <label class="full" data-for="line" data-role="input">{{ _("Показания берутся с") }}<select name="src"><option value="">— {{ _("свои показания") }} —</option>
+      {% set has_input = groups|selectattr('kind', 'equalto', 'line')|map(attribute='cols')|sum(start=[])|selectattr('role', 'equalto', 'input')|list %}
+      <label class="full" data-for="line">{{ _("Роль") }}<select name="role" onchange="qmType()">{% for k, v in LROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == ('own' if has_input else 'input') }}>{{ _(v) }}</option>{% endfor %}</select></label>
+      <label class="full" data-for="line">{{ _("Показания берутся с") }}<select name="src"><option value="">— {{ _("свои показания") }} —</option>
         {% for o in srcs %}<option value="{{ o.value }}" data-line="{{ o.line_id }}">{{ o.label }}</option>{% endfor %}</select></label>
       <label class="full" data-for="tenant">{{ _("Арендатор") }}<select name="owner" onchange="fillWh()">
         {% for o in owners %}<option value="{{ o.tid if o.tid else 'free' }}">{{ o.name or _("Свободные склады") }}</option>{% endfor %}</select></label>
@@ -203,7 +205,7 @@ dialog.qm .full { grid-column: 1 / -1; }
       <label>{{ _("Начальное показание") }}<input name="initial_value" value="0" inputmode="decimal"></label>
       <label class="check" style="align-self:end"><input type="checkbox" name="has_reactive" value="1"> {{ _("реактивная энергия") }}</label>
       <p class="muted full" style="margin:0" data-for="tenant">{{ _("Реактив такому счётчику не вносится — он получает долю реактива линии пропорционально активному расходу.") }}</p>
-      <p class="muted full" style="margin:0" data-for="line">{{ _("Вводный счётчик — общий учёт линии (реактив вносится на нём). Собственный потребитель — охрана, котельная, офис без арендатора: входит в сумму счётчиков линии.") }}</p>
+      <p class="muted full" style="margin:0" data-for="line">{{ _("Вводный счётчик — общий учёт линии (реактив вносится на нём). Собственный потребитель — охрана, котельная, офис без арендатора: входит в сумму счётчиков линии.") }} {{ _("«Показания берутся с» — если этот счётчик уже есть на другой линии (например, ввод офиса там — потребитель здесь): показания вносятся один раз.") }}</p>
       <div class="full row"><span class="muted" id="qmerr"></span><span class="spacer"></span>
         <button type="button" class="ghost" onclick="document.getElementById('qm').close()">{{ _("Отмена") }}</button>
         <button type="button" onclick="saveQM()">{{ _("Добавить счётчик") }}</button></div>
@@ -275,6 +277,17 @@ function stick() {
   if (p) document.querySelectorAll('.rgrid .dcol').forEach(d => d.style.left = p.getBoundingClientRect().width + 'px');
 }
 stick(); window.addEventListener('resize', stick);
+// після додавання — прокрутити до нового лічильника й підсвітити його
+(() => {
+  const f = new URLSearchParams(location.search).get('focus'); if (!f) return;
+  const [k, id] = f.split(':');
+  const th = document.querySelector(`.rgrid tr.h2 th[data-kind="${k}"][data-id="${id}"]`);
+  if (!th) return;
+  const w = document.querySelector('.gridwrap');
+  w.scrollLeft = Math.max(0, th.offsetLeft - w.clientWidth / 2 + th.offsetWidth / 2);
+  th.classList.add('newcol'); setTimeout(() => th.classList.remove('newcol'), 4000);
+  history.replaceState(null, '', location.pathname + location.search.replace(/([?&])focus=[^&]*&?/, '$1').replace(/[?&]$/, ''));
+})();
 // новий місяць: порожні клітинки показників світяться, доки їх не заповнять
 const markTodo = i => i.classList.toggle('todo', i.value.trim() === '');
 document.querySelectorAll('.rgrid tr.curp input[data-key*="|value|"], .rgrid tr.curp input[data-key^="s|"], .rgrid tr.curp input[data-key*="|reactive|"]')
@@ -339,7 +352,12 @@ async function saveQM() {
   data.has_reactive = f.has_reactive.checked;
   const r = await fetch({{ url_for('lines.quick_meter')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
   const j = await r.json().catch(() => ({}));
-  if (r.ok && j.ok) location.reload(); else document.getElementById('qmerr').textContent = j.error || t('Ошибка сохранения');
+  if (r.ok && j.ok) {                                   // показати новий лічильник: прокрутити до нього й підсвітити
+    const u = new URL(location.href);
+    if (data.type === 'line' && data.line_id) u.searchParams.set('line', data.line_id);
+    u.searchParams.set('focus', (data.type === 'line' ? 'l' : 'm') + ':' + j.id);
+    location.href = u.toString();
+  } else document.getElementById('qmerr').textContent = j.error || t('Ошибка сохранения');
 }
 </script>
 {% endblock %}
