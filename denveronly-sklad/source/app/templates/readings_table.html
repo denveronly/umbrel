@@ -46,6 +46,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 .rgrid .sum { background: var(--accent-soft); font-weight: 600; }
 .rgrid th.ten.bal { background: var(--accent-soft); border-left-color: var(--accent); }
 .rgrid td.al { color: var(--muted); font-style: italic; }
+.rgrid td.rnar { width: 1%; min-width: 0; padding-left: 8px; padding-right: 8px; }
 .rgrid th.ten.solarg { background: color-mix(in srgb, #eda100 26%, var(--card)); border-left-color: #eda100; }
 .rgrid .r-solar { background: color-mix(in srgb, #eda100 16%, var(--card)); }
 .rgrid .solarc { border-left: 2px solid #eda100; }
@@ -109,7 +110,7 @@ dialog.qm .full { grid-column: 1 / -1; }
       {% for g in groups %}{% for c in g.cols %}
         <th class="{{ 'first' if loop.first }} r-{{ c.role }}">{{ _("показание") }}</th><th class="r-{{ c.role }}">{{ _("расход") }}</th>
         {% if c.rmode == 'input' %}<th class="r-{{ c.role }}">{{ _("реакт.") }}</th><th class="r-{{ c.role }}">{{ _("реакт. расход, кВт·год") }}</th>
-        {% elif c.rmode == 'alloc' %}<th class="r-{{ c.role }}" title="{{ _("Реактив линии, распределённый пропорционально активному расходу") }}">{{ _("реакт. (доля), кВт·год") }}</th>{% endif %}
+        {% elif c.rmode == 'alloc' %}<th class="r-{{ c.role }}" title="{{ _("Реактив линии, распределённый пропорционально активному расходу") }}, {{ _("кВт·год") }}">{{ _("реактив") }}</th>{% endif %}
       {% endfor %}{% endfor %}
       {% if bal %}<th class="r-solar first solarc">{{ _("выработано, кВт·год") }}</th><th class="r-solar" title="{{ _("Учитывается в балансе с потерями") }}">−{{ solar_loss|plain }}% {{ _("потерь") }}</th>
         <th class="sum first">{{ _("кВт·год") }}</th><th class="sum">{{ _("реакт., кВт·год") }}</th><th class="sum">{{ _("кВт·год") }}</th><th class="sum">%</th>{% endif %}
@@ -128,7 +129,7 @@ dialog.qm .full { grid-column: 1 / -1; }
             <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
             <td class="c rx r-{{ c.role }}">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
           {% elif c.rmode == 'alloc' %}
-            <td class="c al r-{{ c.role }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ num(d.ralloc) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
+            <td class="c al rnar r-{{ c.role }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ num(d.ralloc) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
           {% endif %}
         {% else %}<td class="nom first"></td>{% endfor %}
       {% endfor %}

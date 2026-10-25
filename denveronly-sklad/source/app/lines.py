@@ -1,5 +1,6 @@
 """Лінії електроживлення: таблиця показників по лінії (як у Google Таблиці), баланс ввід/сонце/лічильники."""
 import json
+import math
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
@@ -70,7 +71,7 @@ def line_data(line_id, periods):
                      "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": m["role"], "name": None,
                      "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
     # реактивна: вносять лише ввідні/сонячні лічильники лінії; споживачам з галочкою «реактивна» реактив лінії
-    # розподіляється пропорційно їхній активній витраті
+    # розподіляється пропорційно їхній активній витраті й округлюється вгору до цілих кВт·год
     for c in cols:
         c["rmode"] = ("input" if c["role"] in ("input", "solar") else "alloc") if c["reactive"] else None
     for p in periods:
@@ -82,7 +83,7 @@ def line_data(line_id, periods):
         for c in cols:
             if c["rmode"] == "alloc":
                 v = cons[id(c)]
-                c["data"][p]["ralloc"] = calc.r2(total * v / base) if total is not None and base and v and v > 0 else \
+                c["data"][p]["ralloc"] = math.ceil(calc.r2(total * v / base)) if total is not None and base and v and v > 0 else \
                     (0 if total is not None and v is not None else None)
         # stored reactive of consumers is ignored now
     # баланс по місяцях; сонце — з втратами (налаштування solar_loss_pct, типово 5%)
