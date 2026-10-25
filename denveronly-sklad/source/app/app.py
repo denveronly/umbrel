@@ -64,6 +64,12 @@ def span(a, b=None):
     return " ".join(p for p in (f"{y} {_('г.')}" if y else "", f"{m} {_('мес.')}" if m else "") if p)
 
 
+@app.template_filter("kwh")
+def kwh_filter(x):
+    """кВт·год без десятих: 3650,85 -> 3 651."""
+    return calc.fmt_num(calc.kwh_round(x)) if x is not None and x != "" else ""
+
+
 @app.template_filter("plain")
 def plain(x):
     """Число для поля ввода: 1250.0 -> 1250, 9.10 -> 9.1, None -> ''."""

@@ -78,8 +78,8 @@ def line_data(line_id, periods):
     for p in periods:
         total = [c["data"][p]["rcons"] for c in cols if c["rmode"] == "input" and c["role"] == "input"
                  and c["data"][p]["rcons"] is not None]
-        total = sum(total) if total else None
-        cons = {id(c): c["data"][p]["cons"] for c in cols if c["rmode"] == "alloc"}
+        total = calc.kwh_round(sum(total)) if total else None
+        cons = {id(c): calc.kwh_round(c["data"][p]["cons"]) for c in cols if c["rmode"] == "alloc"}
         base = sum(v for v in cons.values() if v and v > 0)
         for c in cols:
             if c["rmode"] == "alloc":
@@ -94,19 +94,19 @@ def line_data(line_id, periods):
                                                               (line_id,))}
     bal = {}
     for p in periods:
-        def s(role, key="cons"):
-            vals = [c["data"][p][key] for c in cols if c["role"] in role and c["data"][p][key] is not None]
-            return calc.r2(sum(vals)) if vals else None
+        def s(role, key="cons"):                        # кВт·год — цілі: кожен лічильник округлюється, як в акті
+            vals = [calc.kwh_round(c["data"][p][key]) for c in cols if c["role"] in role and c["data"][p][key] is not None]
+            return sum(vals) if vals else None
         users = s(("tenant", "own"))
         al = [c["data"][p].get("ralloc") for c in cols if c["rmode"] == "alloc" and c["data"][p].get("ralloc") is not None]
-        ureact = calc.r2(sum(al)) if al else None
+        ureact = calc.kwh_round(sum(al)) if al else None
         inp = s(("input",))
         solar_m = s(("solar",))                              # сонячні лічильники (накопичувальні), якщо є
         sk = solar_kwh.get(p)                                # вироблено за місяць, внесено напряму
         solar_raw = None if solar_m is None and sk is None else (solar_m or 0) + (sk or 0)
-        solar = calc.r2(solar_raw * (1 - loss / 100)) if solar_raw is not None else None
-        supply = calc.r2((inp or 0) + (solar or 0)) if inp is not None or solar is not None else None
-        diff = calc.r2(supply - (users or 0)) if supply is not None and users is not None else None
+        solar = calc.kwh_round(solar_raw * (1 - loss / 100)) if solar_raw is not None else None
+        supply = (inp or 0) + (solar or 0) if inp is not None or solar is not None else None
+        diff = supply - (users or 0) if supply is not None and users is not None else None
         bal[p] = {"users": users, "ureact": ureact, "input": inp, "solar": solar, "solar_raw": solar_raw, "solar_kwh": sk,
                   "supply": supply, "diff": diff,
                   "pct": calc.r2(diff / supply * 100) if diff is not None and supply else None}

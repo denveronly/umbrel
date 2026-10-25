@@ -66,7 +66,7 @@
       <div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>
       <input name="m_{{ r.m.id }}" inputmode="decimal" value="{{ r.cur|plain }}"
              data-prev="{{ r.prev }}" data-coef="{{ r.m.coef }}" data-unit="{{ r.m.unit }}" oninput="upd(this)" placeholder="—">
-      <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ num(r.cons) }} {{ r.m.unit }}</span>{% endif %}</div>
+      <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ (r.cons|kwh) if 'квт' in (r.m.unit or '')|lower else num(r.cons) }} {{ r.m.unit }}</span>{% endif %}</div>
     </div>
   {% else %}
     <p class="muted">{{ _("Счётчиков нет. Добавьте их в карточке склада") }}.</p>
@@ -108,7 +108,7 @@ function upd(inp) {
   const v = parseFloat(inp.value.replace(',', '.').replace(/\s/g, ''));
   if (isNaN(v)) { cell.innerHTML = ''; return; }
   const c = (v - parseFloat(inp.dataset.prev)) * parseFloat(inp.dataset.coef);
-  cell.innerHTML = `<span class="${c < 0 ? 'badge warnb' : ''}">${c.toLocaleString('uk-UA', {maximumFractionDigits: 3})} ${inp.dataset.unit}</span>`;
+  cell.innerHTML = `<span class="${c < 0 ? 'badge warnb' : ''}">${(/квт/i.test(inp.dataset.unit) ? Math.round(c) : c).toLocaleString('uk-UA', {maximumFractionDigits: 3})} ${inp.dataset.unit}</span>`;
 }
 function fillPrices() {
   document.querySelectorAll('input[data-last]').forEach(i => { if (!i.value && i.dataset.last) i.value = i.dataset.last; });

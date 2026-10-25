@@ -79,16 +79,16 @@ table.lgrid { border-collapse: separate; border-spacing: 0; font-size: 12.5px; w
       <td class="pcol">{{ period_label(p) }}</td>
       {% for c in cols %}{% set d = c.data[p] %}
         <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
-        <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
+        <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ (d.cons|kwh) if d.cons is not none else '' }}</td>
         {% if c.reactive %}
           <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
-          <td class="c rx r-{{ c.role }}">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
+          <td class="c rx r-{{ c.role }}">{{ (d.rcons|kwh) if d.rcons is not none else '' }}</td>
         {% endif %}
       {% endfor %}
-      <td class="c sum">{{ num(b.users) if b.users is not none else '' }}</td>
-      <td class="c sum rx">{{ num(b.ureact) if b.ureact is not none else '' }}</td>
-      <td class="c sum">{{ num(b.supply) if b.supply is not none else '' }}</td>
-      <td class="c sum {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ num(b.diff) if b.diff is not none else '' }}</td>
+      <td class="c sum">{{ (b.users|kwh) if b.users is not none else '' }}</td>
+      <td class="c sum rx">{{ (b.ureact|kwh) if b.ureact is not none else '' }}</td>
+      <td class="c sum">{{ (b.supply|kwh) if b.supply is not none else '' }}</td>
+      <td class="c sum {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ (b.diff|kwh) if b.diff is not none else '' }}</td>
       <td class="c sum">{{ '%.1f'|format(b.pct) if b.pct is not none else '' }}</td>
     </tr>
   {% endfor %}

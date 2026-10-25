@@ -146,22 +146,22 @@ dialog.qm .full { grid-column: 1 / -1; }
       {% for g in groups %}
         {% for c in g.cols %}{% set d = c.data[p] %}{% set pastn = (c.past or {}).get(p) %}
           <td class="{{ 'first' if loop.first }} r-{{ c.role }} {{ 'pastt' if pastn }}" {% if pastn %}title="{{ _("Арендатор в этом месяце") }}: {{ pastn }}"{% endif %}>{% if pastn %}<span class="pastn">{{ pastn }}</span>{% endif %}<input data-key="{{ c.kind }}|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
-          <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }} {{ 'pastt' if pastn }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
+          <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }} {{ 'pastt' if pastn }}">{{ (d.cons|kwh) if d.cons is not none else '' }}</td>
           {% if c.rmode == 'input' %}
             <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
-            <td class="c rx r-{{ c.role }}">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
+            <td class="c rx r-{{ c.role }}">{{ (d.rcons|kwh) if d.rcons is not none else '' }}</td>
           {% elif c.rmode == 'alloc' %}
-            <td class="c al rnar r-{{ c.role }} {{ 'pastt' if pastn }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ num(d.ralloc) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
+            <td class="c al rnar r-{{ c.role }} {{ 'pastt' if pastn }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ (d.ralloc|kwh) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
           {% endif %}
         {% else %}<td class="nom first"></td>{% endfor %}
       {% endfor %}
       {% if bal %}
         <td class="r-solar first solarc"><input data-key="s|{{ line.id }}|kwh|{{ p }}" value="{{ b.solar_kwh|plain }}" inputmode="decimal"></td>
-        <td class="c r-solar">{{ num(b.solar) if b.solar is not none else '' }}</td>
-        <td class="c sum first">{{ num(b.users) if b.users is not none else '' }}</td>
-        <td class="c sum rx">{{ num(b.ureact) if b.ureact is not none else '' }}</td>
-        <td class="c sum">{{ num(b.supply) if b.supply is not none else '' }}</td>
-        <td class="c sum {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ num(b.diff) if b.diff is not none else '' }}</td>
+        <td class="c r-solar">{{ (b.solar|kwh) if b.solar is not none else '' }}</td>
+        <td class="c sum first">{{ (b.users|kwh) if b.users is not none else '' }}</td>
+        <td class="c sum rx">{{ (b.ureact|kwh) if b.ureact is not none else '' }}</td>
+        <td class="c sum">{{ (b.supply|kwh) if b.supply is not none else '' }}</td>
+        <td class="c sum {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ (b.diff|kwh) if b.diff is not none else '' }}</td>
         <td class="c sum">{{ '%.1f'|format(b.pct) if b.pct is not none else '' }}</td>
       {% endif %}
     </tr>

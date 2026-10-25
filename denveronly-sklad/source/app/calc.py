@@ -1,5 +1,6 @@
 """Розрахунки: оренда, комунальні, акти, сума прописом."""
 import json
+import math
 from decimal import Decimal, ROUND_HALF_UP
 
 from db import get_db, settings, price_for, PAYMENT_TYPES
@@ -211,6 +212,8 @@ def build_act(tenant_id, period):
                 continue
             prev, _ = previous_value(m, uperiod)
             qty = r2((cur - prev) * (m["coef"] or 1))
+            if is_kwh(m["unit"]):
+                qty = kwh_round(qty)                      # кВт·год в актах — тільки цілі
             if qty < 0:
                 warnings.append(f"Від'ємне споживання: {wh['name']} / {m['svc_name']}")
             pr = price({"id": m["sid"], "name": m["svc_name"]})
@@ -237,7 +240,7 @@ def build_act(tenant_id, period):
                         "name": f"Реактивна електроенергія та втрати на лінії ({wh['name']}{serial}), частка лінії {fmt_num(share * 100, 1)}%",
                         "unit": "кВт·год", "qty": rq, "price": pr, "sum": r2(rq * pr),
                         "service": "Реактивна електроенергія та втрати на лінії", "wh": wh["name"], "serial": m["serial"] or "",
-                        "rnote": f"{fmt_num(share * 100, 1)}% від {fmt_num(rtot)}"})
+                        "rnote": f"{fmt_num(share * 100, 1)}% від {fmt_num(kwh_round(rtot))}"})
 
     # --- підключені послуги: кількість / площа / фіксовано ---
     subs = db.execute("SELECT s.* FROM tenant_services ts JOIN services s ON s.id=ts.service_id "
@@ -358,6 +361,18 @@ def save_act(tenant_id, period, final=False):
         act_id = cur.lastrowid
     db.commit()
     return act_id, warnings
+
+
+def kwh_round(x):
+    """кВт·год — завжди цілі (половина — вгору)."""
+    if x is None:
+        return None
+    x = float(x)
+    return int(math.floor(x + 0.5)) if x >= 0 else -int(math.floor(-x + 0.5))
+
+
+def is_kwh(unit):
+    return "квт" in (unit or "").lower()
 
 
 def fmt_num(x, digits=None):
