@@ -100,10 +100,24 @@ def switch_site(sid):
     return resp
 
 
+def is_embed():
+    """Сторінка відкрита у вікні поверх іншої (⚙ орендаря в Актах): без меню."""
+    return request.args.get("embed") == "1" or (request.method == "POST" and request.form.get("_embed") == "1")
+
+
+@app.after_request
+def embed_and_frames(resp):
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")        # вбудовувати сторінки лише в наші ж
+    if is_embed() and resp.status_code in (301, 302, 303) and resp.location and resp.location.startswith("/tenants/"):
+        loc, _h, frag = resp.location.partition("#")
+        resp.location = loc + ("&" if "?" in loc else "?") + "embed=1" + ("#" + frag if frag else "")
+    return resp
+
+
 @app.context_processor
 def site_ctx():
     from db import SITES, current_site
-    return {"SITES": SITES, "cur_site": current_site(), "site_name": _(SITES[current_site()]["name"])}
+    return {"SITES": SITES, "cur_site": current_site(), "site_name": _(SITES[current_site()]["name"]), "embed": is_embed()}
 
 
 def app_version():

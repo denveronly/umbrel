@@ -42,11 +42,25 @@
   </div>
   {% if not grp.c %}<div class="warn" style="margin-top:8px">{{ _("У этих контактов не выбрана компания — в акте не будет реквизитов арендодателя") }}.</div>{% endif %}
 
+  {# підсумки без повторів: одна форма оплати — одна цифра з її назвою (з ПДВ — ще й сума ПДВ); кілька — по кожній + разом #}
+  {% set pts = grp.by_pt.keys()|list %}
   <div class="cototals">
-    <div><span class="muted">{{ _("Без ПДВ") }}</span><b>{{ money(grp.tot.net) }}</b></div>
-    <div><span class="muted">{{ _("ПДВ") }}</span><b>{{ money(grp.tot.vat) }}</b></div>
-    <div><span class="muted">{{ _("Итого") }}</span><b>{{ money(grp.tot.total) }}</b></div>
-    {% for k, v in grp.by_pt.items() %}<div><span class="muted">{{ PAYMENT_TYPES[k] }}</span><b>{{ money(v) }}</b></div>{% endfor %}
+    {% if pts|length == 1 %}
+      {% if pts[0] == 'bank_vat' %}
+        <div><span class="muted">{{ _("Всего с ПДВ") }}</span><b>{{ money(grp.tot.total) }}</b></div>
+        <div><span class="muted">{{ _("ПДВ") }}</span><b>{{ money(grp.tot.vat) }}</b></div>
+      {% elif pts[0] == 'bank' %}
+        <div><span class="muted">{{ _("Без ПДВ") }}</span><b>{{ money(grp.tot.total) }}</b></div>
+      {% else %}
+        <div><span class="muted">{{ PAYMENT_TYPES[pts[0]] }}</span><b>{{ money(grp.tot.total) }}</b></div>
+      {% endif %}
+    {% else %}
+      {% for k in ('bank_vat', 'bank', 'cash') if k in grp.by_pt %}
+        <div><span class="muted">{{ {'bank_vat': _("С ПДВ"), 'bank': _("Без ПДВ"), 'cash': PAYMENT_TYPES['cash']}[k] }}</span><b>{{ money(grp.by_pt[k]) }}</b></div>
+      {% endfor %}
+      {% if grp.tot.vat %}<div><span class="muted">{{ _("в т.ч. ПДВ") }}</span><b>{{ money(grp.tot.vat) }}</b></div>{% endif %}
+      <div class="ctsum"><span class="muted">{{ _("Итого") }}</span><b>{{ money(grp.tot.total) }}</b></div>
+    {% endif %}
   </div>
 
   {% for it in grp.rows %}
@@ -60,6 +74,8 @@
       </span>
       <span class="n"><b>{{ money(it.totals.total) }}</b>{% if it.totals.vat %}<br><span class="muted">{{ _("в т.ч. ПДВ") }} {{ money(it.totals.vat) }}</span>{% endif %}</span>
       <span class="btns">
+        <button type="button" class="sm ghost gearbtn" title="{{ _("Настройки арендатора") }}" data-tid="{{ it.t.id }}" data-name="{{ it.t.name }}"
+                onclick="event.preventDefault(); event.stopPropagation(); openTenant(this)">⚙</button>
         <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()">
           <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
           <button class="sm" name="fmt" value="pdf">PDF ↓</button>
@@ -97,6 +113,28 @@
   <a class="btn ghost sm" href="{{ url_for('acts_zip', period=period, fmt='docx') }}">{{ _("все Word") }} ↓</a>
 </div>
 {% endif %}
+<dialog id="tdlg" class="tdlg">
+  <div class="row tdlg-h"><b id="tdlg-title"></b><span class="spacer"></span>
+    <a id="tdlg-open" class="btn sm ghost" href="#" target="_top">{{ _("Открыть карточку") }} ↗</a>
+    <button type="button" class="sm ghost" onclick="closeTenant()">✕</button></div>
+  <iframe id="tdlg-frame" title=""></iframe>
+</dialog>
+<script>
+let tdlgDirty = false;
+function openTenant(btn) {
+  const d = document.getElementById('tdlg'), f = document.getElementById('tdlg-frame');
+  document.getElementById('tdlg-title').textContent = btn.dataset.name;
+  document.getElementById('tdlg-open').href = '/tenants/' + btn.dataset.tid;
+  f.src = '/tenants/' + btn.dataset.tid + '?embed=1';
+  let loads = 0; f.onload = () => { if (++loads > 1) tdlgDirty = true; };   // друге завантаження = щось збережено
+  tdlgDirty = false; d.showModal();
+}
+function closeTenant() {
+  document.getElementById('tdlg').close();
+}
+document.getElementById('tdlg').addEventListener('close', () => { document.getElementById('tdlg-frame').src = 'about:blank'; if (tdlgDirty) location.reload(); });
+document.getElementById('tdlg').addEventListener('click', e => { if (e.target.id === 'tdlg') closeTenant(); });
+</script>
 {% endblock %}
 {% block scripts %}
 <script>

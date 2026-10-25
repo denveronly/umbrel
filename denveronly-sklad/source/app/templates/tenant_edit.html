@@ -3,13 +3,14 @@
 {% block title %}{{ t.name if t else _("Новый арендатор") }}{% endblock %}
 {% block content %}
 {% macro v(field) %}{{ (t[field] if t and t[field] is not none else '') }}{% endmacro %}
-<div class="row tnav-top"><a href="{{ url_for('tenants') }}">← {{ _("Арендаторы") }}</a><span class="spacer"></span>
+{% if not embed %}<div class="row tnav-top"><a href="{{ url_for('tenants') }}">← {{ _("Арендаторы") }}</a><span class="spacer"></span>
   {% if t %}
   {% if nav_prev %}<a class="btn sm ghost tnav" href="{{ url_for('tenant_edit', tid=nav_prev.id) }}" title="{{ nav_prev.name }}">← {{ _("Предыдущий") }}</a>{% else %}<span class="btn sm ghost" aria-disabled="true" style="opacity:.4">← {{ _("Предыдущий") }}</span>{% endif %}
   {% if nav_next %}<a class="btn sm ghost tnav" href="{{ url_for('tenant_edit', tid=nav_next.id) }}" title="{{ nav_next.name }}">{{ _("Следующий") }} →</a>{% else %}<span class="btn sm ghost" aria-disabled="true" style="opacity:.4">{{ _("Следующий") }} →</span>{% endif %}
   {% endif %}
 </div>
-{% if t %}
+{% endif %}
+{% if t and not embed %}
 {% if nav_prev %}<a class="tnav tnav-side left" href="{{ url_for('tenant_edit', tid=nav_prev.id) }}" aria-label="{{ _("Предыдущий") }}"><span>‹</span><small>{{ nav_prev.name }}</small></a>{% endif %}
 {% if nav_next %}<a class="tnav tnav-side right" href="{{ url_for('tenant_edit', tid=nav_next.id) }}" aria-label="{{ _("Следующий") }}"><span>›</span><small>{{ nav_next.name }}</small></a>{% endif %}
 {% endif %}

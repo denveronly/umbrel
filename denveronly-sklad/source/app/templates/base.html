@@ -14,7 +14,7 @@
   const tok = document.querySelector('meta[name=csrf]').content, site = document.querySelector('meta[name=site]').content;
   const hidden = (f, n, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = n; i.value = v; f.appendChild(i); };
   const add = f => { if (f.method && f.method.toLowerCase() === 'post' && !f.querySelector('input[name=_csrf]')) {
-    hidden(f, '_csrf', tok); hidden(f, '_site', site); } };
+    hidden(f, '_csrf', tok); hidden(f, '_site', site); {% if embed %}hidden(f, '_embed', '1');{% endif %} } };
   document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('form').forEach(add));
   document.addEventListener('submit', e => add(e.target), true);
   const of = window.fetch;
@@ -31,7 +31,7 @@
 {% block head %}{% endblock %}
 </head>
 <body>
-{% if current_user %}
+{% if current_user and not embed %}
 <header class="top">
   {% macro site_icon(kind) %}{% if kind == 'house' %}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 11.2 12 4l9 7.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.5V20h13V9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 20v-5.5h4V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>{% else %}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2.5 9 12 4l9.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 8v12h15V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 20v-8h8v8M8 14.7h8M8 17.4h8" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>{% endif %}{% endmacro %}
   <details class="sitesw" id="sitesw">
@@ -62,10 +62,10 @@
     <form method="post" action="{{ url_for('auth.logout') }}"><button class="sm ghost">{{ _("Выйти") }}</button></form>
   </div>
 </header>
-{% else %}
+{% elif not current_user %}
 <div class="themecorner"><button type="button" class="themebtn langbtn" onclick="switchLang()" title="{{ _("Язык интерфейса") }}">{{ LANGS[lang] }}</button><button type="button" class="themebtn" onclick="cycleTheme()" id="themebtn" title="{{ _("Тема") }}"></button></div>
 {% endif %}
-<main class="{% block mainclass %}{% endblock %}">
+<main class="{% block mainclass %}{% endblock %}{{ ' embed' if embed }}">
   {% with msgs = get_flashed_messages() %}
     {% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}
   {% endwith %}
