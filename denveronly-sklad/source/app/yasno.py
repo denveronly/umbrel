@@ -274,6 +274,10 @@ class LoginError(Exception):
     pass
 
 
+class RateLimited(LoginError):
+    pass
+
+
 class Cabinet:
     def __init__(self, base, fp=None):
         self.base = base.rstrip("/")
@@ -345,7 +349,7 @@ class Cabinet:
         """Кілька способів по черзі (звичайна форма; форма з CSRF-заголовком як у Rails UJS/Turbo; AJAX),
         бо сайт може приймати вхід лише одним із них. Кожна відповідь зберігається для діагностики."""
         last_err = None
-        for n, mode in enumerate(("form", "ujs", "xhr"), 1):
+        for n, mode in enumerate(("form", "ujs"), 1):
             final, html, _ct = self.get("/")
             self.pages[f"login_{n}"] = html
             p = parse(html)
@@ -377,6 +381,9 @@ class Cabinet:
                 if loc:
                     final, html, ctype = self.get(loc.group(1), keep_errors=True)
                     self.pages[f"after_login_{n}_next"] = html
+            if "rate_limited" in final or re.search(r"занадто багато спроб|too many", html, re.I):
+                raise RateLimited("кабінет тимчасово заблокував вхід: «Занадто багато спроб». Зачекайте 1–2 години "
+                                  "і не натискайте перевірку повторно — кожна спроба продовжує блокування")
             if self.status < 400 and self._logged_in(html):
                 return final
             # перевірити сесію: чи відкривається кабінет
@@ -384,11 +391,17 @@ class Cabinet:
                 f2, h2, _c = self.get("/", keep_errors=True)
                 if self._logged_in(h2):
                     return f2
+            # повідомлення сайту: <div class="page-error">…</div> (або flash/alert), інакше — ключові слова
+            box = re.search(r'class="[^"]*(?:page-error|flash|alert|error|notice)[^"]*"[^>]*>(.*?)</(?:div|p|span)>', html,
+                            re.I | re.S)
+            box_txt = re.sub(r"<[^>]+>|\s+", " ", box.group(1)).strip() if box else ""
             msg = re.search(r"(невірн[^<.]{0,80}|неправильн[^<.]{0,80}|не знайден[^<.]{0,60}|заблоковано[^<.]{0,60})",
                             html, re.I)
+            if box_txt:
+                msg = re.match(r"(.*)", box_txt)
             last_err = ("кабінет: " + msg.group(1).strip()) if msg else \
                 f"кабінет не прийняв вхід (HTTP {self.status})"
-            if msg:          # сайт прямо написав, що не так — інші способи не допоможуть
+            if msg or self.status < 400:   # сайт відповів сторінкою (не помилкою) — інший спосіб не допоможе
                 break
         raise LoginError(last_err + ". Якщо логін і пароль вірні — натисніть «Завантажити сторінки для діагностики» "
                                     "і надішліть файл розробнику")
@@ -541,7 +554,8 @@ def _sync(kind):
     except Exception as e:
         err = f"{type(e).__name__}: {e}" if not isinstance(e, LoginError) else str(e)
         err = err[:400]
-        _write_status(running=False, ok=False, error=err, time=now.isoformat(timespec="seconds"), kind=kind)
+        _write_status(running=False, ok=False, error=err, time=now.isoformat(timespec="seconds"), kind=kind,
+                      rate_limited=isinstance(e, RateLimited))
         with using_site(MAIN_SITE):
             db = get_db()
             key = f"err:{date.today().isoformat()}"
@@ -661,7 +675,7 @@ def _sync(kind):
             msg += f"; помилка Telegram: {tg_err}"
         _audit("Кабинет YASNO проверен", msg)
         db.commit()
-    _write_status(running=False, ok=True, error=tg_err or "", time=now.isoformat(timespec="seconds"), kind=kind,
+    _write_status(running=False, ok=True, error=tg_err or "", rate_limited=False, time=now.isoformat(timespec="seconds"), kind=kind,
                   summary=msg, debt=debt, debts=data["debts"], unpaid=data["unpaid"], topay=data["topay"],
                   last_auto=date.today().isoformat() if kind == "auto" else read_status().get("last_auto"))
     return True, msg
@@ -713,7 +727,8 @@ def _scheduler(app):
                 if now.hour < c["hour"] or st.get("last_auto") == date.today().isoformat() or st.get("running"):
                     continue
                 last = st.get("last_attempt")
-                if last and now - datetime.fromisoformat(last) < timedelta(hours=1):
+                wait = timedelta(hours=3 if st.get("rate_limited") else 1)
+                if last and now - datetime.fromisoformat(last) < wait:
                     continue          # після невдачі — повтор не частіше раз на годину
                 sync("auto")
         except Exception:
