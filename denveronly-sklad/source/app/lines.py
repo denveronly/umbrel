@@ -381,7 +381,8 @@ def table():
     return render_template("readings_table.html", groups=groups, bal=bal, line=line, all_lines=all_lines,
                            solar_loss=float(_settings().get("solar_loss_pct") or 5),
                            dates=dates, periods=periods, months=n, end=end, service=sid, msvcs=msvcs,
-                           owners=[{"tid": t, "name": nm, "whs": w} for t, nm, w in owners])
+                           owners=[{"tid": t, "name": nm, "whs": w} for t, nm, w in owners], srcs=src_options(),
+                           LROLES=ROLES)
 
 
 @bp.route("/readings/table/meter", methods=["POST"])
@@ -389,6 +390,29 @@ def quick_meter():
     """Швидке додавання лічильника з таблиці показників."""
     db = get_db()
     d = request.get_json(force=True) or {}
+    if d.get("type") == "line":                    # лічильник лінії без орендаря: ввідний / власний споживач / сонце
+        lid = int(d["line_id"]) if str(d.get("line_id") or "").isdigit() else None
+        name = (d.get("name") or "").strip()
+        role = d.get("role") if d.get("role") in ROLES else "own"
+        if not lid or not name:
+            return jsonify(ok=False, error=_("Укажите название и линию")), 400
+        src = d.get("src") or None
+        if src:
+            r = resolve_src(src)
+            if not r or (r[0] == "m" and r[2]["line_id"] == lid) or (r[0] == "l" and r[2]["line_id"] == lid):
+                return jsonify(ok=False, error=_("Нельзя взять показания со счётчика этой же линии")), 400
+            role = "input"
+        try:
+            vals = (_num(d.get("coef")) or 1, _num(d.get("initial_value")) or 0, _num(d.get("initial_reactive")) or 0)
+        except ValueError:
+            return jsonify(ok=False, error=_("Неверное число")), 400
+        mid = db.execute("INSERT INTO line_meters(line_id, name, role, serial, coef, initial_value, initial_reactive, "
+                         "has_reactive, src) VALUES (?,?,?,?,?,?,?,?,?)",
+                         (lid, name, role, (d.get("serial") or "").strip(), *vals, 1 if d.get("has_reactive") else 0,
+                          src)).lastrowid
+        log("Счётчик линии добавлен", f"{name} ({_(ROLES[role]).split(' (')[0]})", commit=False)
+        db.commit()
+        return jsonify(ok=True, id=mid)
     wh = db.execute("SELECT id, name FROM warehouses WHERE id=?", (d.get("warehouse_id"),)).fetchone()
     svc = db.execute("SELECT id, name FROM services WHERE id=? AND mode='meter'", (d.get("service_id"),)).fetchone()
     if not wh or not svc:

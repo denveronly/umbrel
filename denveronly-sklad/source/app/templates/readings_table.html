@@ -36,6 +36,11 @@ dialog.qm .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
 dialog.qm .full { grid-column: 1 / -1; }
 .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .filters select { width: auto; }
+.qmtype { display: flex; gap: 6px; margin: 4px 0 12px; flex-wrap: wrap; }
+.qmtype label { flex: 1; min-width: 180px; display: flex; flex-direction: row; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; cursor: pointer; font-size: 13px; }
+.qmtype input { width: auto; margin: 0; }
+.qmtype label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .linetabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
 .linetabs a.lt { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: var(--card); }
 .linetabs a.lt.on { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -108,7 +113,8 @@ dialog.qm .full { grid-column: 1 / -1; }
             {% if g.cols %}draggable="true" data-kind="{{ g.cols[0].dkind or g.cols[0].kind }}" data-ids="{% for c in g.cols %}{{ c.did or c.id }}{{ ',' if not loop.last }}{% endfor %}"{% endif %}>
           {% set tw = [ns.w * 72, 150]|max %}
           <span class="tn" style="max-width:{{ tw }}px" data-full="{{ g.title or '' }}">{% if g.kind == 'line' %}⚡ {{ _("Счётчики линии") }}{% elif g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.title }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}</span>
-          {% if g.kind == 'tenant' %}<button type="button" class="sm ghost addm" onclick="openQM({{ g.tid|tojson }})" title="{{ _("Добавить счётчик") }}">＋</button>{% endif %}</th>
+          {% if g.kind == 'tenant' %}<button type="button" class="sm ghost addm" onclick="openQM({{ g.tid|tojson }})" title="{{ _("Добавить счётчик") }}">＋</button>
+          {% elif g.kind == 'line' %}<button type="button" class="sm ghost addm" onclick="openQM('line')" title="{{ _("Добавить счётчик") }}">＋</button>{% endif %}</th>
       {% endfor %}
       {% if bal %}{% if line.has_solar %}<th class="ten solarg" colspan="2">☀ {{ _("Солнце") }}</th>{% endif %}<th class="ten bal" colspan="5">{{ _("Баланс линии") }}</th>{% endif %}
     </tr>
@@ -178,18 +184,26 @@ dialog.qm .full { grid-column: 1 / -1; }
 <dialog class="qm" id="qm">
   <form method="dialog" id="qmform">
     <h2 style="margin-top:0">{{ _("Новый счётчик") }}</h2>
+    <div class="seg qmtype">
+      <label><input type="radio" name="type" value="tenant" checked onchange="qmType()"> {{ _("Счётчик арендатора") }}</label>
+      <label><input type="radio" name="type" value="line" onchange="qmType()"> {{ _("Счётчик линии (без арендатора)") }}</label>
+    </div>
     <div class="grid">
-      <label class="full">{{ _("Арендатор") }}<select name="owner" onchange="fillWh()">
+      <label class="full" data-for="line">{{ _("Роль") }}<select name="role" onchange="qmType()">{% for k, v in LROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'input' }}>{{ _(v) }}</option>{% endfor %}</select></label>
+      <label class="full" data-for="line" data-role="input">{{ _("Показания берутся с") }}<select name="src"><option value="">— {{ _("свои показания") }} —</option>
+        {% for o in srcs %}<option value="{{ o.value }}" data-line="{{ o.line_id }}">{{ o.label }}</option>{% endfor %}</select></label>
+      <label class="full" data-for="tenant">{{ _("Арендатор") }}<select name="owner" onchange="fillWh()">
         {% for o in owners %}<option value="{{ o.tid if o.tid else 'free' }}">{{ o.name or _("Свободные склады") }}</option>{% endfor %}</select></label>
-      <label>{{ _("Склад") }}<select name="warehouse_id" required></select></label>
-      <label>{{ _("Услуга") }}<select name="service_id">{% for s in msvcs %}<option value="{{ s.id }}" {{ 'selected' if service == s.id }}>{{ s.name }}</option>{% endfor %}</select></label>
+      <label data-for="tenant">{{ _("Склад") }}<select name="warehouse_id"></select></label>
+      <label data-for="tenant">{{ _("Услуга") }}<select name="service_id">{% for s in msvcs %}<option value="{{ s.id }}" {{ 'selected' if service == s.id }}>{{ s.name }}</option>{% endfor %}</select></label>
       <label>{{ _("Название") }}<input name="name" placeholder="{{ _("напр. Офис, Цех, Ввод 2") }}"></label>
       <label>{{ _("Номер счётчика") }}<input name="serial"></label>
-      <label>{{ _("Линия электроэнергии") }}<select name="line_id"><option value="">—</option>{% for l in all_lines %}<option value="{{ l.id }}" {{ 'selected' if line and line.id == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
+      <label>{{ _("Линия электроэнергии") }}<select name="line_id" onchange="qmType()"><option value="">—</option>{% for l in all_lines %}<option value="{{ l.id }}" {{ 'selected' if line and line.id == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
       <label>{{ _("Коэффициент") }}<input name="coef" value="1" inputmode="decimal"></label>
       <label>{{ _("Начальное показание") }}<input name="initial_value" value="0" inputmode="decimal"></label>
       <label class="check" style="align-self:end"><input type="checkbox" name="has_reactive" value="1"> {{ _("реактивная энергия") }}</label>
-      <p class="muted full" style="margin:0">{{ _("Реактив такому счётчику не вносится — он получает долю реактива линии пропорционально активному расходу.") }}</p>
+      <p class="muted full" style="margin:0" data-for="tenant">{{ _("Реактив такому счётчику не вносится — он получает долю реактива линии пропорционально активному расходу.") }}</p>
+      <p class="muted full" style="margin:0" data-for="line">{{ _("Вводный счётчик — общий учёт линии (реактив вносится на нём). Собственный потребитель — охрана, котельная, офис без арендатора: входит в сумму счётчиков линии.") }}</p>
       <div class="full row"><span class="muted" id="qmerr"></span><span class="spacer"></span>
         <button type="button" class="ghost" onclick="document.getElementById('qm').close()">{{ _("Отмена") }}</button>
         <button type="button" onclick="saveQM()">{{ _("Добавить счётчик") }}</button></div>
@@ -293,11 +307,23 @@ function fillWh() {
   const f = document.getElementById('qmform'), o = OWNERS.find(x => String(x.tid || 'free') === f.owner.value);
   f.warehouse_id.innerHTML = (o ? o.whs : []).map(w => `<option value="${w.id}">${w.name.replace(/</g, '&lt;')}</option>`).join('');
 }
+function qmType() {
+  const f = document.getElementById('qmform'), ty = f.querySelector('input[name=type]:checked').value, role = f.role.value;
+  f.querySelectorAll('[data-for]').forEach(el => {
+    el.style.display = el.dataset.for === ty && (!el.dataset.role || el.dataset.role === role) ? '' : 'none';
+  });
+  const lsel = f.line_id;                                // для лічильника лінії «—» не можна
+  lsel.options[0].disabled = ty === 'line';
+  if (ty === 'line' && !lsel.value && lsel.options.length > 1) lsel.selectedIndex = 1;
+  [...f.src.options].forEach(o => { o.hidden = !!o.value && o.dataset.line === lsel.value; });
+}
 function openQM(tid) {
   const f = document.getElementById('qmform');
+  if (tid === 'line') { f.querySelector('input[name=type][value=line]').checked = true; tid = undefined; }
+  else if (arguments.length) f.querySelector('input[name=type][value=tenant]').checked = true;
   if (tid !== null && tid !== undefined) f.owner.value = String(tid);
   else if (tid === null && arguments.length && OWNERS.some(o => !o.tid)) f.owner.value = 'free';
-  fillWh();
+  fillWh(); qmType();
   document.getElementById('qmerr').textContent = '';
   document.getElementById('qm').showModal();
   (f.warehouse_id.options.length > 1 ? f.warehouse_id : f.serial).focus();
