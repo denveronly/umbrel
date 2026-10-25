@@ -139,6 +139,22 @@ def build_act(tenant_id, period):
                 "unit": m["unit"], "qty": qty, "price": pr, "sum": r2(qty * pr),
                 "service": m["svc_name"], "wh": wh["name"], "serial": m["serial"] or "",
                 "prev": prev, "cur": cur, "coef": m["coef"] or 1})
+            # реактивна: частка реактиву лінії пропорційно активному споживанню, в кВт·год за ціною послуги
+            if m["has_reactive"]:
+                if not m["line_id"]:
+                    warnings.append(f"Реактивна: лічильник не прив'язаний до лінії — {wh['name']}{serial}")
+                    continue
+                import lines as _lines
+                rq, share, rtot = _lines.meter_reactive(m["id"], m["line_id"], uperiod)
+                if rq is None:
+                    warnings.append(f"Немає показника реактиву на вводі лінії за {ulabel} ({wh['name']}{serial})")
+                elif rq > 0:
+                    lines.append({
+                        "group": "util",
+                        "name": f"Реактивна електроенергія ({wh['name']}{serial}), частка лінії {fmt_num(share * 100, 1)}%",
+                        "unit": "кВт·год", "qty": rq, "price": pr, "sum": r2(rq * pr),
+                        "service": "Реактивна електроенергія", "wh": wh["name"], "serial": m["serial"] or "",
+                        "rnote": f"{fmt_num(share * 100, 1)}% від {fmt_num(rtot)}"})
 
     # --- підключені послуги: кількість / площа / фіксовано ---
     subs = db.execute("SELECT s.* FROM tenant_services ts JOIN services s ON s.id=ts.service_id "

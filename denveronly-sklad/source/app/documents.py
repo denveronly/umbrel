@@ -171,6 +171,8 @@ def _detail_rows(lay):
                 readings = f"{fmt_num(l['prev'])} → {fmt_num(l['cur'])}"
                 if (l.get("coef") or 1) != 1:
                     readings += f" ×{fmt_num(l['coef'])}"
+            elif l.get("rnote"):
+                readings = l["rnote"]
             else:
                 readings = "—"
             name = l["service"]
@@ -370,7 +372,8 @@ def act_docx(act):
             cell.paragraphs[0].add_run(label).bold = True
             if full:
                 for x in _party(party):
-                    cell.add_paragraph(x).runs[0].font.size = Pt(9)
+                    if x:                                    # порожні реквізити (компанію не вказано) пропускаємо
+                        cell.add_paragraph(x).runs[0].font.size = Pt(9)
             sc = sig.cell(1, col)
             sc.text = ""
             sc.paragraphs[0].paragraph_format.space_before = Pt(24)

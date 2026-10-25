@@ -179,6 +179,19 @@ def save():
 
 # ---------------- таблиця показників: колонки — лічильники орендарів, рядки — місяці / дати зйому ----------------
 
+def meter_reactive(meter_id, line_id, period):
+    """Частка реактиву лінії для лічильника складу за місяць: (кВт·год, частка 0..1, реактив лінії) або (None, …)."""
+    cols, _bal = line_data(line_id, [period])
+    total = [c["data"][period]["rcons"] for c in cols if c["role"] == "input" and c["reactive"]
+             and c["data"][period]["rcons"] is not None]
+    me = next((c for c in cols if c["kind"] == "m" and c["id"] == meter_id), None)
+    if not me or not total:
+        return None, None, None
+    val = me["data"][period].get("ralloc")
+    tot = sum(total)
+    return val, (val / tot if tot and val is not None else None), tot
+
+
 def _owners():
     """Орендарі зі складами (за абеткою) + «вільні склади»: [(tid, name, [whs])]."""
     db = get_db()

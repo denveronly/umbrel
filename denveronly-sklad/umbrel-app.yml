@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.14.0"
+version: "1.15.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,10 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Таблиця показників: окрема вкладка на кожну лінію (нова лінія — нова вкладка) і «Без лінії». На вкладці лінії:
-  лічильники орендарів, лічильники лінії (ввід, сонце, власні), сума лічильників і різниця з вводом.
-  Реактив вноситься лише на ввідному лічильнику; лічильникам з галочкою «реактивна» він розподіляється
-  пропорційно активній витраті.
+  Реактивна енергія в актах: лічильнику з галочкою «реактивна» нараховується частка реактиву лінії
+  пропорційно активному споживанню — окремим рядком у кВт·год за ціною електроенергії
+  (у деталізації: «75,0% від 80»). Виправлено формування Word-акта без компанії-отримувача.
 dependencies: []
 path: ""
 defaultUsername: ""
