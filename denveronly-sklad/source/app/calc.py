@@ -307,10 +307,11 @@ def build_act(tenant_id, period):
                 warnings.append(f"«{svc['name']}» за {ulabel}: " + ("немає показника загального лічильника"
                                 if svc["has_main"] and cons is None else "не задано ціну"))
                 continue
-            lines.append({"group": "service", "name": f"{svc['name']} за {ulabel} — {fmt_num(pct)}% від {how}",
+            pct_s = f"{pct:g}".replace(".", ",")
+            lines.append({"group": "service", "name": f"{svc['name']} за {ulabel} — {pct_s}% × {fmt_money(p)}",
                           "unit": "%", "qty": pct, "price": r2(total / 100), "sum": r2(total * pct / 100),
                           "service": svc["name"], "wh": "", "serial": "",
-                          "rnote": f"{fmt_num(pct)}% від {how}" + (f" = {fmt_money(total)} грн" if svc["has_main"] else "")})
+                          "rnote": f"{pct_s}% від {how}" + (f" = {fmt_money(total)} грн" if svc["has_main"] else "")})
 
     net = r2(sum(l["sum"] for l in lines))
     vat_sum = r2(net * vat)
