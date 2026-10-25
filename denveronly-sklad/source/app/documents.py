@@ -11,7 +11,7 @@ from calc import MONTHS_UK_GEN, act_layout, amount_in_words, fmt_money, fmt_num
 FONT_DIRS = ["/usr/share/fonts/truetype/dejavu", os.path.join(os.path.dirname(__file__), "fonts")]
 
 MAIN_HEAD = ["№", "Найменування", "Од.", "К-сть", "Ціна, грн", "Сума, грн"]
-DETAIL_HEAD = ["№", "Послуга", "Склад / лічильник", "Показники", "Од.", "К-сть", "Ціна, грн", "Сума, грн"]
+DETAIL_HEAD = ["№", "Послуга", "Приміщення", "Показники", "Од.", "К-сть", "Ціна, грн", "Сума, грн"]
 
 
 def _font(name):

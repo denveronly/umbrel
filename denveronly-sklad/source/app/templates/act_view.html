@@ -58,7 +58,7 @@
   <h3>{{ _("ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ") }}</h3>
   <p style="text-align:center;margin:2px 0 14px">{{ _("за") }} {{ d.util_period_label or d.period_label }} — {{ _("додаток до акта №") }} {{ act.number }}</p>
   <table>
-    <thead><tr><th>№</th><th>{{ _("Послуга") }}</th><th>{{ _("Склад / лічильник") }}</th><th>{{ _("Показники") }}</th><th>{{ _("Од") }}.</th>
+    <thead><tr><th>№</th><th>{{ _("Послуга") }}</th><th>{{ _("Приміщення") }}</th><th>{{ _("Показники") }}</th><th>{{ _("Од") }}.</th>
       <th class="n">{{ _("К-сть") }}</th><th class="n">{{ _("Ціна") }}</th><th class="n">{{ _("Сума") }}</th></tr></thead>
     <tbody>{% for l in lay.util %}
       <tr><td>{{ loop.index }}</td>
