@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.18.0"
+version: "1.18.1"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,9 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Акти за історією оренди: акт рахується за складами, які орендар мав саме в тому місяці — колишньому орендарю
-  можна сформувати правильний фінальний акт і після зміни. Колишні орендарі видно в «Актах» за свої місяці;
-  при зміні орендаря — нагадування про фінальний акт. У таблиці показників місяці іншого орендаря — сірим з його ім'ям.
+  Таблиця показників: у рядку нового місяця порожні клітинки показників світяться по контуру, доки їх не заповнять.
+  З 1.18.0: акти й таблиця показників за історією оренди, нагадування про фінальний акт колишньому орендарю.
 dependencies: []
 path: ""
 defaultUsername: ""

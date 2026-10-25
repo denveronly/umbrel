@@ -61,6 +61,11 @@ dialog.qm .full { grid-column: 1 / -1; }
 .rgrid .pastn { position: absolute; left: 6px; top: 1px; font-size: 9.5px; color: var(--muted); max-width: 92%; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .rgrid td.pastt input { padding-top: 9px; }
+.rgrid tr.curp input.todo { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--card));
+  box-shadow: 0 0 0 1px var(--accent), 0 0 10px 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: glow 2.4s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: 0 0 0 1px var(--accent), 0 0 3px 0 color-mix(in srgb, var(--accent) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .rgrid tr.curp input.todo { animation: none; } }
 .rgrid td.rnar { width: 1%; min-width: 0; padding-left: 8px; padding-right: 8px; }
 .rgrid th.ten.solarg { background: color-mix(in srgb, #eda100 26%, var(--card)); border-left-color: #eda100; }
 .rgrid .r-solar { background: color-mix(in srgb, #eda100 16%, var(--card)); }
@@ -256,6 +261,10 @@ function stick() {
   if (p) document.querySelectorAll('.rgrid .dcol').forEach(d => d.style.left = p.getBoundingClientRect().width + 'px');
 }
 stick(); window.addEventListener('resize', stick);
+// новий місяць: порожні клітинки показників світяться, доки їх не заповнять
+const markTodo = i => i.classList.toggle('todo', i.value.trim() === '');
+document.querySelectorAll('.rgrid tr.curp input[data-key*="|value|"], .rgrid tr.curp input[data-key^="s|"], .rgrid tr.curp input[data-key*="|reactive|"]')
+  .forEach(i => { markTodo(i); i.addEventListener('input', () => markTodo(i)); });
 const changed = {};
 document.querySelectorAll('.rgrid input').forEach(i => {
   i.dataset.orig = i.value;
