@@ -122,6 +122,23 @@ def line_data(line_id, periods):
         cols.append({"kind": "l", "id": m["id"], "title": m["name"], "sub": _(ROLES[m["role"]]).split(" (")[0],
                      "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": m["role"], "name": None,
                      "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
+    # сублінії, що живляться від цієї лінії: їхні ввідні лічильники тут — споживачі (показники ті самі)
+    for sl in db.execute("SELECT id, name FROM power_lines WHERE parent_id=? AND active=1 ORDER BY sort, id",
+                         (line_id,)).fetchall():
+        for m in db.execute("SELECT * FROM line_meters WHERE line_id=? AND role='input' AND active=1 ORDER BY sort, id",
+                            (sl["id"],)).fetchall():
+            src = resolve_src(m["src"]) if m["src"] else None
+            if src and src[2]["line_id"] == line_id:
+                continue                              # ввід сублінії і так узятий з лічильника цієї лінії — не двічі
+            kind, sid, base = (src[0], src[1], src[2]) if src else ("l", m["id"], m)
+            table, idcol = ("readings", "meter_id") if kind == "m" else ("line_readings", "line_meter_id")
+            rows = db.execute(f"SELECT period, value, reactive FROM {table} WHERE {idcol}=?", (sid,)).fetchall()
+            cols.append({"kind": kind, "id": sid, "dkind": "sub", "did": m["id"], "title": m["name"],
+                         "sub": _("ввод подлинии") + f" «{sl['name']}»", "serial": base["serial"],
+                         "reactive": bool(m["has_reactive"]), "role": "own", "name": None, "linked": sl["name"],
+                         "subline": sl["id"],
+                         "data": _series(rows, base["initial_value"], base["initial_reactive"] or 0, base["coef"] or 1,
+                                         periods)})
     # реактивна: вносять лише ввідні/сонячні лічильники лінії; споживачам з галочкою «реактивна» реактив лінії
     # розподіляється пропорційно їхній активній витраті й округлюється вгору до цілих кВт·год
     for c in cols:
@@ -312,7 +329,7 @@ def table_view(line_id, periods, service_id=None):
     if line_id:
         cols, bal = line_data(line_id, periods)
         groups = _group([c for c in cols if c.get("dkind", c["kind"]) == "m"])
-        own = [c for c in cols if c.get("dkind", c["kind"]) == "l"]
+        own = [c for c in cols if c.get("dkind", c["kind"]) in ("l", "sub")]
         _mark_past(groups, periods)
         if own:
             groups.append({"kind": "line", "tid": None, "title": None, "cols": own})
@@ -441,15 +458,24 @@ def manage():
             lid = request.form.get("lid", type=int)
             name = request.form.get("name", "").strip()
             if request.form.get("delete") and lid:
+                db.execute("UPDATE power_lines SET parent_id=NULL WHERE parent_id=?", (lid,))
                 db.execute("UPDATE meters SET line_id=NULL WHERE line_id=?", (lid,))
                 db.execute("DELETE FROM line_readings WHERE line_meter_id IN (SELECT id FROM line_meters WHERE line_id=?)",
                            (lid,))
                 db.execute("DELETE FROM line_meters WHERE line_id=?", (lid,))
                 db.execute("DELETE FROM power_lines WHERE id=?", (lid,))
             elif lid:
-                db.execute("UPDATE power_lines SET name=?, note=?, sort=?, has_solar=? WHERE id=?",
+                parent = request.form.get("parent_id", type=int)
+                p = parent
+                while p:                                   # без циклів: лінія не може живитись від своєї сублінії
+                    if p == lid:
+                        flash(_("Линия не может питаться от самой себя или своей подлинии"))
+                        return redirect(url_for("lines.manage"))
+                    r_ = db.execute("SELECT parent_id FROM power_lines WHERE id=?", (p,)).fetchone()
+                    p = r_["parent_id"] if r_ else None
+                db.execute("UPDATE power_lines SET name=?, note=?, sort=?, has_solar=?, parent_id=? WHERE id=?",
                            (name, request.form.get("note", "").strip(), request.form.get("sort", type=int) or 100,
-                            1 if request.form.get("has_solar") else 0, lid))
+                            1 if request.form.get("has_solar") else 0, parent, lid))
             elif name:
                 db.execute("INSERT INTO power_lines(name, note, sort, has_solar) VALUES (?,?,?,?)",
                            (name, request.form.get("note", "").strip(), request.form.get("sort", type=int) or 100,

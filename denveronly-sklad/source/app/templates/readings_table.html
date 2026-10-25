@@ -97,7 +97,7 @@ dialog.qm .full { grid-column: 1 / -1; }
   </form>
   <button type="button" class="sm" onclick="openQM()">＋ {{ _("Счётчик") }}</button>
 </div>
-{% if line and line.note %}<p class="muted" style="margin-top:-4px">{{ line.note }}</p>{% endif %}
+{% if line and (line.note or line.parent_id) %}<p class="muted" style="margin-top:-4px">{{ line.note or '' }}{% if line.parent_id %}{% for p in all_lines if p.id == line.parent_id %}{{ ' · ' if line.note }}{{ _("Подлиния, питается от") }} «{{ p.name }}» — {{ _("её ввод там учитывается как потребитель") }}{% endfor %}{% endif %}</p>{% endif %}
 
 {% macro width(c) %}{{ 2 + (2 if c.rmode == 'input' else 1 if c.rmode == 'alloc' else 0) }}{% endmacro %}
 {% if not groups %}

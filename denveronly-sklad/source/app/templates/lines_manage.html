@@ -7,13 +7,16 @@
 
 <div class="card">
   <h2 style="margin-top:0">1. {{ _("Линии электроэнергии") }}</h2>
-  <p class="muted">{{ _("Каждая линия — отдельный ввод на базу со своим счётчиком. Например: «Линия 1 (старая)», «Линия 2 (новая)».") }}</p>
+  <p class="muted">{{ _("Каждая линия — отдельный ввод на базу со своим счётчиком. Например: «Линия 1 (старая)», «Линия 2 (новая)».") }}
+    {{ _("Подлиния (например, «Офис» с помещениями внутри) — укажите «питается от»: её вводный счётчик автоматически появится на родительской линии как потребитель, показания вносятся один раз.") }}</p>
   {% for l in all_lines %}
   <form method="post" class="row" style="padding:6px 0;border-bottom:1px solid var(--line);gap:8px;flex-wrap:wrap">
     <input type="hidden" name="action" value="line"><input type="hidden" name="lid" value="{{ l.id }}">
     <input name="name" value="{{ l.name }}" required style="width:220px">
     <input name="note" value="{{ l.note or '' }}" placeholder="{{ _("Заметка") }}" style="flex:1;min-width:180px">
     <input name="sort" value="{{ l.sort }}" inputmode="numeric" style="width:60px" title="{{ _("Порядок") }}">
+    <label class="row" style="gap:6px;font-size:13px;flex-direction:row;align-items:center" title="{{ _("Подлиния: её вводный счётчик будет на выбранной линии потребителем") }}">{{ _("питается от") }}
+      <select name="parent_id" style="width:auto"><option value="">—</option>{% for p in all_lines if p.id != l.id %}<option value="{{ p.id }}" {{ 'selected' if l.parent_id == p.id }}>{{ p.name }}</option>{% endfor %}</select></label>
     <label class="check" title="{{ _("Для подлиний (например, офис) снимите галочку — колонки «Солнце» не будет") }}"><input type="checkbox" name="has_solar" value="1" {{ 'checked' if l.has_solar }}> ☀ {{ _("Солнечная генерация") }}</label>
     <button class="sm ghost">{{ _("Сохранить") }}</button>
     <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить линию вместе с её вводными счётчиками и их показаниями? Счётчики складов останутся, только отвяжутся от линии.")|tojson|forceescape }})">{{ _("Удалить") }}</button>
