@@ -5,3 +5,4 @@ reportlab>=4
 pillow>=10
 pillow-heif>=0.16
 openpyxl>=3.1
+smbprotocol>=1.13

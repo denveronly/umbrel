@@ -587,7 +587,8 @@ def _migrate(con, site=MAIN_SITE):
 
 # що копіюється в новий об'єкт з «Бази» при першому запуску: компанії-отримувачі та загальні налаштування
 SEED_SKIP_SETTINGS = {"plan_image", "plan_w", "plan_h", "last_auto_backup", "fx_last_try", "fx_last_error",
-                      "categories_seeded"}
+                      "categories_seeded", "nas_enabled", "nas_server", "nas_share", "nas_path", "nas_user", "nas_password",
+                      "nas_keep"}
 
 
 def init_db(site=None):

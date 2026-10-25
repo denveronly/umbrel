@@ -11,10 +11,11 @@ from datetime import datetime, timedelta
 from flask import (Blueprint, abort, flash, redirect, render_template, request, send_file, url_for)
 
 import auth
+import nas
 from audit import log
 from i18n import _
-from db import (DATA_DIR, SITES, backup_dir, current_site, db_path, get_db, init_db, photos_dir, set_setting, settings,
-                uploads_dir, using_site)
+from db import (DATA_DIR, MAIN_SITE, SITES, backup_dir, current_site, db_path, get_db, init_db, photos_dir, set_setting,
+                settings, uploads_dir, using_site)
 
 bp = Blueprint("logs", __name__)
 NAME_RE = re.compile(r"^sklad_\d{4}-\d{2}-\d{2}_\d{6}_(manual|auto|pre-restore|pre-ai|upload)\.zip$")
@@ -138,6 +139,7 @@ def _auto_backup_site():
         name = create_backup("auto")
         prune(int(s.get("backup_keep") or 30))
         log("Автоматический бэкап", name, username="система")
+        nas.send_async([(os.path.join(backup_dir(), name), current_site())])
     except Exception as e:
         log("Ошибка автоматического бэкапа", e, username="система")
 
@@ -196,6 +198,36 @@ def database():
             name = create_backup("manual")
             log("Бэкап создан вручную", name)
             flash(_("Бэкап создан") + f": {name}")
+            if nas.send_async([(os.path.join(backup_dir(), name), current_site())], who="вручну"):
+                flash(_("Копия отправляется на сетевую папку — статус ниже"))
+        elif action == "nas_settings":
+            with using_site(MAIN_SITE):
+                set_setting("nas_enabled", "1" if request.form.get("nas_enabled") else "0")
+                for k in ("nas_server", "nas_share", "nas_path", "nas_user"):
+                    set_setting(k, request.form.get(k, "").strip())
+                if request.form.get("nas_password"):          # порожнє поле — пароль не змінюється
+                    set_setting("nas_password", request.form["nas_password"])
+                set_setting("nas_keep", str(max(1, request.form.get("nas_keep", 30, type=int))))
+                get_db().commit()
+            log("Настройки копии на сетевую папку изменены", request.form.get("nas_server", ""))
+            flash(_("Настройки сохранены"))
+        elif action == "nas_test":
+            ok, msg = nas.test_connection()
+            log("Проверка сетевой папки", ("ok " if ok else "ошибка ") + msg)
+            flash((_("Соединение есть, запись работает") + f": {msg}") if ok else (_("Не удалось подключиться") + f": {_(msg)}"))
+        elif action == "nas_send":
+            items = []
+            for site in SITES:
+                with using_site(site):
+                    b = list_backups()
+                    if not b:
+                        b = [{"name": create_backup("manual")}]
+                    items.append((os.path.join(backup_dir(), b[0]["name"]), site))
+            if nas.send_async(items, who="вручну"):
+                log("Отправка бэкапов на сетевую папку", ", ".join(os.path.basename(p) for p, _s in items))
+                flash(_("Последние бэкапы отправляются на сетевую папку — обновите страницу через минуту"))
+            else:
+                flash(_("Сначала включите и заполните настройки сетевой папки"))
         elif action == "settings":
             set_setting("auto_backup", "1" if request.form.get("auto_backup") else "0")
             set_setting("backup_keep", str(max(1, request.form.get("backup_keep", 30, type=int))))
@@ -252,8 +284,9 @@ def database():
             log("Журнал очищен", f"удалено {n} записей старше {days} дней")
             flash(_("Удалено записей журнала") + f": {n}")
         return redirect(url_for("logs.database"))
+    nc = nas.config()
     return render_template("logs_db.html", st=db_stats(), backups=list_backups(), tab="db",
-                           last_auto=settings().get("last_auto_backup"))
+                           last_auto=settings().get("last_auto_backup"), nas=nc, nas_status=nas.read_status())
 
 
 @bp.route("/logs/backup/<name>")
