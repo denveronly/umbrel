@@ -19,6 +19,7 @@ import ai
 import economics
 import photos
 import tenant_files
+import diag
 import lines
 import sheet
 from audit import log
@@ -33,6 +34,7 @@ backup.init_app(app)
 audit.init_app(app)
 photos.init_app(app)
 tenant_files.init_app(app)
+diag.init_app(app)
 economics.init_app(app)
 ai.init_app(app)
 lines.init_app(app)

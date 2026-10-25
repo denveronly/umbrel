@@ -9,5 +9,6 @@
   <a href="{{ url_for('logs.logs') }}" class="{{ 'on' if request.endpoint == 'logs.logs' }}">{{ _("Журнал действий") }}</a>
   <a href="{{ url_for('logs.database') }}" class="{{ 'on' if request.endpoint == 'logs.database' }}">{{ _("База данных и бэкапы") }}</a>
   {% endif %}
+  {% if current_user.role == 'admin' %}<a href="{{ url_for('diag.page') }}" class="{{ 'on' if request.endpoint == 'diag.page' }}">{{ _("Диагностика") }}</a>{% endif %}
   <span class="spacer"></span><span class="muted ver" title="{{ _("Версия программы") }}">v{{ APP_VERSION }}</span>
 </div>

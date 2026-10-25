@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Диагностика сети") }}{% endblock %}
+{% block content %}
+<h1>{{ _("Настройки") }}</h1>
+{% include "_settings_tabs.html" %}
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Диагностика сети") }}</h2>
+  <p class="muted">{{ _("Проверить, видит ли программа другой сервер (например, Synology для бэкапов): ping, открыт ли порт (SMB — 445), находится ли имя. Это не терминал — только эти проверки.") }}</p>
+  <form method="post" class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+    <label style="min-width:220px">{{ _("Адрес (IP или имя)") }}<input name="host" value="{{ host }}" placeholder="192.168.1.20"></label>
+    <label style="width:110px">{{ _("Порт") }}<input name="port" type="number" min="1" max="65535" value="{{ port }}"></label>
+    <button name="tool" value="ping" class="{{ '' if tool == 'ping' else 'ghost' }}">ping</button>
+    <button name="tool" value="port" class="{{ '' if tool == 'port' else 'ghost' }}">{{ _("Проверить порт") }}</button>
+    <button name="tool" value="dns" class="{{ '' if tool == 'dns' else 'ghost' }}">DNS</button>
+    <button name="tool" value="smb" class="{{ '' if tool == 'smb' else 'ghost' }}" title="{{ _("Подключиться к сетевой папке с сохранёнными настройками и записать пробный файл") }}">{{ _("Проверить SMB-папку") }}</button>
+  </form>
+  {% if out is not none %}<pre class="diagout">{{ out }}</pre>{% endif %}
+</div>
+{% endblock %}
