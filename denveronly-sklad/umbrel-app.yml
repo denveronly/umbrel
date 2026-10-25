@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.30.1"
+version: "1.30.2"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  YASNO: вхід у кабінет пробує кілька способів (звичайна форма, CSRF-заголовок як у Rails, AJAX) — виправлення «HTTP 422».
-  Відповіді кабінету при вході зберігаються для діагностики.
+  Акти: суми за місяць і підсумки компаній бачить лише адміністратор; оператор — компанії з переліком актів.
+  YASNO: вхід у кабінет кількома способами (виправлення «HTTP 422»).
 dependencies: []
 path: ""
 defaultUsername: ""

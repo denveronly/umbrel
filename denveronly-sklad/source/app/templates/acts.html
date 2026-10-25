@@ -15,14 +15,16 @@
 <p class="muted">{{ _("Проверьте цифры, затем «PDF» или «Word» — акт сформируется и скачается. Черновик при повторном нажатии пересчитывается, утверждённый — нет") }}.
   {% if util_period != period %}{{ _("Показания и цены за") }} {{ period_label(util_period) }} {{ _("вносятся во вкладке") }} <a href="{{ url_for('readings', period=util_period) }}">{{ _("Показания") }}</a>.{% endif %}</p>
 
+{# суми по компаніях і за місяць бачить лише адміністратор; оператор — тільки перелік актів #}
+{% set is_admin = current_user and current_user.role == 'admin' %}
 <div class="kpis">
-  <div class="kpi"><small class="muted">{{ _("Всего за месяц") }}</small><b>{{ money(grand) }}</b></div>
-  {% for grp in groups %}<div class="kpi {{ 'kpi-noco' if not grp.c }}"><small class="muted">{{ grp.c.name if grp.c else _("Без компании") }}</small><b>{{ money(grp.tot.total) }}</b>
+  {% if is_admin %}<div class="kpi"><small class="muted">{{ _("Всего за месяц") }}</small><b>{{ money(grand) }}</b></div>{% endif %}
+  {% for grp in groups if is_admin or not grp.c %}<div class="kpi {{ 'kpi-noco' if not grp.c }}"><small class="muted">{{ grp.c.name if grp.c else _("Без компании") }}</small><b>{{ money(grp.tot.total) if is_admin else grp.rows|length ~ ' ' ~ _("арендаторов") }}</b>
     {% if not grp.c %}<details class="kmore"><summary title="{{ _("Кого не отнесли к компании") }}">⋯</summary>
       <div class="kpop"><div class="kpop-h">{{ _("Без компании-получателя") }}</div>
         <p class="muted" style="margin:4px 0 8px">{{ _("Выберите компанию в карточке арендатора — акт напечатается с её реквизитами.") }}</p>
         <ul>{% for r in grp.rows %}<li><a href="{{ url_for('tenant_edit', tid=r.t.id) }}">{{ r.t.name }}</a>
-          <span class="muted">· {{ PAYMENT_TYPES[r.t.payment_type] }} · {{ money(r.totals.total) }}</span>{% if not r.t.active %} <span class="badge off">{{ _("выехал") }}</span>{% endif %}</li>{% endfor %}</ul></div>
+          <span class="muted">· {{ PAYMENT_TYPES[r.t.payment_type] }}{% if is_admin %} · {{ money(r.totals.total) }}{% endif %}</span>{% if not r.t.active %} <span class="badge off">{{ _("выехал") }}</span>{% endif %}</li>{% endfor %}</ul></div>
     </details>{% endif %}</div>{% endfor %}
 <script>document.addEventListener('click', e => document.querySelectorAll('details.kmore[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }));</script>
 </div>
@@ -44,7 +46,7 @@
 
   {# підсумки без повторів: одна форма оплати — одна цифра з її назвою (з ПДВ — ще й сума ПДВ); кілька — по кожній + разом #}
   {% set pts = grp.by_pt.keys()|list %}
-  <div class="cototals">
+  {% if is_admin %}<div class="cototals">
     {% if pts|length == 1 %}
       {% if pts[0] == 'bank_vat' %}
         <div><span class="muted">{{ _("Всего с ПДВ") }}</span><b>{{ money(grp.tot.total) }}</b></div>
@@ -61,7 +63,7 @@
       {% if grp.tot.vat %}<div><span class="muted">{{ _("в т.ч. ПДВ") }}</span><b>{{ money(grp.tot.vat) }}</b></div>{% endif %}
       <div class="ctsum"><span class="muted">{{ _("Итого") }}</span><b>{{ money(grp.tot.total) }}</b></div>
     {% endif %}
-  </div>
+  </div>{% endif %}
 
   {% for it in grp.rows %}
   <details class="actrow">
