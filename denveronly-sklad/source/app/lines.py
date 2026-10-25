@@ -54,20 +54,37 @@ def line_data(line_id, periods):
     db = get_db()
     cols = []
     # субрахунки орендарів (лічильники складів з послугою «за лічильником», закріплені за лінією)
-    for m in db.execute("SELECT m.*, w.name AS wh, t.name AS tenant, s.name AS svc FROM meters m "
+    for m in db.execute("SELECT m.*, w.name AS wh, t.id AS tid, t.name AS tenant, s.name AS svc FROM meters m "
                         "JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN tenants t ON t.id=w.tenant_id "
-                        "JOIN services s ON s.id=m.service_id WHERE m.line_id=? AND m.active=1 ORDER BY w.name, m.serial",
-                        (line_id,)).fetchall():
+                        "JOIN services s ON s.id=m.service_id WHERE m.line_id=? AND m.active=1 "
+                        "ORDER BY t.name IS NULL, t.name COLLATE NOCASE, w.name, m.serial", (line_id,)).fetchall():
         rows = db.execute("SELECT period, value, reactive FROM readings WHERE meter_id=?", (m["id"],)).fetchall()
         cols.append({"kind": "m", "id": m["id"], "title": m["wh"], "sub": m["tenant"] or _("свободен"),
                      "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": "tenant",
+                     "tid": m["tid"], "tenant": m["tenant"], "svc": m["svc"], "name": m["name"],
                      "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
     for m in db.execute("SELECT * FROM line_meters WHERE line_id=? AND active=1 ORDER BY CASE role WHEN 'own' THEN 0 "
                         "WHEN 'input' THEN 1 ELSE 2 END, sort, name", (line_id,)).fetchall():
         rows = db.execute("SELECT period, value, reactive FROM line_readings WHERE line_meter_id=?", (m["id"],)).fetchall()
         cols.append({"kind": "l", "id": m["id"], "title": m["name"], "sub": _(ROLES[m["role"]]).split(" (")[0],
-                     "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": m["role"],
+                     "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": m["role"], "name": None,
                      "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
+    # реактивна: вносять лише ввідні/сонячні лічильники лінії; споживачам з галочкою «реактивна» реактив лінії
+    # розподіляється пропорційно їхній активній витраті
+    for c in cols:
+        c["rmode"] = ("input" if c["role"] in ("input", "solar") else "alloc") if c["reactive"] else None
+    for p in periods:
+        total = [c["data"][p]["rcons"] for c in cols if c["rmode"] == "input" and c["role"] == "input"
+                 and c["data"][p]["rcons"] is not None]
+        total = sum(total) if total else None
+        cons = {id(c): c["data"][p]["cons"] for c in cols if c["rmode"] == "alloc"}
+        base = sum(v for v in cons.values() if v and v > 0)
+        for c in cols:
+            if c["rmode"] == "alloc":
+                v = cons[id(c)]
+                c["data"][p]["ralloc"] = calc.r2(total * v / base) if total is not None and base and v and v > 0 else \
+                    (0 if total is not None and v is not None else None)
+        # stored reactive of consumers is ignored now
     # баланс по місяцях
     bal = {}
     for p in periods:
@@ -75,7 +92,8 @@ def line_data(line_id, periods):
             vals = [c["data"][p][key] for c in cols if c["role"] in role and c["data"][p][key] is not None]
             return calc.r2(sum(vals)) if vals else None
         users = s(("tenant", "own"))
-        ureact = s(("tenant", "own"), "rcons")
+        al = [c["data"][p].get("ralloc") for c in cols if c["rmode"] == "alloc" and c["data"][p].get("ralloc") is not None]
+        ureact = calc.r2(sum(al)) if al else None
         inp = s(("input",))
         solar = s(("solar",))
         supply = (inp or 0) + (solar or 0) if inp is not None or solar is not None else None
@@ -87,6 +105,13 @@ def line_data(line_id, periods):
 
 @bp.route("/lines")
 def lines():
+    """Стара сторінка лінії — тепер вкладка лінії в таблиці показників."""
+    if request.args.get("old") != "1":
+        return redirect(url_for("lines.table", line=request.args.get("line") or "", months=request.args.get("months") or 12))
+    return lines_old()
+
+
+def lines_old():
     db = get_db()
     all_lines = db.execute("SELECT * FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
     if not all_lines:
@@ -154,35 +179,64 @@ def save():
 
 # ---------------- таблиця показників: колонки — лічильники орендарів, рядки — місяці / дати зйому ----------------
 
-def table_data(periods, service_id=None):
+def _owners():
+    """Орендарі зі складами (за абеткою) + «вільні склади»: [(tid, name, [whs])]."""
     db = get_db()
-    groups = []          # [{tenant, tid, whs:[...], cols:[...]}]
-    q = ("SELECT m.*, w.name AS wh, w.id AS wid, s.name AS svc, s.unit, l.name AS line FROM meters m "
-         "JOIN warehouses w ON w.id=m.warehouse_id JOIN services s ON s.id=m.service_id "
-         "LEFT JOIN power_lines l ON l.id=m.line_id WHERE m.active=1 AND s.active=1 AND w.id=?"
-         + (" AND m.service_id=?" if service_id else "") + " ORDER BY s.sort, m.serial")
-
-    def cols_for(wh_ids):
-        cols = []
-        for wid in wh_ids:
-            for m in db.execute(q, (wid, service_id) if service_id else (wid,)).fetchall():
-                rows = db.execute("SELECT period, value, reactive FROM readings WHERE meter_id=?", (m["id"],)).fetchall()
-                cols.append({"id": m["id"], "wh": m["wh"], "svc": m["svc"], "unit": m["unit"], "serial": m["serial"],
-                             "name": m["name"], "line": m["line"], "reactive": bool(m["has_reactive"]),
-                             "data": _series(rows, m["initial_value"], m["initial_reactive"] or 0, m["coef"] or 1, periods)})
-        return cols
+    out = []
     for t in db.execute("SELECT id, name FROM tenants WHERE active=1 ORDER BY name COLLATE NOCASE").fetchall():
-        whs = db.execute("SELECT id, name FROM warehouses WHERE tenant_id=? ORDER BY name", (t["id"],)).fetchall()
-        if not whs:
-            continue
-        groups.append({"tid": t["id"], "tenant": t["name"], "whs": [dict(w) for w in whs],
-                       "cols": cols_for([w["id"] for w in whs])})
-    free = db.execute("SELECT id, name FROM warehouses WHERE tenant_id IS NULL ORDER BY name").fetchall()
-    fcols = cols_for([w["id"] for w in free])
-    if fcols:
-        groups.append({"tid": None, "tenant": None, "whs": [dict(w) for w in free], "cols": fcols})
-    dates = {r["period"]: r["taken"] for r in db.execute("SELECT period, taken FROM reading_dates")}
-    return groups, dates
+        whs = [dict(w) for w in db.execute("SELECT id, name FROM warehouses WHERE tenant_id=? ORDER BY name", (t["id"],))]
+        if whs:
+            out.append((t["id"], t["name"], whs))
+    free = [dict(w) for w in db.execute("SELECT id, name FROM warehouses WHERE tenant_id IS NULL ORDER BY name")]
+    if free:
+        out.append((None, None, free))
+    return out
+
+
+def _group(cols):
+    """Колонки лічильників складів -> групи за орендарями (порядок колонок зберігається)."""
+    groups = []
+    for c in cols:
+        key = c.get("tid")
+        if not groups or groups[-1]["tid"] != key or groups[-1]["kind"] != "tenant":
+            groups.append({"kind": "tenant", "tid": key, "title": c.get("tenant"), "cols": []})
+        groups[-1]["cols"].append(c)
+    return groups
+
+
+def table_view(line_id, periods, service_id=None):
+    """Вкладка таблиці: line_id — лінія (лічильники орендарів + власні лічильники лінії + баланс) або None — без лінії."""
+    db = get_db()
+    if line_id:
+        cols, bal = line_data(line_id, periods)
+        groups = _group([c for c in cols if c["kind"] == "m"])
+        own = [c for c in cols if c["kind"] == "l"]
+        if own:
+            groups.append({"kind": "line", "tid": None, "title": None, "cols": own})
+        return groups, bal
+    known = {r["id"] for r in db.execute("SELECT id FROM power_lines WHERE active=1")}
+    cols = []
+    q = ("SELECT m.*, w.name AS wh, s.name AS svc FROM meters m JOIN warehouses w ON w.id=m.warehouse_id "
+         "JOIN services s ON s.id=m.service_id WHERE m.active=1 AND s.active=1 AND w.id=?"
+         + (" AND m.service_id=?" if service_id else "") + " ORDER BY s.sort, m.serial")
+    groups = []
+    for tid, name, whs in _owners():
+        all_m = [m for w in whs for m in db.execute(q, (w["id"], service_id) if service_id else (w["id"],)).fetchall()]
+        ms = [m for m in all_m if m["line_id"] not in known]
+        has_any = db.execute("SELECT 1 FROM meters m JOIN warehouses w ON w.id=m.warehouse_id WHERE m.active=1 AND "
+                             + ("w.tenant_id=?" if tid else "w.tenant_id IS NULL") + " LIMIT 1",
+                             (tid,) if tid else ()).fetchone()
+        if not ms and (has_any or not tid):
+            continue                                  # орендар без жодного лічильника — тут, з кнопкою «＋»
+        cols = []
+        for m in ms:
+            rows = db.execute("SELECT period, value, reactive FROM readings WHERE meter_id=?", (m["id"],)).fetchall()
+            cols.append({"kind": "m", "id": m["id"], "title": m["wh"], "svc": m["svc"], "name": m["name"],
+                         "serial": m["serial"], "reactive": bool(m["has_reactive"]), "role": "tenant",
+                         "rmode": "alloc" if m["has_reactive"] else None,
+                         "data": _series(rows, m["initial_value"], 0, m["coef"] or 1, periods)})
+        groups.append({"kind": "tenant", "tid": tid, "title": name, "cols": cols})
+    return groups, None
 
 
 @bp.route("/readings/table")
@@ -192,13 +246,20 @@ def table():
     n = request.args.get("months", 12, type=int)
     n = n if n in (6, 12, 24, 36) else 12
     end = request.args.get("to") or this_month()
-    sid = request.args.get("service", type=int)
     periods = periods_range(end, n)
-    groups, dates = table_data(periods, sid)
+    all_lines = db.execute("SELECT * FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
+    tab = request.args.get("line", "")
+    line = next((l for l in all_lines if str(l["id"]) == tab), None)
+    if not line and tab != "none":
+        line = all_lines[0] if all_lines else None
+    sid = request.args.get("service", type=int) if not line else None
+    groups, bal = table_view(line["id"] if line else None, periods, sid)
+    dates = {r["period"]: r["taken"] for r in db.execute("SELECT period, taken FROM reading_dates")}
     msvcs = db.execute("SELECT id, name FROM services WHERE mode='meter' AND active=1 ORDER BY sort, name").fetchall()
-    plines = db.execute("SELECT id, name FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
-    return render_template("readings_table.html", groups=groups, dates=dates, periods=periods, months=n, end=end,
-                           service=sid, msvcs=msvcs, plines=plines)
+    owners = _owners()
+    return render_template("readings_table.html", groups=groups, bal=bal, line=line, all_lines=all_lines,
+                           dates=dates, periods=periods, months=n, end=end, service=sid, msvcs=msvcs,
+                           owners=[{"tid": t, "name": nm, "whs": w} for t, nm, w in owners])
 
 
 @bp.route("/readings/table/meter", methods=["POST"])

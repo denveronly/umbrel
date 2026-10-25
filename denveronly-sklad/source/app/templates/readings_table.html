@@ -36,24 +36,42 @@ dialog.qm .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
 dialog.qm .full { grid-column: 1 / -1; }
 .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .filters select { width: auto; }
+.linetabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.linetabs a.lt { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: var(--card); }
+.linetabs a.lt.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.rgrid th.ten.lineg { background: color-mix(in srgb, #2a78d6 12%, var(--card)); border-left-color: #2a78d6; }
+.rgrid .r-input { background: color-mix(in srgb, #2a78d6 9%, var(--card)); }
+.rgrid .r-solar { background: color-mix(in srgb, #eda100 13%, var(--card)); }
+.rgrid .r-own { background: color-mix(in srgb, var(--muted) 9%, var(--card)); }
+.rgrid .sum { background: var(--accent-soft); font-weight: 600; }
+.rgrid th.ten.bal { background: var(--accent-soft); border-left-color: var(--accent); }
+.rgrid td.al { color: var(--muted); font-style: italic; }
 </style>
 {% endblock %}
 {% block content %}
 <div class="row"><h1 style="margin:0">{{ _("Показания") }}</h1><span class="spacer"></span></div>
 {% include "_readings_tabs.html" %}
 
-<form method="get" class="filters">
-  <span class="muted">{{ _("Услуга") }}:</span>
-  <select name="service" onchange="this.form.submit()"><option value="">{{ _("все счётчики") }}</option>
-    {% for s in msvcs %}<option value="{{ s.id }}" {{ 'selected' if service == s.id }}>{{ s.name }}</option>{% endfor %}</select>
-  <span class="muted">{{ _("Период") }}:</span>
-  <select name="months" onchange="this.form.submit()">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select>
+<div class="linetabs">
+  {% for l in all_lines %}<a class="lt {{ 'on' if line and line.id == l.id }}" href="?line={{ l.id }}&months={{ months }}">⚡ {{ l.name }}</a>{% endfor %}
+  <a class="lt {{ 'on' if not line }}" href="?line=none&months={{ months }}">{{ _("Без линии") }}</a>
+  <a class="btn sm ghost" href="{{ url_for('lines.manage') }}">⚙ {{ _("Настроить линии") }}</a>
   <span class="spacer"></span>
-  <span class="muted">{{ _("Цены и количества (вывоз мусора и т.п.) — во вкладке") }} <a href="{{ url_for('readings') }}">{{ _("Цены и количества") }}</a></span>
-</form>
+  <form method="get" class="filters" style="margin:0">
+    <input type="hidden" name="line" value="{{ line.id if line else 'none' }}">
+    {% if not line %}<span class="muted">{{ _("Услуга") }}:</span>
+    <select name="service" onchange="this.form.submit()"><option value="">{{ _("все счётчики") }}</option>
+      {% for s in msvcs %}<option value="{{ s.id }}" {{ 'selected' if service == s.id }}>{{ s.name }}</option>{% endfor %}</select>{% endif %}
+    <span class="muted">{{ _("Период") }}:</span>
+    <select name="months" onchange="this.form.submit()">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select>
+  </form>
+  <button type="button" class="sm" onclick="openQM()">＋ {{ _("Счётчик") }}</button>
+</div>
+{% if line and line.note %}<p class="muted" style="margin-top:-4px">{{ line.note }}</p>{% endif %}
 
+{% macro width(c) %}{{ 2 + (2 if c.rmode == 'input' else 1 if c.rmode == 'alloc' else 0) }}{% endmacro %}
 {% if not groups %}
-  <div class="warn">{{ _("Нет арендаторов со складами.") }}</div>
+  <div class="warn">{% if line %}{{ _("На этой линии ещё нет счётчиков.") }} {{ _("Добавьте счётчик кнопкой «＋ Счётчик» или привяжите существующие в") }} <a href="{{ url_for('lines.manage') }}">{{ _("Настроить линии") }}</a>.{% else %}{{ _("Все счётчики привязаны к линиям.") }}{% endif %}</div>
 {% else %}
 <div class="gridwrap">
 <table class="rgrid">
@@ -61,43 +79,61 @@ dialog.qm .full { grid-column: 1 / -1; }
     <tr class="h1">
       <th class="pcol" rowspan="3">{{ _("Месяц") }}</th>
       <th class="dcol" rowspan="3">{{ _("Дата снятия") }}</th>
-      {% for g in groups %}{% set span = (g.cols|sum(attribute='reactive') * 2 + g.cols|length * 2) if g.cols else 1 %}
-        <th class="ten {{ 'free' if not g.tid }}" colspan="{{ span }}">{% if g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.tenant }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}
-          <button type="button" class="sm ghost addm" onclick="openQM({{ loop.index0 }})" title="{{ _("Добавить счётчик") }}">＋</button></th>
+      {% for g in groups %}{% set ns = namespace(w=0) %}{% for c in g.cols %}{% set ns.w = ns.w + width(c)|int %}{% endfor %}
+        <th class="ten {{ 'free' if g.kind == 'tenant' and not g.tid }} {{ 'lineg' if g.kind == 'line' }}" colspan="{{ ns.w or 1 }}">
+          {% if g.kind == 'line' %}⚡ {{ _("Счётчики линии") }}{% elif g.tid %}<a href="{{ url_for('tenant_edit', tid=g.tid) }}">{{ g.title }}</a>{% else %}{{ _("Свободные склады") }}{% endif %}
+          {% if g.kind == 'tenant' %}<button type="button" class="sm ghost addm" onclick="openQM({{ g.tid|tojson }})" title="{{ _("Добавить счётчик") }}">＋</button>{% endif %}</th>
       {% endfor %}
+      {% if bal %}<th class="ten bal" colspan="5">{{ _("Баланс линии") }}</th>{% endif %}
     </tr>
     <tr class="h2">
-      {% for g in groups %}{% set gl = loop %}
+      {% for g in groups %}
         {% for c in g.cols %}
-          <th class="mt {{ 'first' if loop.first }} {{ 'freec' if not g.tid }}" colspan="{{ 4 if c.reactive else 2 }}">{{ c.wh }} · {{ c.svc }}
-            <small>{% if c.name %}{{ c.name }} · {% endif %}{% if c.serial %}№{{ c.serial }}{% endif %}{% if c.line %} · ⚡ {{ c.line }}{% endif %}</small></th>
+          <th class="mt {{ 'first' if loop.first }} r-{{ c.role }}" colspan="{{ width(c) }}">{{ c.title }}{% if c.svc %} · {{ c.svc }}{% endif %}
+            <small>{% if c.kind == 'l' %}{{ c.sub }}{% if c.serial %} · №{{ c.serial }}{% endif %}{% else %}{% if c.name %}{{ c.name }} · {% endif %}{% if c.serial %}№{{ c.serial }}{% endif %}{% endif %}</small></th>
         {% else %}
-          <th class="mt first" rowspan="2"><button type="button" class="sm" onclick="openQM({{ gl.index0 }})">＋ {{ _("счётчик") }}</button></th>
+          <th class="mt first" rowspan="2"><button type="button" class="sm" onclick="openQM({{ g.tid|tojson }})">＋ {{ _("счётчик") }}</button></th>
         {% endfor %}
       {% endfor %}
+      {% if bal %}
+        <th class="mt sum first" colspan="2">{{ _("Сумма счётчиков") }}<small>{{ _("потребители линии") }}</small></th>
+        <th class="mt sum" rowspan="2">{{ _("Ввод + солнце") }}</th>
+        <th class="mt sum" colspan="2">{{ _("Разница") }}<small>{{ _("потери / общее") }}</small></th>
+      {% endif %}
     </tr>
     <tr class="h3">
       {% for g in groups %}{% for c in g.cols %}
-        <th class="{{ 'first' if loop.first }} {{ 'freec' if not g.tid }}">{{ _("показание") }}</th><th>{{ _("расход") }}</th>
-        {% if c.reactive %}<th>{{ _("реакт.") }}</th><th>{{ _("реакт. расход") }}</th>{% endif %}
+        <th class="{{ 'first' if loop.first }} r-{{ c.role }}">{{ _("показание") }}</th><th class="r-{{ c.role }}">{{ _("расход") }}</th>
+        {% if c.rmode == 'input' %}<th class="r-{{ c.role }}">{{ _("реакт.") }}</th><th class="r-{{ c.role }}">{{ _("реакт. расход") }}</th>
+        {% elif c.rmode == 'alloc' %}<th class="r-{{ c.role }}" title="{{ _("Реактив линии, распределённый пропорционально активному расходу") }}">{{ _("реакт. (доля)") }}</th>{% endif %}
       {% endfor %}{% endfor %}
+      {% if bal %}<th class="sum first">{{ _("кВт·год") }}</th><th class="sum">{{ _("реакт.") }}</th><th class="sum">{{ _("кВт·год") }}</th><th class="sum">%</th>{% endif %}
     </tr>
   </thead>
   <tbody>
-  {% for p in periods %}
+  {% for p in periods %}{% set b = bal[p] if bal else none %}
     <tr class="{{ 'curp' if loop.first }}">
       <td class="pcol">{{ period_label(p) }}</td>
       <td class="dcol"><input class="dt" data-key="d|0|taken|{{ p }}" value="{{ dates.get(p)|dmy if dates.get(p) else '' }}" placeholder="{{ _("дд.мм") }}" inputmode="numeric"></td>
       {% for g in groups %}
         {% for c in g.cols %}{% set d = c.data[p] %}
-          <td class="{{ 'first' if loop.first }} {{ 'freec' if not g.tid }}"><input data-key="m|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
-          <td class="c {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
-          {% if c.reactive %}
-            <td><input data-key="m|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
-            <td class="c rx">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
+          <td class="{{ 'first' if loop.first }} r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|value|{{ p }}" value="{{ d.value|plain }}" inputmode="decimal"></td>
+          <td class="c r-{{ c.role }} {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ num(d.cons) if d.cons is not none else '' }}</td>
+          {% if c.rmode == 'input' %}
+            <td class="r-{{ c.role }}"><input data-key="{{ c.kind }}|{{ c.id }}|reactive|{{ p }}" value="{{ d.reactive|plain }}" inputmode="decimal"></td>
+            <td class="c rx r-{{ c.role }}">{{ num(d.rcons) if d.rcons is not none else '' }}</td>
+          {% elif c.rmode == 'alloc' %}
+            <td class="c al r-{{ c.role }}" {% if not line %}title="{{ _("Счётчик не привязан к линии — реактив не распределяется") }}"{% endif %}>{{ num(d.ralloc) if d.ralloc is defined and d.ralloc is not none else ('—' if not line else '') }}</td>
           {% endif %}
-        {% else %}<td class="nom first">{% if loop.first %}—{% endif %}</td>{% endfor %}
+        {% else %}<td class="nom first"></td>{% endfor %}
       {% endfor %}
+      {% if bal %}
+        <td class="c sum first">{{ num(b.users) if b.users is not none else '' }}</td>
+        <td class="c sum rx">{{ num(b.ureact) if b.ureact is not none else '' }}</td>
+        <td class="c sum">{{ num(b.supply) if b.supply is not none else '' }}</td>
+        <td class="c sum {{ 'neg' if b.diff is not none and b.diff < 0 }}">{{ num(b.diff) if b.diff is not none else '' }}</td>
+        <td class="c sum">{{ '%.1f'|format(b.pct) if b.pct is not none else '' }}</td>
+      {% endif %}
     </tr>
   {% endfor %}
   </tbody>
@@ -105,22 +141,25 @@ dialog.qm .full { grid-column: 1 / -1; }
 </div>
 <div class="savebar"><span class="muted" id="dirtyinfo">{{ _("Показания на конец месяца. Расход считается от предыдущего показания.") }}</span><span class="spacer"></span>
   <button id="savebtn" onclick="saveCells()" disabled>{{ _("Сохранить") }}</button></div>
-<p class="muted">{{ _("Арендаторы без складов не показаны. Дату снятия можно вписать коротко: 26.10.") }}</p>
+<p class="muted">{% if line %}{{ _("Реактив вносится только на вводном счётчике линии. Счётчикам с галочкой «реактивная энергия» он распределяется пропорционально их активному расходу.") }} {{ _("Разница = ввод + солнечная генерация − сумма всех счётчиков линии (потери в сети и неучтённое потребление). Отрицательная разница подсвечена — проверьте показания.") }}{% else %}{{ _("Здесь — счётчики без линии и арендаторы, у которых ещё нет счётчиков.") }}{% endif %}
+  {{ _("Дату снятия можно вписать коротко: 26.10.") }}</p>
 {% endif %}
 
 <dialog class="qm" id="qm">
   <form method="dialog" id="qmform">
-    <h2 style="margin-top:0">{{ _("Новый счётчик") }}<br><small class="muted" id="qmten"></small></h2>
+    <h2 style="margin-top:0">{{ _("Новый счётчик") }}</h2>
     <div class="grid">
+      <label class="full">{{ _("Арендатор") }}<select name="owner" onchange="fillWh()">
+        {% for o in owners %}<option value="{{ o.tid if o.tid else 'free' }}">{{ o.name or _("Свободные склады") }}</option>{% endfor %}</select></label>
       <label>{{ _("Склад") }}<select name="warehouse_id" required></select></label>
       <label>{{ _("Услуга") }}<select name="service_id">{% for s in msvcs %}<option value="{{ s.id }}" {{ 'selected' if service == s.id }}>{{ s.name }}</option>{% endfor %}</select></label>
       <label>{{ _("Название") }}<input name="name" placeholder="{{ _("напр. Офис, Цех, Ввод 2") }}"></label>
       <label>{{ _("Номер счётчика") }}<input name="serial"></label>
-      <label>{{ _("Линия электроэнергии") }}<select name="line_id"><option value="">—</option>{% for l in plines %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label>
+      <label>{{ _("Линия электроэнергии") }}<select name="line_id"><option value="">—</option>{% for l in all_lines %}<option value="{{ l.id }}" {{ 'selected' if line and line.id == l.id }}>{{ l.name }}</option>{% endfor %}</select></label>
       <label>{{ _("Коэффициент") }}<input name="coef" value="1" inputmode="decimal"></label>
       <label>{{ _("Начальное показание") }}<input name="initial_value" value="0" inputmode="decimal"></label>
-      <label class="check" style="align-self:end"><input type="checkbox" name="has_reactive" value="1" onchange="document.getElementById('qmrx').style.display = this.checked ? '' : 'none'"> {{ _("реактивная энергия") }}</label>
-      <label id="qmrx" style="display:none">{{ _("Начальное реакт.") }}<input name="initial_reactive" value="0" inputmode="decimal"></label>
+      <label class="check" style="align-self:end"><input type="checkbox" name="has_reactive" value="1"> {{ _("реактивная энергия") }}</label>
+      <p class="muted full" style="margin:0">{{ _("Реактив такому счётчику не вносится — он получает долю реактива линии пропорционально активному расходу.") }}</p>
       <div class="full row"><span class="muted" id="qmerr"></span><span class="spacer"></span>
         <button type="button" class="ghost" onclick="document.getElementById('qm').close()">{{ _("Отмена") }}</button>
         <button type="button" onclick="saveQM()">{{ _("Добавить счётчик") }}</button></div>
@@ -130,8 +169,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 {% endblock %}
 {% block scripts %}
 <script>
-const GROUPS = {{ groups|map(attribute='whs')|list|tojson }};
-const TENANTS = {{ groups|map(attribute='tenant')|list|tojson }};
+const OWNERS = {{ owners|tojson }};
 // липкі рядки шапки й перші дві колонки: відступи за фактичними розмірами
 function stick() {
   let top = 0;
@@ -168,13 +206,18 @@ async function saveCells() {
 }
 window.addEventListener('beforeunload', e => { if (Object.keys(changed).length) { e.preventDefault(); e.returnValue = ''; } });
 
-function openQM(gi) {
-  const f = document.getElementById('qmform'), sel = f.warehouse_id;
-  sel.innerHTML = GROUPS[gi].map(w => `<option value="${w.id}">${w.name.replace(/</g, '&lt;')}</option>`).join('');
-  document.getElementById('qmten').textContent = TENANTS[gi] || t('Свободные склады');
+function fillWh() {
+  const f = document.getElementById('qmform'), o = OWNERS.find(x => String(x.tid || 'free') === f.owner.value);
+  f.warehouse_id.innerHTML = (o ? o.whs : []).map(w => `<option value="${w.id}">${w.name.replace(/</g, '&lt;')}</option>`).join('');
+}
+function openQM(tid) {
+  const f = document.getElementById('qmform');
+  if (tid !== null && tid !== undefined) f.owner.value = String(tid);
+  else if (tid === null && arguments.length && OWNERS.some(o => !o.tid)) f.owner.value = 'free';
+  fillWh();
   document.getElementById('qmerr').textContent = '';
   document.getElementById('qm').showModal();
-  (sel.options.length > 1 ? sel : f.serial).focus();
+  (f.warehouse_id.options.length > 1 ? f.warehouse_id : f.serial).focus();
 }
 async function saveQM() {
   if (Object.keys(changed).length && !confirm(t('Есть несохранённые показания. Сохранить их перед добавлением счётчика?'))) return;

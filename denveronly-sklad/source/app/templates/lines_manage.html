@@ -3,7 +3,7 @@
 {% block content %}
 <h1>{{ _("Показания и цены") }}</h1>
 {% include "_readings_tabs.html" %}
-{% if all_lines %}<p><a href="{{ url_for('lines.lines') }}">← {{ _("К таблице показаний линий") }}</a></p>{% endif %}
+{% if all_lines %}<p><a href="{{ url_for('lines.table') }}">← {{ _("К таблице показаний линий") }}</a></p>{% endif %}
 
 <div class="card">
   <h2 style="margin-top:0">1. {{ _("Линии электроэнергии") }}</h2>
