@@ -133,7 +133,9 @@ class Page(HTMLParser):
             self.forms.append(self._form)
         elif tag in ("input", "textarea", "select") and self._form is not None:
             self._form["inputs"].append({"name": a.get("name"), "type": (a.get("type") or "text").lower(),
-                                         "value": a.get("value") or "", "tag": tag})
+                                         "value": a.get("value") or "", "tag": tag, "id": a.get("id") or "",
+                                         "hidden_css": bool(re.search(r"display\s*:\s*none|visibility\s*:\s*hidden",
+                                                                      a.get("style") or "", re.I))})
         elif tag == "table":
             self._tstack.append({"rows": [], "before": self._recent.strip()[-160:], "row": None, "cell": None})
         elif tag == "tr" and self._tstack:
@@ -273,8 +275,9 @@ class LoginError(Exception):
 
 
 class Cabinet:
-    def __init__(self, base):
+    def __init__(self, base, fp=None):
         self.base = base.rstrip("/")
+        self.fp = fp or uuid.uuid4().hex
         self.jar = http.cookiejar.CookieJar()
         self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
         self.pages = {}
@@ -313,20 +316,30 @@ class Cabinet:
         return final, raw.decode(cs.group(1) if cs else "utf-8", errors="replace"), ctype
 
     def _form_data(self, form, login, password):
-        data, user_done = {}, False
+        """Поле логіна — видиме текстове поле з іменем на кшталт username/login/email. Приховані поля-пастки для
+        ботів (напр. «website» з display:none) лишаються порожніми, інакше сайт відхиляє вхід (HTTP 422)."""
+        texts = [i for i in form["inputs"] if i["tag"] == "input" and i["type"] in ("text", "email", "tel") and i["name"]
+                 and not i["hidden_css"] and not re.search(r"website|url|homepage|honey|hp_", i["name"] + i["id"], re.I)]
+        user = next((i for i in texts if re.search(r"login|user|email|phone|account", i["name"] + " " + i["id"], re.I)),
+                    texts[0] if texts else None)
+        data = {}
         for i in form["inputs"]:
             if not i["name"]:
                 continue
             if i["type"] == "password":
                 data[i["name"]] = password
-            elif i["type"] in ("text", "email", "tel") and i["tag"] == "input" and not user_done:
+            elif user is not None and i is user:
                 data[i["name"]] = login
-                user_done = True
             elif i["type"] in ("checkbox", "radio", "submit", "button", "image", "file", "reset"):
                 continue
+            elif re.search(r"fingerprint", i["name"], re.I) and not i["value"]:
+                data[i["name"]] = self.fp      # сайт заповнює його скриптом у браузері
             else:
                 data[i["name"]] = i["value"]
-        return data, user_done
+        submit = next((i for i in form["inputs"] if i["type"] == "submit" and i["name"]), None)
+        if submit:
+            data[submit["name"]] = submit["value"]
+        return data, user is not None
 
     def login(self, login, password):
         """Кілька способів по черзі (звичайна форма; форма з CSRF-заголовком як у Rails UJS/Turbo; AJAX),
@@ -394,11 +407,22 @@ class Cabinet:
         return html
 
 
+def device_fingerprint():
+    """Постійний «відбиток пристрою» програми (як FingerprintJS у браузері) — щоб кабінет бачив той самий пристрій."""
+    with using_site(MAIN_SITE):
+        fp = settings().get("yasno_fp")
+        if not fp:
+            fp = uuid.uuid4().hex
+            set_setting("yasno_fp", fp)
+            get_db().commit()
+    return fp
+
+
 def fetch(c):
     """Зайти в кабінет і зібрати все. -> (data, cabinet)."""
     if not (c["login"] and c["password"]):
         raise LoginError("не задано логін або пароль (або пароль треба ввести знову після відновлення бекапу)")
-    cab = Cabinet(c["url"])
+    cab = Cabinet(c["url"], device_fingerprint())
     try:
         cab.login(c["login"], c["password"])
         data = parse_overview(cab.page("overview", "/"))
@@ -830,7 +854,7 @@ def save_settings():
             flash(_("Ошибка Telegram") + f": {e}")
     elif action == "test":
         try:
-            cab = Cabinet(c["url"])
+            cab = Cabinet(c["url"], device_fingerprint())
             if not (c["login"] and c["password"]):
                 raise LoginError(_("укажите логин и пароль"))
             try:
