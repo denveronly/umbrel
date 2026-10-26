@@ -1130,4 +1130,9 @@ EN = {
     'каждому арендатору своя сумма за месяц (уборщица): в карточке арендатора или во вкладке «Цены и количества»;': 'each tenant has their own amount per month (e.g. cleaner): in the tenant card or on the «Prices and quantities» tab;',
     'Суммы и количества за месяц потребления': 'Amounts and quantities for consumption month',
     'Количество и суммы за месяц': 'Quantities and amounts for the month',
+    'Переплата': 'Overpayment',
+    'задолженности нет': 'no debt',
+    'отключение': 'disconnection',
+    'нет': 'none',
+    'последнее': 'last',
 }

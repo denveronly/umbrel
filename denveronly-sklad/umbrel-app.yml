@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.34.3"
+version: "1.35.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  PDF деталізації: довгі показники переносяться на наступний рядок у межах клітинки (числа не розриваються).
-  YASNO: виправлено «сесія закрилась на сторінці /bills», заборгованість читається з кабінету.
+  YASNO: плитка «Переплата» (зелена) або «Заборгованість» (червона); плитка «Попередження про відключення» — зелена, якщо немає, червона з номером і датою відключення, якщо є.
+  PDF деталізації: довгі показники переносяться в межах клітинки.
 dependencies: []
 path: ""
 defaultUsername: ""

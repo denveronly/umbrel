@@ -496,3 +496,10 @@ details.actrow .btns form.dlgrid { display: grid; }
 .icol { display: inline-block; vertical-align: middle; }
 .icol:hover .fico, .icob:hover .fico { filter: brightness(1.1); transform: translateY(-1px); }
 .svcline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 3px 0; } .svcline label.check { min-width: 360px; }
+.kpi.kgood { background: color-mix(in srgb, #2e9e66 12%, var(--card)); border-color: color-mix(in srgb, #2e9e66 55%, var(--line)); }
+.kpi.kgood b, .kpi.kgood small { color: #2e9e66; }
+:root[data-theme="dark"] .kpi.kgood b, :root[data-theme="dark"] .kpi.kgood small { color: #4fc48a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kpi.kgood b, :root:not([data-theme="light"]) .kpi.kgood small { color: #4fc48a; } }
+.kpi.kbad small { color: var(--warn); }
+.kpi.kbad { background: color-mix(in srgb, #e5484d 13%, var(--card)); border-color: color-mix(in srgb, #e5484d 60%, var(--line)); }
+.kpi.kbad b, .kpi.kbad small { color: #e5484d; }

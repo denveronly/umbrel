@@ -14,8 +14,24 @@
   <div class="kpi"><small class="muted">{{ _("Последняя проверка") }}</small>
     <b>{% if st.running %}⏳ {{ _("идёт…") }}{% elif st.time %}{{ st.time[8:10] }}.{{ st.time[5:7] }} {{ st.time[11:16] }}{% else %}—{% endif %}</b>
     <small class="{{ 'muted' if st.ok else 'warnt' }}">{% if st.time and not st.running %}{{ '✓ ' ~ _("успешно") if st.ok else '✗ ' ~ (st.error or _("ошибка")) }}{% endif %}</small></div>
-  <div class="kpi {{ 'kbad' if (st.debt or 0) > 0 }}"><small class="muted">{{ _("Задолженность") }}</small><b>{{ money(st.debt or 0) }} {{ _("грн") }}</b>
-    {% for d in st.debts or [] if d.saved %}<small class="muted">{{ d.type }}: {{ _("накоплено") }} {{ money(d.saved) }}</small>{% endfor %}</div>
+  {% set saved = (st.debts or [])|map(attribute='saved')|map('float')|sum %}
+  {% if (st.debt or 0) > 0 %}
+  <div class="kpi kbad"><small>{{ _("Задолженность") }}</small><b>{{ money(st.debt) }} {{ _("грн") }}</b>
+    {% for d in st.debts or [] if d.debt %}<small>{{ d.type }}: {{ money(d.debt) }}</small>{% endfor %}</div>
+  {% elif st.time %}
+  <div class="kpi kgood"><small>{{ _("Переплата") }}</small><b>{{ money(saved or 0) }} {{ _("грн") }}</b>
+    <small>{{ _("задолженности нет") }}</small></div>
+  {% else %}
+  <div class="kpi"><small class="muted">{{ _("Задолженность") }}</small><b>—</b></div>
+  {% endif %}
+  {% set active_w = warns|rejectattr('resolved')|list %}
+  {% if active_w %}
+  <div class="kpi kbad"><small>{{ _("Предупреждения об отключении") }}</small><b>{{ active_w|length }} {{ _("активно") }}</b>
+    {% for w in active_w[:2] %}<small>№{{ w.number }}{% if w.off_date %} · {{ _("отключение") }} {{ w.off_date|dmy }}{% endif %}</small>{% endfor %}</div>
+  {% elif st.time %}
+  <div class="kpi kgood"><small>{{ _("Предупреждения об отключении") }}</small><b>{{ _("нет") }}</b>
+    <small>{{ _("последнее") }}: {{ warns[0].warn_date|dmy if warns and warns[0].warn_date else '—' }}</small></div>
+  {% endif %}
   <div class="kpi"><small class="muted">{{ _("Автопроверка") }}</small>
     <b>{% if c.enabled %}{{ _("ежедневно с") }} {{ '%02d'|format(c.hour) }}:00{% else %}{{ _("выключена") }}{% endif %}</b>
     <small class="muted">Telegram: {{ '✓' if c.has_tg_token and c.tg_chat else _("не настроен") }}</small></div>
