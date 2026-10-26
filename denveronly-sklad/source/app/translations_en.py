@@ -1142,4 +1142,5 @@ EN = {
     'Сохранено. Черновик акта пересчитается при следующем формировании.': 'Saved. The draft act is recalculated next time it is generated.',
     'своё название, напр.': 'custom name, e.g.',
     '— сохраняется и для следующих месяцев': '— kept for the following months',
+    'МФО': 'Bank code (MFO)',
 }

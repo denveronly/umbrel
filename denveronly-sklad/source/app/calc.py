@@ -380,7 +380,7 @@ def company_snapshot(c):
     if not c:
         return {}
     return {"company_name": c["name"], "company_edrpou": c["edrpou"], "company_iban": c["iban"],
-            "company_bank": c["bank"], "company_address": c["address"], "company_signer": c["signer"],
+            "company_bank": c["bank"], "company_mfo": c["mfo"] if "mfo" in c.keys() else None, "company_address": c["address"], "company_signer": c["signer"],
             "company_signer_position": c["signer_position"], "company_basis": c["basis"],
             "company_vat_payer": c["vat_payer"]}
 

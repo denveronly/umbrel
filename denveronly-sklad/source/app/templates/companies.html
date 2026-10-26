@@ -40,6 +40,7 @@
   <label>{{ _("ЄДРПОУ / РНОКПП") }}<input name="edrpou" value="{{ c.edrpou or '' if c else '' }}"></label>
   <label>IBAN<input name="iban" value="{{ c.iban or '' if c else '' }}"></label>
   <label>{{ _("Банк") }}<input name="bank" value="{{ c.bank or '' if c else '' }}"></label>
+  <label>{{ _("МФО") }}<input name="mfo" value="{{ c.mfo or '' if c else '' }}" inputmode="numeric" maxlength="6"></label>
   <label>{{ _("ФИО директора (подписант") }})<input name="signer" value="{{ c.signer or '' if c else '' }}" placeholder="{{ _("Дубінін Денис …") }}"></label>
   <label>{{ _("Должность") }}<input name="signer_position" list="positions" value="{{ (c.signer_position or '') if c else 'Директор' }}"></label>
   <label>{{ _("Действует на основании") }}<input name="basis" list="bases" value="{{ (c.basis or '') if c else 'Статуту' }}"></label>

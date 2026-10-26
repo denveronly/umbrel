@@ -37,6 +37,8 @@
   <datalist id="bases"><option>{{ _("Статуту") }}</option><option>{{ _("виписки з ЄДР") }}</option><option>{{ _("довіреності №") }}</option></datalist>
   <label><span class="only-company">{{ _("ЄДРПОУ / РНОКПП") }}</span><span class="only-person">{{ _("РНОКПП (ИНН)") }}</span><input name="edrpou" value="{{ v('edrpou') }}"></label>
   <label>IBAN<input name="iban" value="{{ v('iban') }}"></label>
+  <label>{{ _("Банк") }}<input name="bank" value="{{ v('bank') }}" placeholder="АТ КБ «ПриватБанк»"></label>
+  <label>{{ _("МФО") }}<input name="mfo" value="{{ v('mfo') }}" inputmode="numeric" maxlength="6" placeholder="305299" style="max-width:140px"></label>
   <label class="full">{{ _("Адрес") }}<input name="address" value="{{ v('address') }}"></label>
   <label>{{ _("Компания-получатель денег") }}
     <select name="company_id"><option value="">— {{ _("не выбрана") }} —</option>

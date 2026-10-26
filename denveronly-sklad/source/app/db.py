@@ -538,14 +538,14 @@ MIGRATIONS = {
     "users": {"perms": "TEXT NOT NULL DEFAULT 'economics'", "pin_hash": "TEXT"},   # pin_hash — PIN адміністратора для видалення   # права оператора (через кому); раніше Економіку бачили всі
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
                    "row_no": "TEXT", "description": "TEXT", "tenant_since": "TEXT"},
-    "tenants": {"rent_merge_wid": "INTEGER", "rent_merge_name": "TEXT",   # оренда всіх приміщень одним рядком під назвою цього складу
+    "tenants": {"rent_merge_wid": "INTEGER", "rent_merge_name": "TEXT", "bank": "TEXT", "mfo": "TEXT",   # оренда всіх приміщень одним рядком під назвою цього складу
                 "contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
                 "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT"},
     "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
     "readings": {"reactive": "REAL"},
-    "companies": {"signer_position": "TEXT", "basis": "TEXT",
+    "companies": {"signer_position": "TEXT", "basis": "TEXT", "mfo": "TEXT",
                   "pay_types": "TEXT"},   # які форми оплати приймає компанія: "cash,bank,bank_vat"; порожньо — будь-які
     "acts": {"company_id": "INTEGER"},
     "meters": {"name": "TEXT", "sort_order": "INTEGER", "service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",

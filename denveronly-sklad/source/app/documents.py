@@ -45,8 +45,9 @@ def _party(p):
         rows.append(p["address"])
     if p.get("iban"):
         rows.append(f"IBAN: {p['iban']}")
-    if p.get("bank"):
-        rows.append(p["bank"])
+    bank = ", ".join(x for x in [f"банк {p['bank']}" if p.get("bank") else "", f"МФО {p['mfo']}" if p.get("mfo") else ""] if x)
+    if bank:
+        rows.append(bank[:1].upper() + bank[1:])
     return rows
 
 
@@ -54,7 +55,7 @@ def _company(act):
     c = act["data"]["company"]
     return {"name": c.get("company_name"), "edrpou": c.get("company_edrpou"),
             "address": c.get("company_address"), "iban": c.get("company_iban"),
-            "bank": c.get("company_bank"), "signer": c.get("company_signer"),
+            "bank": c.get("company_bank"), "mfo": c.get("company_mfo"), "signer": c.get("company_signer"),
             "position": c.get("company_signer_position"), "basis": c.get("company_basis")}
 
 
@@ -68,9 +69,9 @@ def _tenant(act):
             if t.get("passport_issued"):
                 passport += f", виданий {t['passport_issued']}"
         return {"name": t.get("name"), "edrpou": t.get("edrpou"), "address": t.get("address"), "iban": t.get("iban"),
-                "signer": t.get("name"), "position": "", "basis": "", "person": True, "passport": passport}
+                "bank": t.get("bank"), "mfo": t.get("mfo"), "signer": t.get("name"), "position": "", "basis": "", "person": True, "passport": passport}
     return {"name": t.get("name"), "edrpou": t.get("edrpou"), "address": t.get("address"),
-            "iban": t.get("iban"), "signer": t.get("contact"),
+            "iban": t.get("iban"), "bank": t.get("bank"), "mfo": t.get("mfo"), "signer": t.get("contact"),
             "position": t.get("director_position"), "basis": t.get("basis")}
 
 
