@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.40.0"
+version: "1.41.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,8 +31,9 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  YASNO для кожного об'єкта окремо: перемкніть об'єкт ліворуч угорі — у «Офісу» свій кабінет, логін, рахунки, Telegram і розклад.
-  Повідомлення в Telegram підписані назвою об'єкта.
+  Інтеграція з BAS Бухгалтерія 2.1: обробка всередині BAS забирає акти місяця з програми (локальна мережа, токен)
+  і створює «Реалізацію товарів і послуг» та «Рахунок на оплату покупцю» без проведення.
+  Налаштування → Компанії → «Інтеграція з BAS»: токен, назви номенклатури, завантаження обробки з інструкцією.
 dependencies: []
 path: ""
 defaultUsername: ""

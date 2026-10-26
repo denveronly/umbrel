@@ -23,6 +23,7 @@ import diag
 import lines
 import sheet
 import yasno
+import bas
 from audit import log
 from i18n import _
 
@@ -40,6 +41,7 @@ economics.init_app(app)
 ai.init_app(app)
 lines.init_app(app)
 yasno.init_app(app)
+bas.init_app(app)
 sheet.init_app(app)
 
 

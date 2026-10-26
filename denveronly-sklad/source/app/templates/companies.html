@@ -35,6 +35,25 @@
 })();
 </script>
 
+<details class="card" id="bas">
+  <summary class="row"><b>🧾 {{ _("Интеграция с BAS Бухгалтерия") }}</b><span class="spacer"></span>
+    <span class="muted">{{ _("токен") }}: {{ '✓' if S.bas_token else _("не создан") }}</span></summary>
+  <p class="muted" style="margin-top:10px">{{ _("BAS сам забирает акты месяца обработкой (в локальной сети) и создаёт «Реализацию товаров и услуг» и «Счёт на оплату» без проведения. Каждая база BAS — своя организация (по ЄДРПОУ компании).") }}</p>
+  <form method="post" action="{{ url_for('bas.save_settings') }}" class="grid">
+    <label class="full">{{ _("Токен для обработки BAS") }}
+      <span class="row" style="gap:8px"><input readonly value="{{ S.bas_token or '' }}" onclick="this.select()" style="flex:1;font-family:monospace">
+      <button class="sm ghost" name="action" value="token" onclick="return !this.form.querySelector('input[readonly]').value || confirm({{ _('Создать новый токен? Старый перестанет работать в BAS.')|tojson|forceescape }})">{{ _("Создать токен") if not S.bas_token else _("Новый токен") }}</button></span></label>
+    <label>{{ _("Номенклатура для аренды") }}<input name="bas_nom_rent" value="{{ S.bas_nom_rent or 'Оренда приміщень' }}"></label>
+    <label>{{ _("Номенклатура для коммунальных") }}<input name="bas_nom_util" value="{{ S.bas_nom_util or 'Компенсація комунальних послуг' }}"></label>
+    <label class="check full"><input type="checkbox" name="bas_cash" value="1" {{ 'checked' if S.bas_cash == '1' }}> {{ _("передавать в BAS и наличных арендаторов") }}</label>
+    <div class="full row" style="gap:8px;flex-wrap:wrap">
+      <button class="sm">{{ _("Сохранить") }}</button>
+      <a class="btn sm ghost" href="{{ url_for('bas.kit') }}">⬇ {{ _("Обработка для BAS и инструкция (zip)") }}</a>
+      <span class="muted">{{ _("Адрес программы для обработки") }}: <code>{{ request.host_url.rstrip('/') }}</code> · {{ _("объект") }}: <code>{{ cur_site }}</code></span>
+    </div>
+  </form>
+</details>
+
 {% macro company_form(c) %}
 <form method="post" class="grid">
   {% if c %}<input type="hidden" name="cid" value="{{ c.id }}">{% endif %}
