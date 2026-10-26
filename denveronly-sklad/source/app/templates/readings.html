@@ -3,7 +3,7 @@
 {% block title %}{{ _("Показания") }}{% endblock %}
 {% block content %}
 <div class="row">
-  <h1>{{ _("Показания и цены") }}</h1><span class="spacer"></span>
+  <h1>{{ _("Показания") }}</h1><span class="spacer"></span>
   <a class="btn ghost sm" href="{{ url_for('guard.sheet') }}" target="_blank" title="{{ _("Бланк для охраны: месяцы до конца следующего года, распечатать и заполнить от руки") }}">🖨 {{ _("Шаблон для охраны") }}</a>
   <a class="btn ghost sm" href="?period={{ prev_p }}">←</a>
   <form method="get"><input type="month" name="period" value="{{ period }}" onchange="this.form.submit()" style="width:auto"></form>
@@ -44,58 +44,13 @@
   </details>
 </div>
 
-{% if main_rows %}
-<div class="card">
-  <h2 style="margin-top:0">{{ _("Общие счётчики и количества услуг") }}</h2>
-  <p class="muted">{{ _("Расход общего счётчика × цена месяца = сумма, которая делится между арендаторами по их % (карточка арендатора → «Доли услуг»). Счётчики арендаторов на эти услуги — только для контроля, в акт не идут.") }}</p>
-  {% for r in main_rows %}
-    <div class="rd">
-      <div class="who"><b>{{ r.s.name }}</b> · {{ _("общий") }}{% if r.s.main_serial %} <span class="muted">№{{ r.s.main_serial }}</span>{% endif %}
-        <div class="muted"><a href="{{ url_for('services_page') }}#svc{{ r.s.id }}" title="{{ _("Доли арендаторов") }}">Σ {{ num(r.sum_pct) }}% {{ _("арендаторов") }}</a>{% if (r.sum_pct - 100)|abs > 0.01 %} <span class="badge warnb">≠ 100%</span>{% endif %}</div></div>
-      {% if r.s.has_main == 2 %}<div class="muted">{{ _("количество за месяц") }},<br>{{ r.s.unit }}</div>
-      {% else %}<div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>{% endif %}
-      {% if r.src %}<div title="{{ _("Показания вносятся в таблице показаний") }}"><b>{{ num(r.cur) if r.cur is not none else '—' }}</b><br><span class="muted">⚡ {{ r.src }}</span></div>
-      {% else %}<input name="sm_{{ r.s.id }}" inputmode="decimal" value="{{ r.cur|plain }}" placeholder="—"
-             data-prev="{{ 0 if r.s.has_main == 2 else r.prev }}" data-coef="{{ 1 if r.s.has_main == 2 else (r.s.main_coef or 1) }}" data-unit="{{ r.s.unit }}" oninput="upd(this)">{% endif %}
-      <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ num(r.cons) }} {{ r.s.unit }}</span>{% endif %}
-        {% if r.total is not none %}<div class="muted">= {{ money(r.total) }} {{ _("грн") }}</div>{% endif %}</div>
-    </div>
-  {% endfor %}
-</div>
-{% endif %}
-
 <!-- історія цін -->
-<div class="card">
+<div class="card" id="history">
   <div class="row"><h2 style="margin:0">{{ _("Цены по месяцам") }}</h2><span class="spacer"></span>
-    <a class="btn sm ghost" href="{{ url_for('services_page') }}#history">{{ _("Больше месяцев") }}</a></div>
+    <span class="muted">{{ _("Период") }}:</span>
+    <select style="width:auto" onchange="location.href='?period={{ period }}&months=' + this.value + '#history'">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if ph_months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select></div>
   {{ price_history_table(ph, period) }}
 </div>
-
-<!-- 2. счётчики -->
-<div class="card">
-  <h2 style="margin-top:0">{{ _("Счётчики") }}</h2>
-  <p class="muted">{{ _("Показания на конец месяца. Пустое поле — показание не внесено") }}.</p>
-  {% set ns = namespace(filled=0) %}
-  {% for r in rows %}
-    {% if r.cur is not none %}{% set ns.filled = ns.filled + 1 %}{% endif %}
-    <div class="rd">
-      <div class="who">
-        <b>{{ r.m.wh_name }}</b> · {{ r.m.svc_name }}{% if r.m.svc_mode == "share" %} <span class="badge off" title="{{ _("Контрольный: в акт не идёт, услуга делится по %") }}">{{ _("контроль") }}</span>{% endif %}
-        {% if r.m.serial %}<span class="muted">№{{ r.m.serial }}</span>{% endif %}
-        <div class="muted">{{ r.m.tenant_name or _("свободен") }}{% if r.m.coef != 1 %} · {{ _("коэф") }}. {{ num(r.m.coef) }}{% endif %}</div>
-      </div>
-      <div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>
-      <input name="m_{{ r.m.id }}" inputmode="decimal" value="{{ r.cur|plain }}"
-             data-prev="{{ r.prev }}" data-coef="{{ r.m.coef }}" data-unit="{{ r.m.unit }}" oninput="upd(this)" placeholder="—">
-      <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ (r.cons|kwh) if 'квт' in (r.m.unit or '')|lower else num(r.cons) }} {{ r.m.unit }}</span>{% endif %}</div>
-    </div>
-  {% else %}
-    <p class="muted">{{ _("Счётчиков нет. Добавьте их в карточке склада") }}.</p>
-  {% endfor %}
-  {% if rows %}<p class="muted">{{ _("Внесено") }} {{ ns.filled }} {{ _("из") }} {{ rows|length }}</p>{% endif %}
-</div>
-
-
 
 <!-- 3. количества (вывоз мусора и т.п.) -->
 {% if qty_svcs %}

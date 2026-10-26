@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Показатели услуг") }}{% endblock %}
+{% block head %}
+<style>
+main { max-width: none; }
+.gridwrap { overflow: auto; max-height: calc(100vh - 250px); border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+table.sgrid { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: max-content; min-width: 100%; }
+.sgrid th, .sgrid td { padding: 4px 8px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.sgrid thead th { position: sticky; background: var(--card); z-index: 2; text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+.sgrid thead tr:first-child th { top: 0; }
+.sgrid thead tr.h2 th { top: 44px; font-weight: 500; color: var(--muted); }
+.sgrid .pcol { position: sticky; left: 0; background: var(--card); z-index: 1; font-weight: 600; min-width: 110px; }
+.sgrid thead .pcol { z-index: 4; }
+.sgrid th.sv { text-align: center; white-space: normal; max-width: 230px; line-height: 1.25; font-size: 12.5px; color: var(--ink); background: var(--accent-soft); border-left: 2px solid var(--accent); }
+.sgrid th.sv small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+.sgrid .first { border-left: 2px solid var(--accent); }
+.sgrid td.c { text-align: right; font-variant-numeric: tabular-nums; }
+.sgrid td.c.neg { color: var(--warn); font-weight: 600; }
+.sgrid td.ro { text-align: right; color: var(--muted); }
+.sgrid input { width: 90px; padding: 3px 5px; font-size: 12.5px; text-align: right; border-radius: 5px; background: transparent; border-color: transparent; }
+.sgrid input:hover { border-color: var(--line); }
+.sgrid input:focus { background: var(--bg); border-color: var(--accent); outline: none; }
+.sgrid input.dirty { background: var(--warn-soft); border-color: var(--warn); }
+.sgrid tr.curp td { background-image: linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent), color-mix(in srgb, var(--accent) 7%, transparent)); }
+.sbar { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center; padding: 10px 0; background: var(--bg); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="row"><h1 style="margin:0">{{ _("Показания") }}</h1><span class="spacer"></span>
+  <form method="get" class="row" style="gap:6px"><span class="muted">{{ _("Период") }}:</span>
+    <select name="months" onchange="this.form.submit()" style="width:auto">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select></form></div>
+{% include "_readings_tabs.html" %}
+<p class="muted">{{ _("Общие счётчики и количества услуг «доля» (вода, генератор, пеллеты, дрова…). Накопительный счётчик — вносите показание на конец месяца, расход считается от предыдущего. Количество за месяц — вносите, сколько израсходовано за месяц на весь комплекс. Сумма = расход × цена месяца и делится между арендаторами по их %.") }}</p>
+{% if not cols %}
+  <div class="card"><p class="muted" style="margin:0">{{ _("Нет услуг с общим счётчиком или количеством. В «Пропорциях услуг» у услуги типа «доля» выберите «Сумма на распределение» → счётчик или количество за месяц.") }}</p></div>
+{% else %}
+<form method="post" id="sf">
+<div class="gridwrap"><table class="sgrid">
+  <thead>
+    <tr><th class="pcol" rowspan="2">{{ _("Месяц") }}</th>
+      {% for c in cols %}<th class="sv" colspan="{{ 2 if c.kind == 'qty' else 3 }}">
+        <a href="{{ url_for('services_page') }}#svc{{ c.s.id }}">{{ c.s.name }}</a>
+        <small>{{ _("количество за месяц") if c.kind == 'qty' else (_("накопительный счётчик") if c.kind == 'meter' else '⚡ ' ~ c.src) }} · {{ c.s.unit }}
+          · Σ {{ num(c.pct) }}%{% if (c.pct - 100)|abs > 0.01 %} ⚠{% endif %}</small></th>{% endfor %}</tr>
+    <tr class="h2">{% for c in cols %}
+      {% if c.kind == 'qty' %}<th class="first">{{ _("количество") }}</th><th>{{ _("сумма, грн") }}</th>
+      {% else %}<th class="first">{{ _("показание") }}</th><th>{{ _("расход") }}</th><th>{{ _("сумма, грн") }}</th>{% endif %}
+    {% endfor %}</tr>
+  </thead>
+  <tbody>{% for p in periods %}
+    <tr class="{{ 'curp' if p == cur }}"><td class="pcol">{{ period_label(p) }}</td>
+      {% for c in cols %}{% set d = c.data[p] %}
+        {% if c.kind == 'src' %}<td class="ro first" title="{{ _("Показания вносятся в таблице показаний") }}">{{ num(d.v) if d.v is not none else '' }}</td>
+        {% else %}<td class="first"><input name="v_{{ c.s.id }}_{{ p }}" inputmode="decimal" value="{{ d.v|plain }}" data-orig="{{ d.v|plain }}"></td>{% endif %}
+        {% if c.kind != 'qty' %}<td class="c {{ 'neg' if d.cons is not none and d.cons < 0 }}">{{ num(d.cons) if d.cons is not none and d.v is not none else '' }}</td>{% endif %}
+        <td class="c">{{ money(d.sum) if d.sum is not none and d.v is not none else '' }}</td>
+      {% endfor %}</tr>
+  {% endfor %}</tbody>
+</table></div>
+<div class="sbar"><button>{{ _("Сохранить") }}</button><span class="muted" id="dn"></span></div>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const sf = document.getElementById('sf');
+if (sf) {
+  sf.addEventListener('input', e => { if (e.target.dataset) e.target.classList.toggle('dirty', e.target.value !== e.target.dataset.orig);
+    document.getElementById('dn').textContent = sf.querySelectorAll('input.dirty').length ? {{ _("есть несохранённые изменения")|tojson }} : ''; });
+  // відправляємо лише змінені клітинки
+  sf.addEventListener('submit', () => sf.querySelectorAll('input[name^=v_]').forEach(i => { if (i.value === i.dataset.orig) i.disabled = true; }));
+  window.addEventListener('beforeunload', e => { if (sf.querySelector('input.dirty') && !sf.dataset.sending) e.preventDefault(); });
+  sf.addEventListener('submit', () => sf.dataset.sending = 1);
+}
+</script>
+{% endblock %}

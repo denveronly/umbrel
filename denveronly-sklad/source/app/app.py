@@ -909,10 +909,66 @@ def readings():
         qty_rows.append({"t": t, "cells": cells})
     qty_rows.sort(key=lambda r: not any(c["sub"] for c in r["cells"]))      # спершу ті, кому послуга підключена
 
+    ph_months = request.args.get("months", 12, type=int)
+    ph_months = ph_months if ph_months in (6, 12, 24, 36) else 12
     return render_template("readings.html", period=period, rows=rows, price_rows=price_rows,
                            acts_period=calc.next_period(period) if settings().get("util_shift", "1") == "1" else period,
-                           qty_svcs=qty_svcs, qty_rows=qty_rows, ph=price_history(period, 12), main_rows=main_rows,
+                           qty_svcs=qty_svcs, qty_rows=qty_rows, ph=price_history(max(period, this_month()), ph_months), ph_months=ph_months,
+                           main_rows=main_rows,
                            prev_p=calc.prev_period(period), next_p=calc.next_period(period))
+
+
+@app.route("/readings/services", methods=["GET", "POST"])
+def service_readings_page():
+    """«Послуги показники»: загальні лічильники й кількості послуг «частка» по місяцях — таблицею, як електричні."""
+    db = get_db()
+    if request.method == "POST":
+        n = 0
+        for k, v in request.form.items():
+            mt = re.fullmatch(r"v_(\d+)_(\d{4}-\d{2})", k)
+            if not mt:
+                continue
+            sid, per = int(mt.group(1)), mt.group(2)
+            v = v.strip().replace(",", ".").replace(" ", "").replace("\u00a0", "")
+            old = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period=?", (sid, per)).fetchone()
+            if v == "":
+                if old:
+                    db.execute("DELETE FROM service_readings WHERE service_id=? AND period=?", (sid, per))
+                    n += 1
+                continue
+            try:
+                fv = float(v)
+            except ValueError:
+                flash(_("Неверное число") + f": {v}")
+                continue
+            if not old or old["value"] != fv:
+                db.execute("INSERT INTO service_readings(service_id, period, value) VALUES (?,?,?) "
+                           "ON CONFLICT(service_id, period) DO UPDATE SET value=excluded.value", (sid, per, fv))
+                n += 1
+        db.commit()
+        if n:
+            log("Показания услуг сохранены", f"{n}")
+        flash(_("Сохранено") + f": {n}")
+        return redirect(url_for("service_readings_page", months=request.args.get("months", 12)))
+    months = request.args.get("months", 12, type=int)
+    months = months if months in (6, 12, 24, 36) else 12
+    periods = []
+    p = this_month()
+    for _i in range(months):
+        periods.append(p)
+        p = calc.prev_period(p)
+    svcs = [sv for sv in services() if sv["mode"] == "share" and sv["has_main"] and sv["active"]]
+    cols = []
+    for sv in svcs:
+        src = lines.resolve_src(sv["main_src"]) if sv["main_src"] else None
+        data = {}
+        for per in periods:
+            cv, pv, pp, coef = calc.main_values(sv, per, db)
+            total, how, cons, price = calc.share_total(sv, per, db)
+            data[per] = {"v": cv, "cons": cons, "sum": total}
+        cols.append({"s": sv, "kind": "src" if src else ("qty" if sv["has_main"] == 2 else "meter"),
+                     "src": src[3] if src else None, "data": data, "pct": share_sum(sv["id"], periods[0])})
+    return render_template("service_readings.html", cols=cols, periods=periods, months=months, cur=this_month())
 
 
 @app.route("/prices/cell", methods=["POST"])
