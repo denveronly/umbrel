@@ -15,25 +15,21 @@ body { font-family: "DejaVu Sans", Arial, sans-serif; color: #000; background: #
 .page { width: 283mm; min-height: 196mm; margin: 12px auto; background: #fff; padding: 6mm; box-shadow: 0 1px 6px #0003; page-break-after: always; break-after: page; }
 .page:last-child { page-break-after: auto; break-after: auto; }
 .hd { display: flex; align-items: baseline; gap: 10px; border-bottom: 2px solid #000; padding-bottom: 2mm; margin-bottom: 2mm; }
-.hd h1 { font-size: 15pt; margin: 0; }
-.hd .no { margin-left: auto; font-size: 13pt; font-weight: 700; border: 2px solid #000; padding: 1mm 3mm; }
-.hd .pg { font-size: 9pt; }
-.rule { font-size: 8.5pt; margin: 0 0 2mm; }
+.hd h1 { font-size: 16pt; margin: 0; }
+.hd .no { margin-left: auto; font-size: 15pt; font-weight: 700; border: 2px solid #000; padding: 1mm 3mm; }
+.hd .pg { font-size: 11pt; }
+.rule { font-size: 10.5pt; margin: 0 0 2mm; }
 table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-th, td { border: 1px solid #000; text-align: center; font-size: 8pt; padding: 0.6mm 0.8mm; overflow: hidden; }
-th.m, td.m { width: 31mm; text-align: left; font-weight: 700; font-size: 9pt; white-space: nowrap; }
-th.d, td.d { width: 15mm; }
-th.sg, td.sg { width: 18mm; }
-tr.grp th { background: #e6e6e6; font-size: 8pt; text-align: left; }
-tr.num th { font-size: 16pt; font-weight: 800; padding: 0.3mm; }
-tr.ttl th { font-size: 7.5pt; font-weight: 600; line-height: 1.15; height: 10mm; vertical-align: middle; }
-tr.ttl small { display: block; font-weight: 400; font-size: 6.5pt; }
-tr.last td.m { white-space: normal; font-size: 7.5pt; }
-tr.last td { color: #444; font-size: 7.5pt; background: #f3f3f3; height: 7mm; }
-tr.last td small { display: block; font-size: 6pt; }
-tbody tr.mo td { height: 8mm; }
-tbody tr.mo td.m { font-size: 9.5pt; }
-.foot { font-size: 8pt; margin-top: 2mm; display: flex; justify-content: space-between; }
+th, td { border: 1px solid #000; text-align: center; font-size: 11pt; padding: 0.6mm 0.8mm; overflow: hidden; }
+th.m, td.m { width: 42mm; text-align: left; font-weight: 700; font-size: 12pt; white-space: nowrap; }
+th.d, td.d { width: 20mm; font-size: 10pt; }
+th.sg, td.sg { width: 20mm; font-size: 10pt; }
+tr.num th { font-size: 20pt; font-weight: 800; padding: 0.3mm; }
+tr.ttl th { font-size: 12pt; font-weight: 700; line-height: 1.15; height: 11mm; vertical-align: middle; }
+tr.num th.m, tr.num th.d, tr.num th.sg { font-size: 11pt; font-weight: 700; }
+tbody tr.mo td { height: 9mm; }
+tbody tr.mo td.m { font-size: 12pt; }
+.foot { font-size: 10pt; margin-top: 2mm; display: flex; justify-content: space-between; }
 @media print {
   body { background: #fff; }
   .bar { display: none; }
@@ -59,15 +55,11 @@ tbody tr.mo td.m { font-size: 9.5pt; }
   <p class="rule">{{ _("Записывайте только целые цифры счётчика — цифры после запятой (обычно красные или в рамке) НЕ пишите. Пишите разборчиво, одну цифру под другой. Ошибку — зачеркните и напишите рядом.") }}</p>
   <table>
     <thead>
-      <tr class="grp"><th class="m" rowspan="3">{{ _("Месяц") }}</th><th class="d" rowspan="3">{{ _("Дата съёма") }}</th>
-        {% for gr in pg.groups %}<th colspan="{{ gr.cols|length }}">{{ gr.title or '' }}</th>{% endfor %}
-        <th class="sg" rowspan="3">{{ _("Подпись") }}</th></tr>
-      <tr class="num">{% for gr in pg.groups %}{% for c in gr.cols %}<th>{{ c.n }}</th>{% endfor %}{% endfor %}</tr>
-      <tr class="ttl">{% for gr in pg.groups %}{% for c in gr.cols %}<th>{{ c.title }}{% if c.sub %}<small>{{ c.sub }}</small>{% endif %}</th>{% endfor %}{% endfor %}</tr>
+      <tr class="num"><th class="m" rowspan="2">{{ _("Месяц") }}</th><th class="d" rowspan="2">{{ _("Дата съёма") }}</th>{% for gr in pg.groups %}{% for c in gr.cols %}<th>{{ c.n }}</th>{% endfor %}{% endfor %}
+        <th class="sg" rowspan="2">{{ _("Подпись") }}</th></tr>
+      <tr class="ttl">{% for gr in pg.groups %}{% for c in gr.cols %}<th>{{ c.title }}</th>{% endfor %}{% endfor %}</tr>
     </thead>
     <tbody>
-      <tr class="last"><td class="m">{{ _("Последние показания") }}</td><td class="d"></td>
-        {% for gr in pg.groups %}{% for c in gr.cols %}<td>{{ num(c.last) if c.last is not none else '—' }}{% if c.lastp %}<small>{{ c.lastp[5:7] }}.{{ c.lastp[:4] }}</small>{% endif %}</td>{% endfor %}{% endfor %}<td class="sg"></td></tr>
       {% for p in periods %}
       <tr class="mo"><td class="m">{{ period_label(p) }}</td><td class="d"></td>
         {% for i in range(pg.ncols) %}<td></td>{% endfor %}<td class="sg"></td></tr>
