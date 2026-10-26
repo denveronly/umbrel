@@ -503,3 +503,4 @@ details.actrow .btns form.dlgrid { display: grid; }
 .kpi.kbad small { color: var(--warn); }
 .kpi.kbad { background: color-mix(in srgb, #e5484d 13%, var(--card)); border-color: color-mix(in srgb, #e5484d 60%, var(--line)); }
 .kpi.kbad b, .kpi.kbad small { color: #e5484d; }
+.mergebar { gap: 8px; margin: 4px 0 8px; font-size: 13px; }

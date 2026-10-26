@@ -104,6 +104,20 @@
     </summary>
     <div class="actlines">
       {% for w in it.warnings %}<div class="warn" style="margin-bottom:4px">{{ w }}</div>{% endfor %}
+      {% if it.whs|length > 1 and not (it.act and it.act.status == 'final') %}
+      <form method="post" action="{{ url_for('tenant_rent_merge', tid=it.t.id) }}" class="row mergebar">
+        <input type="hidden" name="period" value="{{ period }}">
+        <span class="muted">{{ _("Аренда в акте") }}:</span>
+        <select name="wid" style="width:auto" onchange="this.form.querySelector('.mname').hidden = !this.value">
+          <option value="">{{ _("каждое помещение отдельной строкой") }}</option>
+          {% for w in it.whs %}<option value="{{ w.id }}" {{ 'selected' if it.t.rent_merge_wid == w.id }}>{{ _("одной строкой как") }} «{{ w.name }}»</option>{% endfor %}
+        </select>
+        <span class="mname" {{ 'hidden' if not it.t.rent_merge_wid }}><input name="name" value="{{ it.t.rent_merge_name or '' }}"
+          placeholder="{{ _('своё название, напр.') }} Оренда складських приміщень" style="width:300px"> <span class="muted">{{ _("за") }} {{ period_label(period) }}</span></span>
+        <button class="sm">{{ _("Сохранить") }}</button>
+        <span class="muted">{{ _("— сохраняется и для следующих месяцев") }}</span>
+      </form>
+      {% endif %}
       <table>
         <thead><tr><th>{{ _("Позиция") }}</th><th class="n">{{ _("К-сть") }}</th><th class="n">{{ _("Ціна") }}</th><th class="n">{{ _("Сума") }}</th></tr></thead>
         <tbody>{% for l in it.lines %}

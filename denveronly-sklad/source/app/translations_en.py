@@ -1137,4 +1137,9 @@ EN = {
     'последнее': 'last',
     'Акты следующего месяца открывать после': "Open next month's acts after day",
     'числа (0 — всегда текущий месяц)': '(0 — always current month)',
+    'каждое помещение отдельной строкой': 'each premise on its own line',
+    'одной строкой как': 'one line as',
+    'Сохранено. Черновик акта пересчитается при следующем формировании.': 'Saved. The draft act is recalculated next time it is generated.',
+    'своё название, напр.': 'custom name, e.g.',
+    '— сохраняется и для следующих месяцев': '— kept for the following months',
 }

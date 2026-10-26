@@ -1114,6 +1114,7 @@ def acts():
             lines, totals, warnings = d["lines"], d["totals"], []
         g = groups.get(t["company_id"]) or groups[None]
         g["rows"].append({"t": t, "act": act, "lines": lines, "totals": totals, "warnings": warnings,
+                           "whs": calc.warehouses_of(t["id"], period, db),
                            "changed": bool(act and act["status"] == "draft" and abs(act["total"] - totals["total"]) > 0.005)})
         for k in g["tot"]:
             g["tot"][k] = calc.r2(g["tot"][k] + totals[k])
@@ -1137,6 +1138,20 @@ def act_make():
     log("Акт сформирован", f"№{act['number']} {act['data']['tenant']['name']} за {calc.period_label(period)}, "
         f"{calc.fmt_money(act['total'])} грн")
     return _send_act(act, fmt, part=_part())
+
+
+@app.route("/tenants/<int:tid>/rent_merge", methods=["POST"])
+def tenant_rent_merge(tid):
+    """Оренда в акті: окремими рядками або одним рядком під назвою обраного приміщення."""
+    db = get_db()
+    wid = request.form.get("wid", type=int)
+    name = (request.form.get("name") or "").strip()[:120]
+    db.execute("UPDATE tenants SET rent_merge_wid=?, rent_merge_name=? WHERE id=?", (wid or None, name or None, tid))
+    db.commit()
+    log("Оренда в акте", f"{'одной строкой' if wid else 'отдельными строками'}: контакт {tid}")
+    flash(_("Сохранено. Черновик акта пересчитается при следующем формировании."))
+    period = request.form.get("period") or ""
+    return redirect(url_for("acts", period=period) if re.fullmatch(r"\d{4}-\d{2}", period) else url_for("acts"))
 
 
 @app.route("/acts/make_company", methods=["POST"])

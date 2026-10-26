@@ -230,6 +230,16 @@ def build_act(tenant_id, period):
             rate = r2(rent_sum / wh["area"]) if wh["area"] and pt == "bank_vat" else p["rate"]
             lines.append({"group": "rent", "name": f"Оренда «{wh['name']}» за {plabel}",
                           "unit": "м²", "qty": wh["area"], "price": rate, "sum": rent_sum})
+        # об'єднати оренду кількох приміщень в один рядок під назвою обраного приміщення
+        merge = tenant["rent_merge_wid"] if "rent_merge_wid" in tenant.keys() else None
+        rent = [l for l in lines if l["group"] == "rent"]
+        if merge and len(rent) > 1:
+            main = next((w for w in whs if w["id"] == merge), whs[0])
+            total = r2(sum(l["sum"] for l in rent))
+            lines = [l for l in lines if l["group"] != "rent"]
+            custom = ((tenant["rent_merge_name"] if "rent_merge_name" in tenant.keys() else "") or "").strip()
+            lines.insert(0, {"group": "rent", "name": f"{custom or 'Оренда «' + main['name'] + '»'} за {plabel}",
+                             "unit": "міс.", "qty": 1, "price": total, "sum": total, "merged": len(rent)})
 
     # --- послуги за лічильниками ---
     for wh in uwhs:

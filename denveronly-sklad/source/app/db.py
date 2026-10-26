@@ -538,7 +538,8 @@ MIGRATIONS = {
     "users": {"perms": "TEXT NOT NULL DEFAULT 'economics'", "pin_hash": "TEXT"},   # pin_hash — PIN адміністратора для видалення   # права оператора (через кому); раніше Економіку бачили всі
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
                    "row_no": "TEXT", "description": "TEXT", "tenant_since": "TEXT"},
-    "tenants": {"contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
+    "tenants": {"rent_merge_wid": "INTEGER", "rent_merge_name": "TEXT",   # оренда всіх приміщень одним рядком під назвою цього складу
+                "contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
                 "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT"},
