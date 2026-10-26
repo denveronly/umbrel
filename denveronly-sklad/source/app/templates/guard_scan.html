@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Распознать бланк охраны") }}{% endblock %}
+{% block content %}
+<div class="row"><h1>📷 {{ _("Распознать бланк охраны") }}</h1><span class="spacer"></span>
+  <a class="btn ghost sm" href="{{ url_for('ai.chat') }}">← {{ _("ИИ-помощник") }}</a></div>
+{% if not has_key %}
+  <div class="warn" style="margin-bottom:12px">{{ _("Сначала укажите API-ключ Anthropic в настройках") }} — <a href="{{ url_for('ai_settings_page') }}">{{ _("Настройки") }} → {{ _("ИИ") }}</a></div>
+{% endif %}
+<div class="card">
+  <p class="muted" style="margin-top:0">{{ _("1) Показания → «Шаблон для охраны» — распечатайте бланк. 2) Охранник вписывает показания. 3) Сфотографируйте каждый лист целиком, ровно и при хорошем свете, и загрузите здесь. ИИ прочитает цифры, программа сверит их с прошлыми показаниями и покажет скачки — сохраняются только после вашей проверки.") }}</p>
+  {% if sheets %}
+  <form method="post" enctype="multipart/form-data" class="grid" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent={{ _('Загрузка…')|tojson }}">
+    <label>{{ _("Бланк") }}<select name="sheet_id">{% for s in sheets %}<option value="{{ s.id }}">№ {{ s.id }} · {{ period_label(s.plist[0]) }} — {{ period_label(s.plist[-1]) }} ({{ s.created_at[:10]|dmy }})</option>{% endfor %}</select></label>
+    <label>{{ _("Фото листов (до 6)") }}<input type="file" name="photos" accept="image/*" multiple required></label>
+    <div class="full"><button {{ 'disabled' if not has_key }}>{{ _("Распознать") }}</button>
+      <span class="muted">{{ _("Номер бланка напечатан в правом верхнем углу листа.") }}</span></div>
+  </form>
+  {% else %}
+  <div class="warn">{{ _("Сначала распечатайте бланк: Показания → «Шаблон для охраны»") }} — <a href="{{ url_for('guard.sheet') }}" target="_blank">🖨 {{ _("Шаблон для охраны") }}</a></div>
+  {% endif %}
+</div>
+{% if scans %}
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Последние распознавания") }}</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>{{ _("Дата") }}</th><th>{{ _("Бланк") }}</th><th>{{ _("Фото") }}</th><th>{{ _("Статус") }}</th><th>{{ _("Кто") }}</th></tr></thead>
+    <tbody>{% for s in scans %}<tr><td><a href="{{ url_for('guard.review', scan_id=s.id) }}">{{ s.created_at[:16] }}</a></td><td>№ {{ s.sheet_id }}</td><td>{{ s.photos }}</td>
+      <td>{% if s.status == 'saved' %}<span class="badge">✓ {{ _("сохранено") }}</span>{% elif s.status == 'done' %}<span class="badge warnb">{{ _("ждёт проверки") }}</span>{% elif s.status == 'running' %}⏳{% else %}<span class="warnt">{{ _("ошибка") }}</span>{% endif %}</td>
+      <td>{{ s.username }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}

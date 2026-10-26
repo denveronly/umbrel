@@ -642,9 +642,11 @@ def file_to_text(f):
 
 # ---------------- виклик API та цикл агента ----------------
 
-def call_api(key, model, system, messages):
-    body = json.dumps({"model": model, "max_tokens": 8000, "system": system, "tools": TOOLS,
-                       "messages": messages}).encode("utf-8")
+def call_api(key, model, system, messages, tools=TOOLS):
+    payload = {"model": model, "max_tokens": 8000, "system": system, "messages": messages}
+    if tools:
+        payload["tools"] = tools
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(API_URL, data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": API_VERSION, "content-type": "application/json"})
     for attempt in range(4):

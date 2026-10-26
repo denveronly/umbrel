@@ -88,7 +88,7 @@ dialog.qm .full { grid-column: 1 / -1; }
 </style>
 {% endblock %}
 {% block content %}
-<div class="row"><h1 style="margin:0">{{ _("Показания") }}</h1><span class="spacer"></span></div>
+<div class="row"><h1 style="margin:0">{{ _("Показания") }}</h1><span class="spacer"></span><a class="btn ghost sm" href="{{ url_for('guard.sheet') }}" target="_blank" title="{{ _("Бланк для охраны: месяцы до конца следующего года, распечатать и заполнить от руки") }}">🖨 {{ _("Шаблон для охраны") }}</a></div>
 {% include "_readings_tabs.html" %}
 
 <div class="linetabs">

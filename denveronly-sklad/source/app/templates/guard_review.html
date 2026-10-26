@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Проверка показаний с бланка") }}{% endblock %}
+{% block head %}
+<style>
+main { max-width: none; }
+.gw { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); max-height: calc(100vh - 260px); }
+table.gr { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: max-content; min-width: 100%; }
+.gr th, .gr td { padding: 4px 6px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+.gr thead th { position: sticky; top: 0; background: var(--card); z-index: 2; text-align: center; white-space: normal; max-width: 150px; font-size: 11.5px; }
+.gr thead th b.n { display: block; font-size: 16px; }
+.gr .pc { position: sticky; left: 0; background: var(--card); z-index: 1; font-weight: 600; }
+.gr thead .pc { z-index: 3; }
+.gr input { width: 96px; text-align: right; padding: 3px 5px; font-size: 12.5px; }
+.gr input.dt { width: 70px; text-align: left; }
+.gr td small { display: block; color: var(--muted); font-size: 10.5px; max-width: 150px; white-space: normal; }
+.gr td.l-bad { background: color-mix(in srgb, #d33 18%, transparent); }
+.gr td.l-warn { background: var(--warn-soft); }
+.gr td.l-fix { background: color-mix(in srgb, #e0b000 22%, transparent); }
+.gr td.l-same { opacity: .55; }
+.wl { margin: 0; padding-left: 18px; }
+.wl li.bad { color: #c22; } .wl li.fix { color: #a07800; }
+.legend span { display: inline-block; padding: 1px 8px; border-radius: 5px; margin-right: 6px; font-size: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="row"><h1>{{ _("Проверка показаний с бланка") }} № {{ sc.sheet_id }}</h1><span class="spacer"></span>
+  <a class="btn ghost sm" href="{{ url_for('guard.scan_page') }}">← {{ _("Распознать бланк охраны") }}</a></div>
+
+{% if sc.status == 'running' %}
+  <div class="card"><p>⏳ {{ _("ИИ читает фото ({n} шт.) — обычно 20–60 секунд…").format(n=sc.photos) }}</p></div>
+{% elif sc.status == 'error' %}
+  <div class="warn">{{ _("Не удалось распознать") }}: {{ sc.error }}</div>
+{% elif not sh %}
+  <div class="warn">{{ _("Бланк не найден") }}</div>
+{% else %}
+  {% if sc.status == 'saved' %}<div class="card" style="border-color:var(--accent)">✓ {{ _("Эти показания уже сохранены. Можно поправить и сохранить ещё раз.") }}</div>{% endif %}
+  {% if res.sheet_no and res.sheet_no != sh.id %}<div class="warn" style="margin-bottom:10px">⚠ {{ _("На фото бланк № {a}, а выбран № {b} — колонки могут не совпасть. Загрузите заново с правильным бланком.").format(a=res.sheet_no, b=sh.id) }}</div>{% endif %}
+  <div class="card">
+    {% set nbad = warns|selectattr('level', 'equalto', 'bad')|list|length %}
+    {% if warns %}
+      <h2 style="margin-top:0">⚠ {{ _("Скачки и подозрительные показания") }}: {{ warns|length }}</h2>
+      <ul class="wl">{% for w in warns %}<li class="{{ w.level }}">{{ w.text }}</li>{% endfor %}</ul>
+    {% elif rows %}
+      <h2 style="margin-top:0">✓ {{ _("Скачков нет — расход похож на прошлые месяцы") }}</h2>
+    {% else %}
+      <p>{{ _("ИИ не нашёл заполненных клеток.") }}</p>
+    {% endif %}
+    {% if res.notes %}<p class="muted">🤖 {{ res.notes }}</p>{% endif %}
+    <p class="legend muted"><span class="l-bad" style="background:color-mix(in srgb,#d33 18%,transparent)">{{ _("ошибка") }}</span>
+      <span style="background:color-mix(in srgb,#e0b000 22%,transparent)">{{ _("исправлена запятая") }}</span>
+      <span style="background:var(--warn-soft)">{{ _("проверьте") }}</span>
+      <span style="opacity:.6">{{ _("уже в базе") }}</span></p>
+  </div>
+  {% if rows %}
+  <div class="gw"><table class="gr" id="gr">
+    <thead><tr><th class="pc">{{ _("Месяц") }}</th><th>{{ _("Дата съёма") }}</th>
+      {% for c in cols %}<th><b class="n">{{ c.n }}</b>{{ c.title }}<br><span class="muted">{{ c.line }}{% if c.sub %} · {{ c.sub }}{% endif %}</span></th>{% endfor %}</tr></thead>
+    <tbody>{% for r in rows %}<tr><td class="pc">{{ period_label(r.period) }}</td>
+      <td><input class="dt" data-k="d|0|taken|{{ r.period }}" value="{{ r.date or '' }}" placeholder="—"></td>
+      {% for c in cols %}{% set x = r.cells.get(c.n) %}
+        <td class="{{ 'l-' ~ x.level if x }}">{% if x %}<input data-k="{{ c.kind }}|{{ c.id }}|{{ c.field }}|{{ r.period }}" data-lv="{{ x.level }}" value="{{ x.value }}" placeholder="?">
+          <small>{{ (([_("на бланке") ~ ': ' ~ x.raw] if x.raw != x.value else []) + ([_("пред.") ~ ' ' ~ num(x.prev)] if x.prev is not none else []))|join(' · ') }}{% if x.msg %}<br>{{ x.msg }}{% endif %}</small>{% endif %}</td>
+      {% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="row" style="margin-top:10px;gap:10px">
+    <button id="save">{{ _("Сохранить показания") }}</button>
+    <span class="muted" id="msg">{{ _("Серые клетки уже есть в базе — не перезаписываются. Пустая клетка — не сохраняется.") }}</span>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if sc.status == 'running' %}<script>
+(async function poll() {
+  try { const r = await fetch({{ url_for('guard.scan_status', scan_id=sc.id)|tojson }}); const j = await r.json(); if (j.status !== 'running') return location.reload(); } catch (e) {}
+  setTimeout(poll, 3000);
+})();
+</script>{% endif %}
+<script>
+const sb = document.getElementById('save');
+if (sb) sb.onclick = async () => {
+  const cells = {}; let bad = 0, n = 0;
+  document.querySelectorAll('#gr input[data-k]').forEach(i => {
+    const v = i.value.trim();
+    if (!v || i.dataset.lv === 'same' && i.value === i.defaultValue) return;
+    if (i.dataset.lv === 'bad' && i.value === i.defaultValue) bad++;
+    if (!i.dataset.k.startsWith('d|')) n++;
+    cells[i.dataset.k] = v;
+  });
+  if (!Object.keys(cells).length) { document.getElementById('msg').textContent = {{ _("Нечего сохранять")|tojson }}; return; }
+  if (bad && !confirm({{ _("Красных (ошибочных) показаний, которые вы не исправили:")|tojson }} + ' ' + bad + '. ' + {{ _("Всё равно сохранить?")|tojson }})) return;
+  sb.disabled = true;
+  const r = await fetch({{ url_for('lines.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({cells, table: 1, line_name: {{ (_("бланк охраны") ~ ' № ' ~ (sc.sheet_id or ''))|tojson }}})});
+  if (!r.ok) { sb.disabled = false; document.getElementById('msg').textContent = {{ _("Ошибка сохранения")|tojson }} + ': ' + (await r.text()).slice(0, 300); return; }
+  await fetch({{ url_for('guard.mark_saved', scan_id=sc.id)|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({n})});
+  location.href = {{ url_for('lines.table')|tojson }};
+};
+</script>
+{% endblock %}

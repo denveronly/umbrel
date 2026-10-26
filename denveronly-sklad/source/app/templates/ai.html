@@ -24,6 +24,7 @@
 {% endblock %}
 {% block content %}
 <div class="row"><h1>{{ _("ИИ-помощник") }}</h1><span class="spacer"></span>
+  <a class="btn sm" href="{{ url_for('guard.scan_page') }}">📷 {{ _("Распознать бланк охраны") }}</a>
   <span class="muted">{{ model }}</span> <a class="btn ghost sm" href="{{ url_for('ai_settings_page') }}">⚙</a></div>
 {% if not has_key %}
   <div class="warn" style="margin-bottom:12px">{{ _("Сначала укажите API-ключ Anthropic в настройках") }} — <a href="{{ url_for('ai_settings_page') }}">{{ _("Настройки") }} → {{ _("ИИ") }}</a></div>
