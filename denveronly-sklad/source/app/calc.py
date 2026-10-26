@@ -228,7 +228,7 @@ def build_act(tenant_id, period):
             p = rent_price(wh, pt, s)
             rent_sum = p["net"]                              # без ПДВ; ПДВ додається в кінці акта
             rate = r2(rent_sum / wh["area"]) if wh["area"] and pt == "bank_vat" else p["rate"]
-            lines.append({"group": "rent", "name": f"Оренда складу «{wh['name']}» за {plabel}",
+            lines.append({"group": "rent", "name": f"Оренда «{wh['name']}» за {plabel}",
                           "unit": "м²", "qty": wh["area"], "price": rate, "sum": rent_sum})
 
     # --- послуги за лічильниками ---
