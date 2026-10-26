@@ -1125,4 +1125,9 @@ EN = {
     '▦ Склады': '▦ Warehouses',
     'Для каждого пользователя и браузера отдельно. Акты и детализации всегда печатаются на украинском.': 'Per user and browser. Acts and breakdowns are always printed in Ukrainian.',
     'Язык интерфейса': 'Interface language',
+    'сумма вручную каждому арендатору за месяц': 'manual amount per tenant per month',
+    'сумма вручную': 'manual amount',
+    'каждому арендатору своя сумма за месяц (уборщица): в карточке арендатора или во вкладке «Цены и количества»;': 'each tenant has their own amount per month (e.g. cleaner): in the tenant card or on the «Prices and quantities» tab;',
+    'Суммы и количества за месяц потребления': 'Amounts and quantities for consumption month',
+    'Количество и суммы за месяц': 'Quantities and amounts for the month',
 }

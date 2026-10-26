@@ -282,6 +282,15 @@ def build_act(tenant_id, period):
                       "WHERE ts.tenant_id=? AND s.active=1 AND s.mode NOT IN ('meter', 'share') ORDER BY s.sort, s.name",
                       (tenant_id,)).fetchall()
     for svc in subs:
+        if svc["mode"] == "amount":                   # сума вручну цьому орендарю за місяць (напр. прибиральниця)
+            row = db.execute("SELECT qty FROM service_usage WHERE tenant_id=? AND service_id=? AND period=?",
+                             (tenant_id, svc["id"], uperiod)).fetchone()
+            amt = r2(row["qty"]) if row and row["qty"] else 0
+            if amt:
+                lines.append({"group": "service", "name": f"{svc['name']} за {ulabel}", "unit": "послуга", "qty": 1,
+                              "price": amt, "sum": amt, "service": svc["name"], "wh": "", "serial": "", "rnote": "",
+                              "only_sum": True})
+            continue
         if svc["mode"] == "qty":
             row = db.execute("SELECT qty FROM service_usage WHERE tenant_id=? AND service_id=? AND period=?",
                              (tenant_id, svc["id"], uperiod)).fetchone()

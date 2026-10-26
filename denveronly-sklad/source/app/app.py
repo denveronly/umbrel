@@ -612,6 +612,9 @@ def tenant_edit(tid=None):
     acts = db.execute("SELECT * FROM acts WHERE tenant_id=? ORDER BY period DESC", (tid,)).fetchall() if tid else []
     tot = {"total": calc.r2(sum(p["total"] for _w, p in wh_items)), "vat": calc.r2(sum(p["vat"] for _w, p in wh_items))}
     subs = {r[0] for r in db.execute("SELECT service_id FROM tenant_services WHERE tenant_id=?", (tid,))} if tid else set()
+    use_period = request.args.get("up") if re.fullmatch(r"\d{4}-\d{2}", request.args.get("up") or "") else current_period()
+    usage = {r["service_id"]: r["qty"] for r in db.execute(
+        "SELECT service_id, qty FROM service_usage WHERE tenant_id=? AND period=?", (tid, use_period))} if tid else {}
     all_svcs = [sv for sv in services() if sv["mode"] not in ("meter", "share")]
     meter_svcs = db.execute("SELECT DISTINCT s.name FROM meters m JOIN services s ON s.id=m.service_id "
                             "JOIN warehouses w ON w.id=m.warehouse_id WHERE w.tenant_id=? AND m.active=1",
@@ -634,7 +637,7 @@ def tenant_edit(tid=None):
         if pos is not None:
             nav_prev = ids[pos - 1] if pos > 0 else None
             nav_next = ids[pos + 1] if pos + 1 < len(ids) else None
-    return render_template("tenant_edit.html", t=t, nav_prev=nav_prev, nav_next=nav_next, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
+    return render_template("tenant_edit.html", t=t, nav_prev=nav_prev, nav_next=nav_next, usage=usage, use_period=use_period, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
                            subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs, tenancy=tenancy, share_svcs=share_svcs,
                            cur_period=current_period(),
                            tot=tot, companies=companies(), vat=float(st["vat_rate"]), free_prices=free_prices)
@@ -684,11 +687,25 @@ def tenant_warehouses(tid):
 def tenant_services(tid):
     db = get_db()
     db.execute("DELETE FROM tenant_services WHERE tenant_id=?", (tid,))
-    for sid in request.form.getlist("service_id"):
-        db.execute("INSERT INTO tenant_services(tenant_id, service_id) VALUES (?,?)", (tid, int(sid)))
+    on = {int(s) for s in request.form.getlist("service_id")}
+    # суми / кількості за місяць прямо з картки (послуги «кількість» і «сума вручну»)
+    per = request.form.get("use_period") or current_period()
+    if re.fullmatch(r"\d{4}-\d{2}", per):
+        for k, v in request.form.items():
+            if not k.startswith("u_"):
+                continue
+            sid, val = int(k[2:]), fnum(k)
+            if val:
+                on.add(sid)                          # вписали суму — послуга підключається
+                db.execute("INSERT INTO service_usage(tenant_id, service_id, period, qty) VALUES (?,?,?,?) "
+                           "ON CONFLICT(tenant_id, service_id, period) DO UPDATE SET qty=excluded.qty", (tid, sid, per, val))
+            else:
+                db.execute("DELETE FROM service_usage WHERE tenant_id=? AND service_id=? AND period=?", (tid, sid, per))
+    for sid in on:
+        db.execute("INSERT INTO tenant_services(tenant_id, service_id) VALUES (?,?)", (tid, sid))
     db.commit()
     flash(_("Услуги сохранены"))
-    return redirect(url_for("tenant_edit", tid=tid) + "#services")
+    return redirect(url_for("tenant_edit", tid=tid, up=per) + "#services")
 
 
 # ---------------- компании-получатели ----------------
@@ -804,6 +821,8 @@ def readings():
     svcs = services()
     price_rows = []
     for sv in svcs:
+        if sv["mode"] == "amount":                   # сума вносится кожному орендарю окремо — ціни немає
+            continue
         own = db.execute("SELECT price FROM service_prices WHERE service_id=? AND period=?", (sv["id"], period)).fetchone()
         last, last_p = price_for(sv["id"], calc.prev_period(period))
         price_rows.append({"s": sv, "price": own["price"] if own else None, "last": last, "last_p": last_p})
@@ -835,7 +854,7 @@ def readings():
                           "cons": cons, "total": total, "how": how, "sum_pct": share_sum(sv["id"], period)})
 
     # количества по договорам (услуги qty)
-    qty_svcs = [sv for sv in svcs if sv["mode"] == "qty"]
+    qty_svcs = [sv for sv in svcs if sv["mode"] in ("qty", "amount")]
     tenants = db.execute("SELECT id, name FROM tenants WHERE active=1 ORDER BY name").fetchall()
     qty_rows = []
     for t in tenants:
@@ -898,7 +917,7 @@ def price_history(end, n=12):
         p = calc.prev_period(p)
     periods.reverse()
     out = []
-    for sv in db.execute("SELECT * FROM services ORDER BY active DESC, sort, name").fetchall():
+    for sv in db.execute("SELECT * FROM services WHERE mode != 'amount' ORDER BY active DESC, sort, name").fetchall():
         own = {r["period"]: r["price"] for r in db.execute("SELECT period, price FROM service_prices WHERE service_id=?",
                                                               (sv["id"],))}
         before = db.execute("SELECT price FROM service_prices WHERE service_id=? AND period<? ORDER BY period DESC LIMIT 1",

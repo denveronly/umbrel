@@ -210,10 +210,20 @@
   {% if meter_svcs %}<p class="muted">{{ _("По счётчикам складов") }}: {% for m in meter_svcs %}<b>{{ m.name }}</b>{{ ', ' if not loop.last }}{% endfor %} — {{ _("считаются автоматически") }}.</p>{% endif %}
   {% if all_svcs %}
   <form method="post" action="{{ url_for('tenant_services', tid=t.id) }}">
+    {% set manual = all_svcs|selectattr('mode', 'in', ['qty', 'amount'])|list %}
     {% for sv in all_svcs %}
-      <label class="check"><input type="checkbox" name="service_id" value="{{ sv.id }}" {{ 'checked' if sv.id in subs }}>
-        {{ sv.name }} <span class="muted">— {{ _(SERVICE_MODES[sv.mode]) }}</span></label>
+      <div class="svcline">
+        <label class="check"><input type="checkbox" name="service_id" value="{{ sv.id }}" {{ 'checked' if sv.id in subs }}>
+          {{ sv.name }} <span class="muted">— {{ _(SERVICE_MODES[sv.mode]) }}</span></label>
+        {% if sv.mode in ('qty', 'amount') %}
+          <input name="u_{{ sv.id }}" inputmode="decimal" value="{{ usage.get(sv.id)|plain if usage.get(sv.id) else '' }}" placeholder="0"
+                 style="width:110px;text-align:right"><span class="muted">{{ _("грн") if sv.mode == 'amount' else sv.unit }}</span>
+        {% endif %}
+      </div>
     {% endfor %}
+    {% if manual %}<label class="row" style="gap:6px;margin-top:8px">{{ _("Суммы и количества за месяц потребления") }}
+      <input type="month" name="use_period" value="{{ use_period }}" style="width:auto"
+             onchange="location.href='?up=' + this.value + '#services'"></label>{% endif %}
     <button class="sm" style="margin-top:8px">{{ _("Сохранить услуги") }}</button>
   </form>
   {% else %}<p class="muted">{{ _("Других услуг нет. Добавить") }}: <a href="{{ url_for('services_page') }}">{{ _("Показания → Услуги") }}</a>.</p>{% endif %}
