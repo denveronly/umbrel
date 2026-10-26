@@ -168,7 +168,8 @@ def _detail_rows(lay):
             if l.get("serial"):
                 where += f", №{l['serial']}"
             if "cur" in l:
-                readings = f"{fmt_num(l['prev'])} → {fmt_num(l['cur'])}"
+                nb = lambda x: fmt_num(x).replace(" ", "\u00a0")       # число не рветься при переносі
+                readings = f"{nb(l['prev'])} → {nb(l['cur'])}"
                 if (l.get("coef") or 1) != 1:
                     readings += f" ×{fmt_num(l['coef'])}"
             elif "rnote" in l:                                # порожньо — свідомо нічого (реактив)
@@ -222,9 +223,11 @@ def act_pdf(act, part="all"):
         return out + [Spacer(1, 3 * mm)]
 
     def table(head, rows, widths, num_from):
+        # текстові колонки переносяться в межах клітинки (назва, приміщення, показники)
+        wrap_cols = (1, 2, 3) if len(head) > 6 else (1, 2)
         data = [[Paragraph(h, bold_s) for h in head]]
         for r in rows:
-            data.append([Paragraph(str(x), small) if j in (1, 2) else x for j, x in enumerate(r)])
+            data.append([Paragraph(str(x), small) if j in wrap_cols else x for j, x in enumerate(r)])
         tb = Table(data, colWidths=[w * mm for w in widths], repeatRows=1)
         tb.setStyle(TableStyle([
             ("FONT", (0, 0), (-1, -1), "DejaVu", 8),
