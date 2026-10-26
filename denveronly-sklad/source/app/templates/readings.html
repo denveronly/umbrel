@@ -84,8 +84,7 @@
         {% if r.m.serial %}<span class="muted">№{{ r.m.serial }}</span>{% endif %}
         <div class="muted">{{ r.m.tenant_name or _("свободен") }}{% if r.m.coef != 1 %} · {{ _("коэф") }}. {{ num(r.m.coef) }}{% endif %}</div>
       </div>
-      {% if r.s.has_main == 2 %}<div class="muted">{{ _("количество за месяц") }},<br>{{ r.s.unit }}</div>
-      {% else %}<div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>{% endif %}
+      <div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>
       <input name="m_{{ r.m.id }}" inputmode="decimal" value="{{ r.cur|plain }}"
              data-prev="{{ r.prev }}" data-coef="{{ r.m.coef }}" data-unit="{{ r.m.unit }}" oninput="upd(this)" placeholder="—">
       <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ (r.cons|kwh) if 'квт' in (r.m.unit or '')|lower else num(r.cons) }} {{ r.m.unit }}</span>{% endif %}</div>
