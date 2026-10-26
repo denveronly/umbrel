@@ -1040,7 +1040,8 @@ def services_page():
                 msrc = request.form.get("main_src") or ""
                 msrc = msrc if re.fullmatch(r"[lm]:\d+", msrc) else None
                 db.execute("UPDATE services SET has_main=?, main_serial=?, main_coef=?, main_initial=?, main_src=? WHERE id=?",
-                           (1 if request.form.get("has_main") or msrc else 0, request.form.get("main_serial", "").strip(),
+                           (1 if msrc else (request.form.get("has_main", type=int) if request.form.get("has_main", type=int) in (1, 2) else 0),
+                            request.form.get("main_serial", "").strip(),
                             fnum("main_coef", 1) or 1, fnum("main_initial", 0) or 0, msrc, sid))
                 if request.form.get("subscribe_all") and mode not in ("meter", "share"):
                     db.execute("INSERT OR IGNORE INTO tenant_services(tenant_id, service_id) "

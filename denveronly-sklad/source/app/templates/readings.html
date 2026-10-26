@@ -46,16 +46,17 @@
 
 {% if main_rows %}
 <div class="card">
-  <h2 style="margin-top:0">{{ _("Общие счётчики услуг") }}</h2>
+  <h2 style="margin-top:0">{{ _("Общие счётчики и количества услуг") }}</h2>
   <p class="muted">{{ _("Расход общего счётчика × цена месяца = сумма, которая делится между арендаторами по их % (карточка арендатора → «Доли услуг»). Счётчики арендаторов на эти услуги — только для контроля, в акт не идут.") }}</p>
   {% for r in main_rows %}
     <div class="rd">
       <div class="who"><b>{{ r.s.name }}</b> · {{ _("общий") }}{% if r.s.main_serial %} <span class="muted">№{{ r.s.main_serial }}</span>{% endif %}
         <div class="muted"><a href="{{ url_for('services_page') }}#svc{{ r.s.id }}" title="{{ _("Доли арендаторов") }}">Σ {{ num(r.sum_pct) }}% {{ _("арендаторов") }}</a>{% if (r.sum_pct - 100)|abs > 0.01 %} <span class="badge warnb">≠ 100%</span>{% endif %}</div></div>
-      <div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>
+      {% if r.s.has_main == 2 %}<div class="muted">{{ _("количество за месяц") }},<br>{{ r.s.unit }}</div>
+      {% else %}<div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>{% endif %}
       {% if r.src %}<div title="{{ _("Показания вносятся в таблице показаний") }}"><b>{{ num(r.cur) if r.cur is not none else '—' }}</b><br><span class="muted">⚡ {{ r.src }}</span></div>
       {% else %}<input name="sm_{{ r.s.id }}" inputmode="decimal" value="{{ r.cur|plain }}" placeholder="—"
-             data-prev="{{ r.prev }}" data-coef="{{ r.s.main_coef or 1 }}" data-unit="{{ r.s.unit }}" oninput="upd(this)">{% endif %}
+             data-prev="{{ 0 if r.s.has_main == 2 else r.prev }}" data-coef="{{ 1 if r.s.has_main == 2 else (r.s.main_coef or 1) }}" data-unit="{{ r.s.unit }}" oninput="upd(this)">{% endif %}
       <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ num(r.cons) }} {{ r.s.unit }}</span>{% endif %}
         {% if r.total is not none %}<div class="muted">= {{ money(r.total) }} {{ _("грн") }}</div>{% endif %}</div>
     </div>
@@ -83,7 +84,8 @@
         {% if r.m.serial %}<span class="muted">№{{ r.m.serial }}</span>{% endif %}
         <div class="muted">{{ r.m.tenant_name or _("свободен") }}{% if r.m.coef != 1 %} · {{ _("коэф") }}. {{ num(r.m.coef) }}{% endif %}</div>
       </div>
-      <div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>
+      {% if r.s.has_main == 2 %}<div class="muted">{{ _("количество за месяц") }},<br>{{ r.s.unit }}</div>
+      {% else %}<div class="muted">{{ _("пред") }}.: <b>{{ num(r.prev) }}</b><br>{{ period_label(r.prev_p) if r.prev_p else _("начальное") }}</div>{% endif %}
       <input name="m_{{ r.m.id }}" inputmode="decimal" value="{{ r.cur|plain }}"
              data-prev="{{ r.prev }}" data-coef="{{ r.m.coef }}" data-unit="{{ r.m.unit }}" oninput="upd(this)" placeholder="—">
       <div class="n cons">{% if r.cons is not none %}<span class="{{ 'badge warnb' if r.cons < 0 }}">{{ (r.cons|kwh) if 'квт' in (r.m.unit or '')|lower else num(r.cons) }} {{ r.m.unit }}</span>{% endif %}</div>

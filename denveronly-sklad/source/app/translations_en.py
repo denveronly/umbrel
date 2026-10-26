@@ -1269,4 +1269,10 @@ EN = {
     'Подходящих сенсоров не найдено (нужен state_class total/total_increasing или utility_meter) — впишите entity_id вручную.': 'No suitable sensors found (need state_class total/total_increasing or utility_meter) — enter entity_id manually.',
     'Home Assistant отклонил запрос (403) — у пользователя токена нет доступа': 'Home Assistant refused the request (403) — the token user has no access',
     'Home Assistant вернул не JSON — проверьте адрес': 'Home Assistant did not return JSON — check the address',
+    'Сумма на распределение': 'Amount to distribute',
+    'сумма = цена месяца (без количества)': 'amount = monthly price (no quantity)',
+    'количество за месяц на весь комплекс × цена за единицу (напр. тонны пеллет)': 'monthly quantity for the whole complex × unit price (e.g. tonnes of pellets)',
+    'общий счётчик: расход × цена (показания)': 'common meter: consumption × price (readings)',
+    'количество за месяц': 'quantity for the month',
+    'Общие счётчики и количества услуг': 'Common meters and service quantities',
 }

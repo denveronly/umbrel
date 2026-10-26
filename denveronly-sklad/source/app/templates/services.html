@@ -34,7 +34,10 @@
             <label>{{ _("Порядок в акте") }}<input name="sort" type="number" value="{{ s.sort }}"></label>
             <div class="full sharebox" data-for-mode="share" {{ 'hidden' if s.mode != 'share' }}>
               <p class="muted" style="margin:0 0 6px">{{ _("Доля: сумма услуги за месяц делится между арендаторами по % из их карточек. Без общего счётчика сумма = цена месяца (напр. вывоз мусора 9000 грн). С общим счётчиком сумма = расход общего счётчика × цена (вода).") }}</p>
-              <label class="check"><input type="checkbox" name="has_main" value="1" {{ 'checked' if s.has_main }}> {{ _("есть общий счётчик (показания вносятся во вкладке «Цены и количества»)") }}</label>
+              <label>{{ _("Сумма на распределение") }}<select name="has_main">
+                <option value="0" {{ 'selected' if not s.has_main }}>{{ _("сумма = цена месяца (без количества)") }}</option>
+                <option value="2" {{ 'selected' if s.has_main == 2 }}>{{ _("количество за месяц на весь комплекс × цена за единицу (напр. тонны пеллет)") }}</option>
+                <option value="1" {{ 'selected' if s.has_main == 1 }}>{{ _("общий счётчик: расход × цена (показания)") }}</option></select></label>
               <label style="margin-top:6px">{{ _("Показания брать со счётчика из таблицы показаний") }}
                 <select name="main_src"><option value="">— {{ _("свои показания (вкладка «Цены и количества»)") }}</option>
                   {% for o in srcs %}<option value="{{ o.value }}" {{ 'selected' if s.main_src == o.value }}>{{ o.label }}</option>{% endfor %}</select></label>
@@ -97,7 +100,10 @@
   <label>{{ _("Тип") }}<select name="mode">{% for k, v in SERVICE_MODES.items() %}<option value="{{ k }}">{{ _(v) }}</option>{% endfor %}</select></label>
   <label>{{ _("Порядок в акте") }}<input name="sort" type="number" value="100"></label>
   <div class="full sharebox" data-for-mode="share" hidden>
-    <label class="check"><input type="checkbox" name="has_main" value="1"> {{ _("есть общий счётчик (показания вносятся во вкладке «Цены и количества»)") }}</label>
+    <label>{{ _("Сумма на распределение") }}<select name="has_main">
+      <option value="0">{{ _("сумма = цена месяца (без количества)") }}</option>
+      <option value="2">{{ _("количество за месяц на весь комплекс × цена за единицу (напр. тонны пеллет)") }}</option>
+      <option value="1">{{ _("общий счётчик: расход × цена (показания)") }}</option></select></label>
     <label style="margin-top:6px">{{ _("Показания брать со счётчика из таблицы показаний") }}
       <select name="main_src"><option value="">— {{ _("свои показания (вкладка «Цены и количества»)") }}</option>
         {% for o in srcs %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}</select></label>

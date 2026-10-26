@@ -182,6 +182,8 @@ def main_values(svc, period, db=None):
             return (cur["value"] if cur else None, prev["value"] if prev else (m["initial_value"] or 0),
                     prev["period"] if prev else None, m["coef"] or 1)
     cur = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period=?", (svc["id"], period)).fetchone()
+    if svc["has_main"] == 2:                # кількість за місяць на весь комплекс (тонни пелет) — не накопичувальний
+        return (cur["value"] if cur else None, 0, None, 1)
     prev = db.execute("SELECT value, period FROM service_readings WHERE service_id=? AND period<? AND value IS NOT NULL "
                       "ORDER BY period DESC LIMIT 1", (svc["id"], period)).fetchone()
     return (cur["value"] if cur else None, prev["value"] if prev else (svc["main_initial"] or 0),
@@ -198,7 +200,7 @@ def share_total(svc, period, db=None):
     cv, pv, _pp, coef = main_values(svc, period, db)
     if cv is None:
         return None, "", None, p
-    cons = r2((cv - pv) * coef)
+    cons = round((cv - pv) * coef, 3)
     if is_kwh(svc["unit"]):
         cons = kwh_round(cons)
     if p is None:
@@ -360,9 +362,12 @@ def build_act(tenant_id, period):
             pct_s = f"{pct:g}".replace(".", ",")
             # кількість — частка орендаря: м³ від загального лічильника (вода) або частка однієї послуги (сміття)
             qty = round((cons if svc["has_main"] else 1) * pct / 100, 3)
-            lines.append({"group": "service", "name": f"{svc['name']} за {ulabel} — {pct_s}% × {fmt_money(p)}",
+            unit = (svc["unit"] or "м³") if svc["has_main"] else "послуга"
+            lname = (f"{svc['name']} за {ulabel} — {pct_s}% від {fmt_num(cons)} {unit} × {fmt_money(p)} грн/{unit}"
+                     if svc["has_main"] else f"{svc['name']} за {ulabel} — {pct_s}% × {fmt_money(p)}")
+            lines.append({"group": "service", "name": lname,
                           "unit": (svc["unit"] or "м³") if svc["has_main"] else "послуга", "qty": qty, "price": p, "sum": r2(total * pct / 100),
-                          "service": svc["name"], "wh": "", "serial": "", "rnote": f"{pct_s}%",
+                          "service": svc["name"], "wh": "", "serial": "", "rnote": f"{pct_s}% від {fmt_num(cons)}\u00a0{unit}" if svc["has_main"] else f"{pct_s}%",
                           # без загального лічильника в деталізації — лише % і сума (без «0,20 × 9 000»)
                           "only_sum": not svc["has_main"]})
 
