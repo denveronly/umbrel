@@ -4,7 +4,7 @@
 <div class="row"><h1>{{ _("Показания") }}</h1><span class="spacer"></span></div>
 {% include "_readings_tabs.html" %}
 
-<div class="row"><h2 style="margin:0">🏠 Home Assistant <span class="muted" style="font-weight:400">· {{ site_name }}</span></h2><span class="spacer"></span>
+<div class="row"><h2 style="margin:0">🏠 HA <span class="muted" style="font-weight:400">· {{ site_name }}</span></h2><span class="spacer"></span>
   {% if status.time %}<span class="muted">{{ _("Последний автосъём") }}: {{ status.time[8:10] }}.{{ status.time[5:7] }} {{ status.time[11:16] }}</span>{% endif %}</div>
 <p class="muted">{{ _("У каждого объекта (переключатель слева вверху) — свой Home Assistant. Программа каждый час запоминает показания сенсоров, а в начале месяца фиксирует прошлый месяц: расход и показание. Если сенсор привязан к счётчику из таблицы показаний — вписывает туда показание за прошлый месяц (только в пустую клетку).") }}</p>
 

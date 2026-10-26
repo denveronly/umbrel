@@ -1,7 +1,7 @@
 <div class="tabs">
   <a href="{{ url_for('lines.table') }}" class="{{ 'on' if request.endpoint in ('lines.table', 'lines.manage') }}">⚡ {{ _("Электрические показания") }}</a>
-  <a href="{{ url_for('service_readings_page') }}" class="{{ 'on' if request.endpoint == 'service_readings_page' }}">{{ _("Показатели услуг") }}</a>
+  <a href="{{ url_for('service_readings_page') }}" class="{{ 'on' if request.endpoint == 'service_readings_page' }}">🪵 {{ _("Показатели услуг") }}</a>
   <a href="{{ url_for('readings', period=period) if period else url_for('readings') }}" class="{{ 'on' if request.endpoint == 'readings' }}">{{ _("Цены услуг") }}</a>
   <a href="{{ url_for('services_page') }}" class="{{ 'on' if request.endpoint == 'services_page' }}">{{ _("Пропорции услуг") }}</a>
-  {% if can('settings') %}<a href="{{ url_for('ha.page') }}" class="{{ 'on' if (request.endpoint or '').startswith('ha.') }}">🏠 Home Assistant</a>{% endif %}
+  {% if can('settings') %}<a href="{{ url_for('ha.page') }}" class="{{ 'on' if (request.endpoint or '').startswith('ha.') }}">🏠 HA</a>{% endif %}
 </div>

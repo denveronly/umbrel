@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.44.0"
+version: "1.44.1"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Показники: вкладки «Електричні показники», «Послуги показники» (нова таблиця загальних лічильників і кількостей послуг по місяцях), «Ціни послуг» (з цінами за місяцями), «Пропорції послуг» (додати послугу — вгорі).
+  Показники: 🪵 Послуги показники, кнопка «Зберегти» праворуч, вкладка «HA».
 dependencies: []
 path: ""
 defaultUsername: ""
