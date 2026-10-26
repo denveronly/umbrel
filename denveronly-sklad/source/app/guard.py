@@ -88,7 +88,7 @@ def build_sections(periods):
         for gr in groups:
             cols = []
             for c in gr["cols"]:
-                fields = ["value"] + (["reactive"] if c.get("rmode") == "input" else [])
+                fields = ["value"]                     # реактив на бланку не пишемо
                 for f in fields:
                     key = (c["kind"], c["id"], f)
                     if key in seen:
