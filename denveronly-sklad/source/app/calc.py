@@ -403,7 +403,7 @@ def company_snapshot(c):
 
 
 NUM_DEFAULT = "{П}{ММ}{РР}-{NNN}"
-_TOKEN_ALIASES = {"{P}": "{П}", "{MM}": "{ММ}", "{YY}": "{РР}", "{YYYY}": "{РРРР}", "{М}": "{ММ}"}
+_TOKEN_ALIASES = {"{P}": "{П}", "{MM}": "{ММ}", "{YY}": "{РР}", "{YYYY}": "{РРРР}", "{M}": "{М}"}
 
 
 def num_format(s=None):
@@ -411,27 +411,55 @@ def num_format(s=None):
     f = (s.get("act_num_format") or NUM_DEFAULT).strip() or NUM_DEFAULT
     for k, v in _TOKEN_ALIASES.items():
         f = f.replace(k, v)
-    if not re.search(r"\{N+\}", f):
+    if not re.search(r"\{N+\}|\{ДОГ\}", f):
         f += "-{NNN}"
     return f, s.get("act_num_reset") or "month", max(1, int(s.get("act_num_start") or 1))
 
 
-def format_act_number(fmt, prefix, period, n):
+def act_date_short(period, mode=None):
+    """Дата акта коротко: 31/10/26 (без нулів попереду, рік двома цифрами)."""
+    import calendar
+    mode = mode or settings().get("act_date", "prev_last")
+    y, m = map(int, period.split("-"))
+    if mode == "prev_last":
+        y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+        d = calendar.monthrange(y, m)[1]
+    else:
+        d = 1 if mode == "first" else calendar.monthrange(y, m)[1]
+    return f"{d}/{m}/{str(y)[2:]}"
+
+
+def format_act_number(fmt, prefix, period, n, contract=None):
     y, m = period.split("-")
-    out = fmt.replace("{П}", prefix or "").replace("{РРРР}", y).replace("{РР}", y[2:]).replace("{ММ}", m)
+    out = (fmt.replace("{П}", prefix or "").replace("{РРРР}", y).replace("{РР}", y[2:]).replace("{ММ}", m)
+           .replace("{М}", str(int(m))))
+    if "{ДОГ}" in out:
+        out = out.replace("{ДОГ}", (contract or "").strip() or "б/н")
+    if "{ДАТА}" in out:
+        out = out.replace("{ДАТА}", act_date_short(period))
     return re.sub(r"\{(N+)\}", lambda mt: f"{n:0{len(mt.group(1))}d}", out)
 
 
-def next_act_number(company, period):
+def next_act_number(company, period, tenant=None):
     """Нумерація окремо для кожної компанії за шаблоном з Налаштувань (за замовчуванням <префікс>ММРР-NNN).
-    Лічильник починається заново щомісяця / щороку / ніколи — теж у налаштуваннях."""
+    Лічильник починається заново щомісяця / щороку / ніколи — теж у налаштуваннях.
+    Шаблон з {ДОГ} (номер договору) і {ДАТА} (дата акта): «26/10 31/10/26» — без лічильника."""
     fmt, reset, start = num_format()
     y, m = period.split("-")
     prefix = (company["act_prefix"] if company else "") or ""
+    if "{ДОГ}" in fmt and not re.search(r"\{N+\}", fmt):
+        number = format_act_number(fmt, prefix, period, 0, tenant["contract_no"] if tenant else None)
+        taken = {r["number"] for r in get_db().execute("SELECT number FROM acts WHERE period=? AND tenant_id IS NOT ?",
+                                                        (period, tenant["id"] if tenant else None)).fetchall()}
+        base, k = number, 2
+        while number in taken:                       # однаковий № договору в різних орендарів
+            number = f"{base}-{k}"
+            k += 1
+        return number
     # регулярний вираз для пошуку вже виданих номерів у межах «періоду обнулення»
     rx, i = "", 0
     while i < len(fmt):
-        mt = re.match(r"\{П\}|\{РРРР\}|\{РР\}|\{ММ\}|\{N+\}", fmt[i:])
+        mt = re.match(r"\{П\}|\{РРРР\}|\{РР\}|\{ММ\}|\{М\}|\{N+\}|\{ДОГ\}|\{ДАТА\}", fmt[i:])
         if not mt:
             rx += re.escape(fmt[i])
             i += 1
@@ -439,10 +467,16 @@ def next_act_number(company, period):
         tok = mt.group(0)
         if tok == "{П}":
             rx += re.escape(prefix)
+        elif tok == "{ДОГ}":
+            rx += re.escape(((tenant["contract_no"] if tenant else "") or "").strip() or "б/н")
+        elif tok == "{ДАТА}":
+            rx += re.escape(act_date_short(period))
         elif tok == "{РРРР}":
             rx += y if reset in ("month", "year") else r"\d{4}"
         elif tok == "{РР}":
             rx += y[2:] if reset in ("month", "year") else r"\d{2}"
+        elif tok == "{М}":
+            rx += str(int(m)) if reset == "month" else r"\d{1,2}"
         elif tok == "{ММ}":
             rx += m if reset == "month" else r"\d{2}"
         else:
@@ -463,7 +497,7 @@ def next_act_number(company, period):
         args.append(y)
     used = [int(mt.group("n")) for r in get_db().execute(q, args).fetchall() if (mt := rx.match(r["number"] or ""))]
     n = max(max(used) + 1 if used else start, start)
-    return format_act_number(fmt, prefix, period, n)
+    return format_act_number(fmt, prefix, period, n, tenant["contract_no"] if tenant else None)
 
 
 def save_act(tenant_id, period, final=False):
@@ -492,7 +526,7 @@ def save_act(tenant_id, period, final=False):
     if existing:
         number = existing["number"]
         if existing["company_id"] != cid:          # змінилась компанія — новий номер у її нумерації
-            number = next_act_number(company, period)
+            number = next_act_number(company, period, tenant)
         db.execute("UPDATE acts SET number=?, company_id=?, data=?, total=?, payment_type=?, status=? WHERE id=?",
                    (number, cid, data, totals["total"], tenant["payment_type"], status, existing["id"]))
         act_id = existing["id"]
@@ -500,7 +534,7 @@ def save_act(tenant_id, period, final=False):
         cur = db.execute(
             "INSERT INTO acts(number, tenant_id, company_id, period, payment_type, data, total, status) "
             "VALUES (?,?,?,?,?,?,?,?)",
-            (next_act_number(company, period), tenant_id, cid, period, tenant["payment_type"],
+            (next_act_number(company, period, tenant), tenant_id, cid, period, tenant["payment_type"],
              data, totals["total"], status))
         act_id = cur.lastrowid
     db.commit()

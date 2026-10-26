@@ -734,7 +734,7 @@ def companies_page():
         cid = request.form.get("cid", type=int)
         if request.form.get("action") == "numbering":       # шаблон номера акта
             fmt = (request.form.get("act_num_format") or calc.NUM_DEFAULT).strip()[:60]
-            if not re.search(r"\{N+\}", fmt):
+            if not re.search(r"\{N+\}|\{ДОГ\}", fmt):
                 flash(_("В шаблоне нужен счётчик {N}, {NN} или {NNN}"))
                 return redirect(url_for("companies_page") + "#numbering")
             reset = request.form.get("act_num_reset") if request.form.get("act_num_reset") in ("month", "year", "never") else "month"
@@ -770,9 +770,9 @@ def companies_page():
                       "FROM companies c ORDER BY c.active DESC, c.name").fetchall()
     fmt, reset, start = calc.num_format()
     per = current_period()
-    samples = [(r["name"], calc.format_act_number(fmt, r["act_prefix"] or "", per, start)) for r in rows if r["active"]]
+    samples = [(r["name"], calc.format_act_number(fmt, r["act_prefix"] or "", per, start, "26/10")) for r in rows if r["active"]]
     return render_template("companies.html", rows=rows, num_fmt=fmt, num_reset=reset, num_start=start, num_samples=samples,
-                           num_period=per)
+                           num_period=per, act_date_example=calc.act_date_short(acts_default_period()))
 
 
 # ---------------- показания, цены месяца, услуги ----------------

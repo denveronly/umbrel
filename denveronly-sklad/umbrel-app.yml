@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.38.1"
+version: "1.39.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,8 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Деталізація: «Підстава: Договір № … від …». Дата акта і деталізації — останній день попереднього місяця.
+  Нумерація актів: нові підстановки {ДОГ} — номер договору орендаря, {М} — місяць без нуля, {ДАТА} — дата акта.
+  Шаблон «{ДОГ} {М}/{РР}» дає «26/10 11/26». Налаштування → Компанії → Нумерація актів.
 dependencies: []
 path: ""
 defaultUsername: ""

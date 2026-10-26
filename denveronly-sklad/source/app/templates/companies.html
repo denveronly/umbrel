@@ -10,11 +10,11 @@
   <form method="post" class="grid" style="margin-top:12px">
     <input type="hidden" name="action" value="numbering">
     <label>{{ _("Шаблон номера") }}<input name="act_num_format" id="nfmt" value="{{ num_fmt }}" list="nfmts"></label>
-    <datalist id="nfmts"><option value="{П}{ММ}{РР}-{NNN}"><option value="{П}{NNN}"><option value="{П}{РРРР}-{NNN}"><option value="{NNN}/{ММ}"><option value="{N}"></datalist>
+    <datalist id="nfmts"><option value="{П}{ММ}{РР}-{NNN}"><option value="{П}{NNN}"><option value="{П}{РРРР}-{NNN}"><option value="{NNN}/{ММ}"><option value="{N}"><option value="{ДОГ} {М}/{РР}"><option value="{ДОГ} {ДАТА}"></datalist>
     <label>{{ _("Счётчик начинается заново") }}<select name="act_num_reset">
       {% for k, v in [('month', _("каждый месяц")), ('year', _("каждый год")), ('never', _("никогда (сквозная нумерация)"))] %}<option value="{{ k }}" {{ 'selected' if num_reset == k }}>{{ v }}</option>{% endfor %}</select></label>
     <label>{{ _("Первый номер") }}<input name="act_num_start" type="number" min="1" value="{{ num_start }}"></label>
-    <p class="full muted" style="margin:0">{{ _("Подстановки") }}: <code>{П}</code> — {{ _("префикс компании") }}, <code>{ММ}</code> — {{ _("месяц") }}, <code>{РР}</code> / <code>{РРРР}</code> — {{ _("год") }}, <code>{N}</code> <code>{NNN}</code> — {{ _("порядковый номер (NNN = 001)") }}. {{ _("Нумерация — отдельно у каждой компании. Первый номер — например, чтобы продолжить нумерацию из старой программы.") }}</p>
+    <p class="full muted" style="margin:0">{{ _("Подстановки") }}: <code>{П}</code> — {{ _("префикс компании") }}, <code>{ММ}</code> / <code>{М}</code> — {{ _("месяц") }} (01 / 1), <code>{РР}</code> / <code>{РРРР}</code> — {{ _("год") }}, <code>{N}</code> <code>{NNN}</code> — {{ _("порядковый номер (NNN = 001)") }}, <code>{ДОГ}</code> — {{ _("номер договора арендатора") }}, <code>{ДАТА}</code> — {{ _("дата акта (31/10/26)") }}. {{ _("Нумерация — отдельно у каждой компании. Первый номер — например, чтобы продолжить нумерацию из старой программы.") }}</p>
     <div class="full muted" id="nprev"></div>
     <div class="full"><button class="sm">{{ _("Сохранить") }}</button></div>
   </form>
@@ -26,7 +26,9 @@
   const upd = () => {
     const [y, m] = per.split('-'), n = parseInt(st.value) || 1;
     const one = p => inp.value.replace(/\{П\}|\{P\}/g, p || '').replace(/\{РРРР\}|\{YYYY\}/g, y).replace(/\{РР\}|\{YY\}/g, y.slice(2))
-      .replace(/\{ММ\}|\{MM\}/g, m).replace(/\{(N+)\}/g, (_, k) => String(n).padStart(k.length, '0'));
+      .replace(/\{ММ\}|\{MM\}/g, m).replace(/\{(N+)\}/g, (_, k) => String(n).padStart(k.length, '0'))
+      .replace(/\{М\}|\{M\}/g, String(parseInt(m, 10)))
+      .replace(/\{ДОГ\}/g, '26/10').replace(/\{ДАТА\}/g, {{ act_date_example|tojson }});
     out.textContent = t('Пример') + ': ' + (cos.length ? cos.map(one).join(', ') : one(''));
   };
   inp.addEventListener('input', upd); st.addEventListener('input', upd); upd();
