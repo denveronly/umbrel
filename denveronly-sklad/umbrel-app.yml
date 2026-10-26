@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.43.0"
+version: "1.43.1"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Home Assistant (Показники → 🏠 Home Assistant): у кожного об'єкта свій HA за токеном (зашифровано). Сенсори-лічильники (генератор, пелети), витрата по місяцях, автоматичне вписування показника за минулий місяць у лічильник таблиці показників.
+  Home Assistant: список сенсорів завантажується кнопкою (на сервері), зрозумілі помилки зв'язку з HA.
 dependencies: []
 path: ""
 defaultUsername: ""

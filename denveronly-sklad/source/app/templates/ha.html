@@ -40,8 +40,14 @@
   {% if c.url and c.has_token %}
   <h3>＋ {{ _("Добавить сенсор") }}</h3>
   <form method="post" action="{{ url_for('ha.sensor_save') }}" class="grid" id="addf">
-    <label class="full">{{ _("Сенсор из Home Assistant") }}
-      <select id="pick"><option value="">{{ _("загрузка списка…") }}</option></select></label>
+    <div class="full">{% if cand_err %}<div class="warn">{{ cand_err }}</div>
+    {% elif cands is none %}
+      <a class="btn sm ghost" href="{{ url_for('ha.page', pick=1) }}#addf">🔍 {{ _("Загрузить список сенсоров из Home Assistant") }}</a>
+    {% else %}<label>{{ _("Сенсор из Home Assistant") }} ({{ cands|length }})
+      <select id="pick"><option value="">{{ _("— выберите сенсор —") }}</option>
+        {% for x in cands %}<option data-s="{{ x|tojson|forceescape }}">{{ x.name }} — {{ x.state }} {{ x.unit }}{% if x.kind == 'monthly' %} ({{ _("месяц") }}){% endif %} · {{ x.entity }}</option>{% endfor %}
+      </select></label>{% if not cands %}<p class="muted">{{ _("Подходящих сенсоров не найдено (нужен state_class total/total_increasing или utility_meter) — впишите entity_id вручную.") }}</p>{% endif %}
+    {% endif %}</div>
     <label>entity_id<input name="entity" id="f_entity" placeholder="sensor.generator_energy" required></label>
     <label>{{ _("Название") }}<input name="name" id="f_name" placeholder="{{ _('Генератор') }}"></label>
     <label>{{ _("Тип") }}<select name="kind" id="f_kind"><option value="total">{{ _("накопительный") }}</option><option value="monthly">{{ _("утилити-метр (месяц)") }}</option></select></label>
@@ -86,23 +92,10 @@
 </div>
 {% endblock %}
 {% block scripts %}
-{% if c.url and c.has_token %}<script>
-(async () => {
-  const sel = document.getElementById('pick'); if (!sel) return;
-  try {
-    const j = await (await fetch({{ url_for('ha.sensors_json')|tojson }})).json();
-    if (!j.ok) { sel.innerHTML = '<option value="">' + j.error + '</option>'; return; }
-    const have = new Set({{ c.sensors|map(attribute='entity')|list|tojson }});
-    sel.innerHTML = '<option value="">' + {{ _("— выберите сенсор —")|tojson }} + ' (' + j.sensors.length + ')</option>';
-    j.sensors.filter(s => !have.has(s.entity)).forEach((s, i) => {
-      const o = document.createElement('option'); o.value = i; o.dataset.s = JSON.stringify(s);
-      o.textContent = s.name + ' — ' + s.state + ' ' + s.unit + (s.kind === 'monthly' ? ' (' + {{ _("месяц")|tojson }} + ')' : '') + ' · ' + s.entity;
-      sel.appendChild(o);
-    });
-    sel.onchange = () => { const o = sel.selectedOptions[0]; if (!o || !o.dataset.s) return; const s = JSON.parse(o.dataset.s);
-      document.getElementById('f_entity').value = s.entity; document.getElementById('f_name').value = s.name;
-      document.getElementById('f_kind').value = s.kind; document.getElementById('f_unit').value = s.unit; };
-  } catch (e) { sel.innerHTML = '<option value="">' + e + '</option>'; }
-})();
-</script>{% endif %}
+<script>
+const pick = document.getElementById('pick');
+if (pick) pick.onchange = () => { const o = pick.selectedOptions[0]; if (!o || !o.dataset.s) return; const s = JSON.parse(o.dataset.s);
+  document.getElementById('f_entity').value = s.entity; document.getElementById('f_name').value = s.name;
+  document.getElementById('f_kind').value = s.kind; document.getElementById('f_unit').value = s.unit; };
+</script>
 {% endblock %}

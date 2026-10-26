@@ -97,16 +97,20 @@ def api(c, path):
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
     try:
-        with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 401:
             raise HAError(_("Home Assistant отклонил токен (401)"))
+        if e.code == 403:
+            raise HAError(_("Home Assistant отклонил запрос (403) — у пользователя токена нет доступа"))
         if e.code == 404:
             raise HAError(_("Не найдено (404)") + f": {path}")
         raise HAError(f"HTTP {e.code}")
     except (urllib.error.URLError, OSError) as e:
-        raise HAError(_("Нет связи с Home Assistant") + f": {getattr(e, 'reason', e)}")
+        raise HAError(_("Нет связи с Home Assistant") + f" ({c['url']}): {getattr(e, 'reason', e)}")
+    except ValueError:
+        raise HAError(_("Home Assistant вернул не JSON — проверьте адрес"))
 
 
 def fnum(v):
@@ -308,6 +312,15 @@ def page():
             states = snapshot(c)
         except HAError as e:
             err = str(e)
+    cands, cand_err = None, None
+    if request.args.get("pick") and c["url"] and c["token"]:    # список сенсорів — на сервері, без fetch зі сторінки
+        try:
+            have = {x["entity"] for x in c["sensors"]}
+            cands = [x for x in candidate_sensors(c) if x["entity"] not in have]
+        except HAError as e:
+            cand_err = str(e)
+        except Exception as e:  # noqa
+            cand_err = f"{type(e).__name__}: {e}"
     cur = _period(date.today())
     rows = []
     import lines as L
@@ -333,7 +346,7 @@ def page():
     except ValueError:
         status = {}
     return render_template("ha.html", c=c, rows=rows, err=err, periods=periods[1:], hist=hist, status=status,
-                           srcs=L.src_options(), cur=cur, site_name=_(SITES[current_site()]["name"]))
+                           srcs=L.src_options(), cur=cur, cands=cands, cand_err=cand_err, site_name=_(SITES[current_site()]["name"]))
 
 
 @bp.route("/ha/sensors")
