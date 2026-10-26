@@ -67,7 +67,8 @@ def _act_payload(act):
                          "person": t.get("party_type") == "person", "address": t.get("address"),
                          "iban": t.get("iban"), "bank": t.get("bank"), "mfo": t.get("mfo")},
         "contract": {"number": t.get("contract_no") or "", "date": _iso_date(t.get("contract_date") or "")},
-        "comment": f"Склади: акт № {act['number']} за {calc.period_label(act['period'])}",
+        "key": f"T{act['tenant_id']}-{act['period']}",       # стабільний ключ: орендар + місяць (не залежить від №)
+        "comment": f"Склади: акт № {act['number']} за {calc.period_label(act['period'])} [T{act['tenant_id']}-{act['period']}]",
         "lines": lines,
     }
 

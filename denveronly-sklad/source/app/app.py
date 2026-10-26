@@ -771,7 +771,7 @@ def companies_page():
     rows = db.execute("SELECT c.*, (SELECT COUNT(*) FROM tenants t WHERE t.company_id=c.id AND t.active=1) AS used "
                       "FROM companies c ORDER BY c.active DESC, c.name").fetchall()
     fmt, reset, start = calc.num_format()
-    per = current_period()
+    per = acts_default_period()
     samples = [(r["name"], calc.format_act_number(fmt, r["act_prefix"] or "", per, start, "26/10")) for r in rows if r["active"]]
     return render_template("companies.html", rows=rows, num_fmt=fmt, num_reset=reset, num_start=start, num_samples=samples,
                            num_period=per, act_date_example=calc.act_date_short(acts_default_period()))

@@ -35,6 +35,11 @@ def rent_price(wh, pt=None, s=None):
     area = wh["area"] or 0
     rate = wh["price_m2"] or 0
     total = r2(area * rate)
+    # ціна за м² зберігається з 4 знаками (з суми за місяць) — прибираємо копійчаний «хвіст» округлення:
+    # 252,4 м² × 170,3645 = 42 999,99 → 43 000,00
+    whole = round(area * rate)
+    if total != whole and abs(area * rate - whole) <= area * 0.00005 + 0.001:
+        total = float(whole)
     if pt == "bank_vat" and vat:
         net = r2(total / (1 + vat))
         return {"rate": r2(rate), "total": total, "net": net, "vat": r2(total - net), "pt": pt}
@@ -440,23 +445,20 @@ def format_act_number(fmt, prefix, period, n, contract=None):
     return re.sub(r"\{(N+)\}", lambda mt: f"{n:0{len(mt.group(1))}d}", out)
 
 
-def next_act_number(company, period, tenant=None):
-    """Нумерація окремо для кожної компанії за шаблоном з Налаштувань (за замовчуванням <префікс>ММРР-NNN).
-    Лічильник починається заново щомісяця / щороку / ніколи — теж у налаштуваннях.
-    Шаблон з {ДОГ} (номер договору) і {ДАТА} (дата акта): «26/10 31/10/26» — без лічильника."""
-    fmt, reset, start = num_format()
+def act_number_fits(number, company, period, tenant=None, exclude_id=None):
+    """Чи відповідає вже виданий номер чернетки поточному шаблону (інакше при перерахунку — новий номер)."""
+    fmt, _reset, _start = num_format()
+    if "{ДОГ}" in fmt and not re.search(r"\{N+\}", fmt):
+        want = next_act_number(company, period, tenant, exclude_id=exclude_id)
+        return number == want or re.fullmatch(re.escape(want.rsplit("-", 1)[0] if re.search(r"-\d+$", want) else want)
+                                               + r"(-\d+)?", number or "") is not None
+    return _num_regex(fmt, company, period, tenant).match(number or "") is not None
+
+
+def _num_regex(fmt, company, period, tenant=None, reset=None):
+    reset = reset or num_format()[1]
     y, m = period.split("-")
     prefix = (company["act_prefix"] if company else "") or ""
-    if "{ДОГ}" in fmt and not re.search(r"\{N+\}", fmt):
-        number = format_act_number(fmt, prefix, period, 0, tenant["contract_no"] if tenant else None)
-        taken = {r["number"] for r in get_db().execute("SELECT number FROM acts WHERE period=? AND tenant_id IS NOT ?",
-                                                        (period, tenant["id"] if tenant else None)).fetchall()}
-        base, k = number, 2
-        while number in taken:                       # однаковий № договору в різних орендарів
-            number = f"{base}-{k}"
-            k += 1
-        return number
-    # регулярний вираз для пошуку вже виданих номерів у межах «періоду обнулення»
     rx, i = "", 0
     while i < len(fmt):
         mt = re.match(r"\{П\}|\{РРРР\}|\{РР\}|\{ММ\}|\{М\}|\{N+\}|\{ДОГ\}|\{ДАТА\}", fmt[i:])
@@ -482,8 +484,28 @@ def next_act_number(company, period, tenant=None):
         else:
             rx += r"(?P<n>\d+)"
         i += len(tok)
-    rx = re.compile("^" + rx + "$")
-    q, args = "SELECT number, period FROM acts WHERE ", []
+    return re.compile("^" + rx + "$")
+
+
+def next_act_number(company, period, tenant=None, exclude_id=None):
+    """Нумерація окремо для кожної компанії за шаблоном з Налаштувань (за замовчуванням <префікс>ММРР-NNN).
+    Лічильник починається заново щомісяця / щороку / ніколи — теж у налаштуваннях.
+    Шаблон з {ДОГ} (номер договору) і {ДАТА} (дата акта): «26/10 31/10/26» — без лічильника."""
+    fmt, reset, start = num_format()
+    y, m = period.split("-")
+    prefix = (company["act_prefix"] if company else "") or ""
+    if "{ДОГ}" in fmt and not re.search(r"\{N+\}", fmt):
+        number = format_act_number(fmt, prefix, period, 0, tenant["contract_no"] if tenant else None)
+        taken = {r["number"] for r in get_db().execute("SELECT number FROM acts WHERE period=? AND tenant_id IS NOT ? AND id IS NOT ?",
+                                                        (period, tenant["id"] if tenant else None, exclude_id)).fetchall()}
+        base, k = number, 2
+        while number in taken:                       # однаковий № договору в різних орендарів
+            number = f"{base}-{k}"
+            k += 1
+        return number
+    # регулярний вираз для пошуку вже виданих номерів у межах «періоду обнулення»
+    rx = _num_regex(fmt, company, period, tenant, reset)
+    q, args = "SELECT number, period FROM acts WHERE id IS NOT ? AND ", [exclude_id]
     if company:
         q += "company_id=?"
         args.append(company["id"])
@@ -525,8 +547,9 @@ def save_act(tenant_id, period, final=False):
     cid = company["id"] if company else None
     if existing:
         number = existing["number"]
-        if existing["company_id"] != cid:          # змінилась компанія — новий номер у її нумерації
-            number = next_act_number(company, period, tenant)
+        # змінилась компанія або шаблон нумерації (Налаштування → Компанії) — чернетка отримує новий номер
+        if existing["company_id"] != cid or not act_number_fits(number, company, period, tenant, existing["id"]):
+            number = next_act_number(company, period, tenant, exclude_id=existing["id"])
         db.execute("UPDATE acts SET number=?, company_id=?, data=?, total=?, payment_type=?, status=? WHERE id=?",
                    (number, cid, data, totals["total"], tenant["payment_type"], status, existing["id"]))
         act_id = existing["id"]
