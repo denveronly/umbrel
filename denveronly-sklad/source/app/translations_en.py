@@ -1135,4 +1135,6 @@ EN = {
     'отключение': 'disconnection',
     'нет': 'none',
     'последнее': 'last',
+    'Акты следующего месяца открывать после': "Open next month's acts after day",
+    'числа (0 — всегда текущий месяц)': '(0 — always current month)',
 }

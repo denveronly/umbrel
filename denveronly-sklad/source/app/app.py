@@ -163,6 +163,18 @@ def current_period():
     return calc.prev_period(f"{t.year}-{t.month:02d}")
 
 
+def acts_default_period():
+    """Акти за замовчуванням — поточний місяць, а після N-го числа (Налаштування, за замовч. 20) — наступний:
+    наприкінці місяця вже готують акти наперед."""
+    t = date.today()
+    try:
+        day = int(settings().get("acts_next_day") or 20)
+    except ValueError:
+        day = 20
+    p = f"{t.year}-{t.month:02d}"
+    return calc.next_period(p) if 0 < day < 31 and t.day > day else p
+
+
 def this_month():
     t = date.today()
     return f"{t.year}-{t.month:02d}"
@@ -1077,7 +1089,7 @@ def service_tenants(sid):
 def acts():
     """Расчёт за месяц по каждой компании: что программа насчитала, перед формированием акта."""
     db = get_db()
-    period = get_period(this_month())
+    period = get_period(acts_default_period())
     tenants = db.execute("SELECT t.*, c.name AS company_name FROM tenants t LEFT JOIN companies c "
                          "ON c.id=t.company_id ORDER BY t.name").fetchall()
     uperiod = calc.util_period_for(period)

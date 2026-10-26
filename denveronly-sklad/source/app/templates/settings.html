@@ -22,6 +22,8 @@
       <option value="first" {{ 'selected' if S.act_date != 'last' }}>{{ _("1-е число месяца аренды") }}</option>
       <option value="last" {{ 'selected' if S.act_date == 'last' }}>{{ _("последний день месяца аренды") }}</option>
     </select></label>
+  <label>{{ _("Акты следующего месяца открывать после") }}
+    <span class="row" style="gap:6px"><input name="s_acts_next_day" type="number" min="0" max="30" value="{{ S.acts_next_day or 20 }}" style="width:90px"><span class="muted">{{ _("числа (0 — всегда текущий месяц)") }}</span></span></label>
   <label>{{ _("Аренда в акте") }}
     <select name="s_include_rent">
       <option value="1" {{ 'selected' if S.include_rent == '1' }}>{{ _("аренда + коммунальные в одном акте") }}</option>
