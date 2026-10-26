@@ -1147,4 +1147,5 @@ EN = {
     'последний день предыдущего месяца (акт за ноябрь — 31 октября)': 'last day of the previous month (November act — 31 October)',
     'номер договора арендатора': "tenant's contract number",
     'дата акта (31/10/26)': 'act date (31/10/26)',
+    'У каждого объекта (переключатель слева вверху) — свой кабинет YASNO и свои настройки.': 'Each site (switcher at top left) has its own YASNO cabinet and settings.',
 }

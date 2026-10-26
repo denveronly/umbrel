@@ -2,10 +2,10 @@
 {% block title %}YASNO{% endblock %}
 {% block content %}
 <div class="row">
-  <h1>⚡ YASNO</h1><span class="spacer"></span>
+  <h1>⚡ YASNO <span class="muted" style="font-weight:400">· {{ site_name }}</span></h1><span class="spacer"></span>
   <form method="post" action="{{ url_for('yasno.run_now') }}"><button {{ 'disabled' if st.running or not (c.login and c.has_password) }}>{{ _("Проверить кабинет сейчас") }}</button></form>
 </div>
-<p class="muted">{{ _("Каждый день программа заходит в кабинет поставщика электроэнергии, забирает новые счета (PDF), задолженность и предупреждения об отключении и присылает уведомления в Telegram.") }}
+<p class="muted">{{ _("У каждого объекта (переключатель слева вверху) — свой кабинет YASNO и свои настройки.") }} {{ _("Каждый день программа заходит в кабинет поставщика электроэнергии, забирает новые счета (PDF), задолженность и предупреждения об отключении и присылает уведомления в Telegram.") }}
   {% if c.url %}<a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.url|replace('https://', '') }}</a>{% endif %}</p>
 
 {% if key_lost %}<div class="warn" style="margin-bottom:12px">{{ _("Пароль кабинета или токен бота не расшифровываются (база восстановлена на другом сервере или удалён ключ). Введите их заново в настройках ниже.") }}</div>{% endif %}

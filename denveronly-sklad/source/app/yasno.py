@@ -4,7 +4,7 @@
 Кабінет — звичайний сайт із формою входу (Rails, authenticity_token), тож браузер не потрібен:
 сесія з cookie, форма розбирається автоматично (поля логіна/пароля шукаються за типом).
 Пароль і токен бота — зашифровані (vault.py), ключ — поза базою та бекапами.
-Дані й налаштування — в «Базі» (MAIN_SITE).
+Кожен об'єкт («База», «Офіс») має свій кабінет YASNO: налаштування, рахунки, статус і PDF — у даних об'єкта.
 """
 import fcntl
 import http.cookiejar
@@ -26,20 +26,29 @@ from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template
 
 import auth
 import vault
-from db import DATA_DIR, MAIN_SITE, get_db, set_setting, settings, using_site
+from db import DATA_DIR, MAIN_SITE, SITES, current_site, get_db, set_setting, settings, site_dir, using_site
 from i18n import _
 
 bp = Blueprint("yasno", __name__)
 
 DEFAULT_URL = "https://mybiz.kyiv.yasno.com.ua"
 TG_API = "https://api.telegram.org"
-FILES_DIR = os.path.join(DATA_DIR, "yasno")
-LAST_DIR = os.path.join(FILES_DIR, "last")           # останні сторінки кабінету — для діагностики
-STATUS_FILE = os.path.join(DATA_DIR, "yasno_status.json")
 LOCK_FILE = os.path.join(DATA_DIR, "yasno.lock")
+
+
+def _files_dir():
+    return os.path.join(site_dir(), "yasno")
+
+
+def _last_dir():                                    # останні сторінки кабінету — для діагностики
+    return os.path.join(_files_dir(), "last")
+
+
+def _status_file():
+    return os.path.join(site_dir(), "yasno_status.json")
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 TIMEOUT = 40
-_run_lock = threading.Lock()
+_run_locks = {s: threading.Lock() for s in SITES}
 
 MONTHS = {"січ": 1, "лют": 2, "бер": 3, "кві": 4, "тра": 5, "чер": 6, "лип": 7, "сер": 8, "вер": 9, "жов": 10,
           "лис": 11, "гру": 12}
@@ -50,7 +59,7 @@ BILL_RE = re.compile(r"\b(\d{5,}(?:/[0-9A-Za-zА-Яа-яІіЇїЄє]+)+)")
 # ---------------- налаштування ----------------
 
 def config():
-    with using_site(MAIN_SITE):
+    with using_site(current_site()):
         s = settings()
     return {
         "enabled": s.get("yasno_enabled") == "1",
@@ -71,7 +80,7 @@ def config():
 
 def read_status():
     try:
-        with open(STATUS_FILE) as f:
+        with open(_status_file()) as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
@@ -80,10 +89,10 @@ def read_status():
 def _write_status(**kw):
     st = read_status()
     st.update(kw)
-    tmp = STATUS_FILE + ".tmp"
+    tmp = _status_file() + ".tmp"
     with open(tmp, "w") as f:
         json.dump(st, f, ensure_ascii=False)
-    os.replace(tmp, STATUS_FILE)
+    os.replace(tmp, _status_file())
 
 
 # ---------------- розбір HTML ----------------
@@ -432,7 +441,7 @@ class Cabinet:
 
 def device_fingerprint():
     """Постійний «відбиток пристрою» програми (як FingerprintJS у браузері) — щоб кабінет бачив той самий пристрій."""
-    with using_site(MAIN_SITE):
+    with using_site(current_site()):
         fp = settings().get("yasno_fp")
         if not fp:
             fp = uuid.uuid4().hex
@@ -460,9 +469,9 @@ def fetch(c):
 
 
 def _save_pages(cab):
-    os.makedirs(LAST_DIR, exist_ok=True)
+    os.makedirs(_last_dir(), exist_ok=True)
     for name, html in cab.pages.items():
-        with open(os.path.join(LAST_DIR, f"{name}.html"), "w", encoding="utf-8") as f:
+        with open(os.path.join(_last_dir(), f"{name}.html"), "w", encoding="utf-8") as f:
             f.write(html)
 
 
@@ -472,9 +481,9 @@ def download_pdf(cab, bill):
     _f, raw, ctype = cab.get(bill["pdf_url"], binary=True, referer=urllib.parse.urljoin(cab.base + "/", "bills"))
     if not raw.startswith(b"%PDF"):
         return None
-    os.makedirs(FILES_DIR, exist_ok=True)
+    os.makedirs(_files_dir(), exist_ok=True)
     name = re.sub(r"[^\w.-]+", "_", bill["number"]) + ".pdf"
-    with open(os.path.join(FILES_DIR, name), "wb") as f:
+    with open(os.path.join(_files_dir(), name), "wb") as f:
         f.write(raw)
     return name
 
@@ -513,8 +522,13 @@ def tg_call(token, method, fields=None, file=None):
 def tg_send(c, text, pdf=None):
     if not (c["tg_token"] and c["tg_chat"]):
         return False
-    if pdf and os.path.exists(os.path.join(FILES_DIR, pdf)):
-        with open(os.path.join(FILES_DIR, pdf), "rb") as f:
+    try:
+        site = current_site()
+        text = f"🏢 <b>{_esc(_(SITES[site]['name']))}</b>\n" + text     # з якого об'єкта повідомлення
+    except Exception:
+        pass
+    if pdf and os.path.exists(os.path.join(_files_dir(), pdf)):
+        with open(os.path.join(_files_dir(), pdf), "rb") as f:
             tg_call(c["tg_token"], "sendDocument", {"chat_id": c["tg_chat"], "caption": text[:1000], "parse_mode": "HTML"},
                     file=(pdf, f.read()))
     else:
@@ -547,12 +561,13 @@ def _mark(db, key):
 
 def sync(kind="manual", app=None):
     """Повний цикл: вхід, рахунки, PDF, заборгованість, попередження, пуші. -> (ok, повідомлення)."""
-    if not _run_lock.acquire(blocking=False):
+    lock = _run_locks.get(current_site()) or threading.Lock()
+    if not lock.acquire(blocking=False):
         return False, "перевірка вже виконується"
     try:
         return _sync(kind)
     finally:
-        _run_lock.release()
+        lock.release()
 
 
 def _sync(kind):
@@ -566,7 +581,7 @@ def _sync(kind):
         err = err[:400]
         _write_status(running=False, ok=False, error=err, time=now.isoformat(timespec="seconds"), kind=kind,
                       rate_limited=isinstance(e, RateLimited))
-        with using_site(MAIN_SITE):
+        with using_site(current_site()):
             db = get_db()
             key = f"err:{date.today().isoformat()}"
             if not _notified(db, key):
@@ -580,7 +595,7 @@ def _sync(kind):
         return False, err
 
     msgs, new_bills, sent = [], [], 0
-    with using_site(MAIN_SITE):
+    with using_site(current_site()):
         db = get_db()
         first = settings().get("yasno_initialized") != "1"
         for b in data["bills"]:
@@ -707,8 +722,10 @@ def run_async(kind="manual"):
     from flask import current_app
     app = current_app._get_current_object()
 
+    site = current_site()
+
     def run():
-        with app.app_context():
+        with app.app_context(), using_site(site):
             sync(kind)
     threading.Thread(target=run, daemon=True).start()
 
@@ -729,18 +746,22 @@ def _scheduler(app):
                 except OSError:
                     f.close()
                     continue
-            with app.app_context():
-                c = config()
-                if not c["enabled"]:
-                    continue
-                st, now = read_status(), datetime.now()
-                if now.hour < c["hour"] or st.get("last_auto") == date.today().isoformat() or st.get("running"):
-                    continue
-                last = st.get("last_attempt")
-                wait = timedelta(hours=3 if st.get("rate_limited") else 1)
-                if last and now - datetime.fromisoformat(last) < wait:
-                    continue          # після невдачі — повтор не частіше раз на годину
-                sync("auto")
+            for site in SITES:                     # кожен об'єкт — свій кабінет і свій розклад
+                try:
+                    with app.app_context(), using_site(site):
+                        c = config()
+                        if not c["enabled"]:
+                            continue
+                        st, now = read_status(), datetime.now()
+                        if now.hour < c["hour"] or st.get("last_auto") == date.today().isoformat() or st.get("running"):
+                            continue
+                        last = st.get("last_attempt")
+                        wait = timedelta(hours=3 if st.get("rate_limited") else 1)
+                        if last and now - datetime.fromisoformat(last) < wait:
+                            continue          # після невдачі — повтор не частіше раз на годину
+                        sync("auto")
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -749,11 +770,12 @@ def init_app(app):
     app.register_blueprint(bp)
     if os.environ.get("YASNO_SCHED", "1") != "0":
         threading.Thread(target=_scheduler, args=(app,), daemon=True).start()
-    st = read_status()
-    if st.get("running"):          # процес перезапустився посеред перевірки
+    for site in SITES:             # процес перезапустився посеред перевірки
         try:
-            _write_status(running=False)
-        except OSError:
+            with app.app_context(), using_site(site):
+                if read_status().get("running"):
+                    _write_status(running=False)
+        except Exception:
             pass
 
 
@@ -767,7 +789,7 @@ def _require():
 @bp.route("/yasno")
 def page():
     _require()
-    with using_site(MAIN_SITE):
+    with using_site(current_site()):
         db = get_db()
         bills = db.execute("SELECT * FROM yasno_bills ORDER BY COALESCE(received, '') DESC, number DESC LIMIT 60").fetchall()
         warns = db.execute("SELECT * FROM yasno_warnings ORDER BY COALESCE(warn_date, '') DESC").fetchall()
@@ -798,11 +820,11 @@ def status():
 @bp.route("/yasno/pdf/<path:number>")
 def pdf(number):
     _require()
-    with using_site(MAIN_SITE):
+    with using_site(current_site()):
         b = get_db().execute("SELECT pdf FROM yasno_bills WHERE number=?", (number,)).fetchone()
-    if not b or not b["pdf"] or not os.path.exists(os.path.join(FILES_DIR, b["pdf"])):
+    if not b or not b["pdf"] or not os.path.exists(os.path.join(_files_dir(), b["pdf"])):
         abort(404)
-    return send_file(os.path.join(FILES_DIR, b["pdf"]), mimetype="application/pdf",
+    return send_file(os.path.join(_files_dir(), b["pdf"]), mimetype="application/pdf",
                      download_name=f"YASNO_{b['pdf']}", as_attachment=request.args.get("dl") == "1")
 
 
@@ -821,7 +843,7 @@ def save_settings():
     _admin()
     f = request.form
     action = f.get("action", "save")
-    with using_site(MAIN_SITE):
+    with using_site(current_site()):
         set_setting("yasno_enabled", "1" if f.get("enabled") else "0")
         url = (f.get("url") or DEFAULT_URL).strip().rstrip("/")
         if not re.fullmatch(r"https://[A-Za-z0-9.\-]+(:\d+)?(/[\w\-./]*)?", url):
@@ -871,7 +893,7 @@ def save_settings():
                 flash(_("Боту ещё никто не писал: откройте бота в Telegram, нажмите «Start» (или напишите любое сообщение) и повторите"))
             else:
                 if not c["tg_chat"]:
-                    with using_site(MAIN_SITE):
+                    with using_site(current_site()):
                         set_setting("tg_chat", str(chats[-1][0]))
                         get_db().commit()
                 flash(_("Найдены чаты") + ": " + ", ".join(f"{cid} ({name})" for cid, name in chats))
@@ -901,9 +923,9 @@ def debug_zip():
     _admin()
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        if os.path.isdir(LAST_DIR):
-            for n in sorted(os.listdir(LAST_DIR)):
-                z.write(os.path.join(LAST_DIR, n), n)
+        if os.path.isdir(_last_dir()):
+            for n in sorted(os.listdir(_last_dir())):
+                z.write(os.path.join(_last_dir(), n), n)
         st = dict(read_status())
         z.writestr("status.json", json.dumps(st, ensure_ascii=False, indent=1))
     buf.seek(0)
