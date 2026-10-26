@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Home Assistant{% endblock %}
+{% block content %}
+<div class="row"><h1>{{ _("Показания") }}</h1><span class="spacer"></span></div>
+{% include "_readings_tabs.html" %}
+
+<div class="row"><h2 style="margin:0">🏠 Home Assistant <span class="muted" style="font-weight:400">· {{ site_name }}</span></h2><span class="spacer"></span>
+  {% if status.time %}<span class="muted">{{ _("Последний автосъём") }}: {{ status.time[8:10] }}.{{ status.time[5:7] }} {{ status.time[11:16] }}</span>{% endif %}</div>
+<p class="muted">{{ _("У каждого объекта (переключатель слева вверху) — свой Home Assistant. Программа каждый час запоминает показания сенсоров, а в начале месяца фиксирует прошлый месяц: расход и показание. Если сенсор привязан к счётчику из таблицы показаний — вписывает туда показание за прошлый месяц (только в пустую клетку).") }}</p>
+
+{% if err %}<div class="warn" style="margin-bottom:12px">{{ err }}</div>{% endif %}
+{% for e in status.errors or [] %}<div class="warn" style="margin-bottom:6px">{{ e }}</div>{% endfor %}
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Сенсоры") }}</h2>
+  {% if rows %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>{{ _("Название") }}</th><th class="n">{{ _("Сейчас") }}</th><th class="n">{{ _("С начала месяца") }}</th>
+      {% for p in periods[:3] %}<th class="n">{{ period_label(p) }}</th>{% endfor %}<th>{{ _("В таблицу показаний") }}</th><th></th></tr></thead>
+    <tbody>{% for r in rows %}
+      <tr><td><b>{{ r.s.name }}</b><br><span class="muted">{{ r.s.entity }} · {{ _("утилити-метр (месяц)") if r.s.kind == 'monthly' else _("накопительный") }}</span></td>
+        <td class="n">{% if r.error %}<span class="warnt" title="{{ r.error }}">✗</span>{% elif r.value is not none %}<b>{{ num(r.value) }}</b> {{ r.unit }}<br><span class="muted">{{ r.updated[11:16] }}</span>{% else %}—{% endif %}</td>
+        <td class="n">{{ (num(r.month) ~ ' ' ~ r.unit) if r.month is not none else '—' }}</td>
+        {% for p in periods[:3] %}{% set h = hist.get((r.s.entity, p)) %}<td class="n">{% if h and h.cons is not none %}{{ num(h.cons) }}{% if h.written %} <span title="{{ _("вписано в таблицу показаний") }}">✓</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}
+        <td>{{ r.target_label or '—' }}</td>
+        <td><details><summary class="btn sm ghost">⚙</summary>
+          <form method="post" action="{{ url_for('ha.sensor_save') }}" class="grid" style="min-width:320px;margin-top:8px">
+            <input type="hidden" name="entity" value="{{ r.s.entity }}">
+            <label>{{ _("Название") }}<input name="name" value="{{ r.s.name }}"></label>
+            <label>{{ _("Тип") }}<select name="kind"><option value="total" {{ 'selected' if r.s.kind != 'monthly' }}>{{ _("накопительный") }}</option><option value="monthly" {{ 'selected' if r.s.kind == 'monthly' }}>{{ _("утилити-метр (месяц)") }}</option></select></label>
+            <label class="full">{{ _("Вписывать в счётчик") }}<select name="target"><option value="">— {{ _("не вписывать, только показывать") }}</option>
+              {% for o in srcs %}<option value="{{ o.value }}" {{ 'selected' if r.s.target == o.value }}>{{ o.label }}</option>{% endfor %}</select></label>
+            <input type="hidden" name="unit" value="{{ r.s.unit }}">
+            <div class="full row" style="gap:8px"><button class="sm">{{ _("Сохранить") }}</button><button class="sm ghost" name="delete" value="1" onclick="return confirm({{ _('Убрать сенсор?')|tojson }})">{{ _("Убрать") }}</button></div>
+          </form></details></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">{{ _("Сенсоров ещё нет — укажите адрес и токен ниже, затем добавьте сенсоры.") }}</p>{% endif %}
+
+  {% if c.url and c.has_token %}
+  <h3>＋ {{ _("Добавить сенсор") }}</h3>
+  <form method="post" action="{{ url_for('ha.sensor_save') }}" class="grid" id="addf">
+    <label class="full">{{ _("Сенсор из Home Assistant") }}
+      <select id="pick"><option value="">{{ _("загрузка списка…") }}</option></select></label>
+    <label>entity_id<input name="entity" id="f_entity" placeholder="sensor.generator_energy" required></label>
+    <label>{{ _("Название") }}<input name="name" id="f_name" placeholder="{{ _('Генератор') }}"></label>
+    <label>{{ _("Тип") }}<select name="kind" id="f_kind"><option value="total">{{ _("накопительный") }}</option><option value="monthly">{{ _("утилити-метр (месяц)") }}</option></select></label>
+    <label>{{ _("Вписывать в счётчик") }}<select name="target"><option value="">— {{ _("не вписывать, только показывать") }}</option>
+      {% for o in srcs %}<option value="{{ o.value }}">{{ o.label }}</option>{% endfor %}</select></label>
+    <input type="hidden" name="unit" id="f_unit">
+    <div class="full"><button class="sm">{{ _("Добавить") }}</button></div>
+  </form>
+  {% endif %}
+</div>
+
+{% if rows %}
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Расход по месяцам") }}</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>{{ _("Месяц") }}</th>{% for r in rows %}<th class="n">{{ r.s.name }}{% if r.unit %}, {{ r.unit }}{% endif %}</th>{% endfor %}</tr></thead>
+    <tbody>{% for p in periods %}<tr><td>{{ period_label(p) }}</td>
+      {% for r in rows %}{% set h = hist.get((r.s.entity, p)) %}<td class="n">{{ num(h.cons) if h and h.cons is not none else '—' }}{% if h and h.reading is not none %}<br><span class="muted">{{ _("показание") }} {{ num(h.reading) }}</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></div>
+  <form method="post" action="{{ url_for('ha.close_now') }}" class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+    <span class="muted">{{ _("Зафиксировать месяц вручную (если автосъём пропустил):") }}</span>
+    <select name="period" style="width:auto">{% for p in [cur] + periods %}<option value="{{ p }}" {{ 'selected' if loop.index == 2 }}>{{ period_label(p) }}</option>{% endfor %}</select>
+    <button class="sm ghost">{{ _("Зафиксировать") }}</button></form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Подключение") }}</h2>
+  <p class="muted" style="margin-top:0">{{ _("Токен: Home Assistant → ваш профиль (слева внизу) → вкладка «Безопасность» → «Долгосрочные токены доступа» → «Создать токен». Лучше создать в HA отдельного пользователя без прав администратора (напр. «sklady») и токен — от него.") }}</p>
+  <form method="post" action="{{ url_for('ha.save_settings') }}" class="grid" autocomplete="off">
+    <label class="check full"><input type="checkbox" name="enabled" value="1" {{ 'checked' if c.enabled }}> {{ _("снимать показания автоматически каждый час") }}</label>
+    <label>{{ _("Адрес Home Assistant") }}<input name="url" value="{{ c.url }}" placeholder="http://192.168.1.20:8123"></label>
+    <label>{{ _("Токен") }}<input type="password" name="token" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_token else 'eyJ0eXAi…' }}"></label>
+    <label class="check full"><input type="checkbox" name="insecure" value="1" {{ 'checked' if c.insecure }}> {{ _("https с самоподписанным сертификатом (не проверять сертификат)") }}</label>
+    <div class="full row" style="gap:8px;flex-wrap:wrap">
+      <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
+      <button class="sm ghost" name="action" value="test">{{ _("Проверить связь") }}</button>
+      {% if c.has_token %}<button class="sm ghost" name="action" value="clear_token" onclick="return confirm({{ _('Удалить токен?')|tojson }})">{{ _("Удалить токен") }}</button>{% endif %}
+    </div>
+    <p class="full muted" style="margin:0">🔒 {{ _("Токен хранится зашифрованным; ключ лежит отдельно от базы и не попадает в бэкапы. Программа только читает состояния сенсоров — ничего в Home Assistant не включает и не меняет.") }}</p>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if c.url and c.has_token %}<script>
+(async () => {
+  const sel = document.getElementById('pick'); if (!sel) return;
+  try {
+    const j = await (await fetch({{ url_for('ha.sensors_json')|tojson }})).json();
+    if (!j.ok) { sel.innerHTML = '<option value="">' + j.error + '</option>'; return; }
+    const have = new Set({{ c.sensors|map(attribute='entity')|list|tojson }});
+    sel.innerHTML = '<option value="">' + {{ _("— выберите сенсор —")|tojson }} + ' (' + j.sensors.length + ')</option>';
+    j.sensors.filter(s => !have.has(s.entity)).forEach((s, i) => {
+      const o = document.createElement('option'); o.value = i; o.dataset.s = JSON.stringify(s);
+      o.textContent = s.name + ' — ' + s.state + ' ' + s.unit + (s.kind === 'monthly' ? ' (' + {{ _("месяц")|tojson }} + ')' : '') + ' · ' + s.entity;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => { const o = sel.selectedOptions[0]; if (!o || !o.dataset.s) return; const s = JSON.parse(o.dataset.s);
+      document.getElementById('f_entity').value = s.entity; document.getElementById('f_name').value = s.name;
+      document.getElementById('f_kind').value = s.kind; document.getElementById('f_unit').value = s.unit; };
+  } catch (e) { sel.innerHTML = '<option value="">' + e + '</option>'; }
+})();
+</script>{% endif %}
+{% endblock %}

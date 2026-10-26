@@ -2,4 +2,5 @@
   <a href="{{ url_for('lines.table') }}" class="{{ 'on' if request.endpoint in ('lines.table', 'lines.manage') }}">{{ _("Таблица показаний") }}</a>
   <a href="{{ url_for('readings', period=period) if period else url_for('readings') }}" class="{{ 'on' if request.endpoint == 'readings' }}">{{ _("Цены и количества") }}</a>
   <a href="{{ url_for('services_page') }}" class="{{ 'on' if request.endpoint == 'services_page' }}">{{ _("Услуги") }}</a>
+  {% if can('settings') %}<a href="{{ url_for('ha.page') }}" class="{{ 'on' if (request.endpoint or '').startswith('ha.') }}">🏠 Home Assistant</a>{% endif %}
 </div>

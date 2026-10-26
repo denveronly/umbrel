@@ -25,6 +25,7 @@ import sheet
 import yasno
 import bas
 import guard
+import ha
 from audit import log
 from i18n import _
 
@@ -44,6 +45,7 @@ lines.init_app(app)
 yasno.init_app(app)
 bas.init_app(app)
 guard.init_app(app)
+ha.init_app(app)
 sheet.init_app(app)
 
 
