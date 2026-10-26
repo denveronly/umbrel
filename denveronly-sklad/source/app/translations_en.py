@@ -1144,4 +1144,5 @@ EN = {
     '— сохраняется и для следующих месяцев': '— kept for the following months',
     'МФО': 'Bank code (MFO)',
     'ИНН плательщика ПДВ (ІПН)': 'VAT number (IPN)',
+    'последний день предыдущего месяца (акт за ноябрь — 31 октября)': 'last day of the previous month (November act — 31 October)',
 }

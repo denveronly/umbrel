@@ -421,7 +421,7 @@ DEFAULT_SETTINGS = {
     "cash_coef": "1.0",
     "include_rent": "1",
     "util_shift": "1",          # 1 = в акті комунальні за попередній місяць (акт наперед)
-    "act_date": "first",        # first | last — дата акта: 1-ше або останнє число місяця
+    "act_date": "prev_last",    # prev_last | first | last — останній день попереднього місяця / 1-ше / останнє число
     "auto_backup": "1",
     "backup_keep": "30",
 }
@@ -558,6 +558,10 @@ OLD_UNITS = {"electricity": "кВт·год", "water": "м³", "heating": "Гк�
 
 def _migrate(con, site=MAIN_SITE):
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    # 1.38: акти датуються останнім днем попереднього місяця (одноразово переводимо зі старого «1-ше число»)
+    if "settings" in tables and not con.execute("SELECT 1 FROM settings WHERE key='act_date_v2'").fetchone():
+        con.execute("UPDATE settings SET value='prev_last' WHERE key='act_date' AND value='first'")
+        con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('act_date_v2', '1')")
     for table, cols in MIGRATIONS.items():
         have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
         for col, typ in cols.items():

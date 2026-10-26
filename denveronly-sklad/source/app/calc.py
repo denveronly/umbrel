@@ -384,7 +384,11 @@ def act_date_text(period, mode=None):
     import calendar
     mode = mode or settings().get("act_date", "first")
     y, m = map(int, period.split("-"))
-    d = 1 if mode == "first" else calendar.monthrange(y, m)[1]
+    if mode == "prev_last":                      # останній день попереднього місяця (акт за листопад — 31 жовтня)
+        y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+        d = calendar.monthrange(y, m)[1]
+    else:
+        d = 1 if mode == "first" else calendar.monthrange(y, m)[1]
     return f"{d:02d} {MONTHS_UK_GEN[m - 1]} {y} р."
 
 

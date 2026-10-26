@@ -19,7 +19,8 @@
     </select></label>
   <label>{{ _("Дата акта") }}
     <select name="s_act_date">
-      <option value="first" {{ 'selected' if S.act_date != 'last' }}>{{ _("1-е число месяца аренды") }}</option>
+      <option value="prev_last" {{ 'selected' if S.act_date not in ('first', 'last') }}>{{ _("последний день предыдущего месяца (акт за ноябрь — 31 октября)") }}</option>
+      <option value="first" {{ 'selected' if S.act_date == 'first' }}>{{ _("1-е число месяца аренды") }}</option>
       <option value="last" {{ 'selected' if S.act_date == 'last' }}>{{ _("последний день месяца аренды") }}</option>
     </select></label>
   <label>{{ _("Акты следующего месяца открывать после") }}
