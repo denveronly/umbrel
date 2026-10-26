@@ -137,7 +137,7 @@ def _detail_intro(act):
     d = act["data"]
     contract = _contract(act)
     return (f"Орендодавець: {_company(act)['name'] or ''}. Орендар: {d['tenant']['name']}. "
-            f"Період споживання: {_ulabel(act)}." + (f" Підстава: {contract}." if contract else ""))
+            f"Період споживання: {_ulabel(act)}." + (f" Підстава: Договір{contract[len('Договором'):]}." if contract else ""))
 
 
 def _vat_rate(act):
