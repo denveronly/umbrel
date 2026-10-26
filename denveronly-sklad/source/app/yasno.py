@@ -195,7 +195,7 @@ def parse_overview(html):
         h = header_text(t)
         if "заборгованіст" in h and "тип" in h:
             for r in t["rows"]:
-                if len(r) >= 2 and not r[0]["th"] and num(r[1]["text"]) is not None:
+                if len(r) >= 2 and num(r[1]["text"]) is not None:
                     debts.append({"type": r[0]["text"], "debt": num(r[1]["text"]),
                                   "saved": num(r[2]["text"]) if len(r) > 2 else None})
         elif "номер рахунку" in h and "термін" in h:
@@ -355,7 +355,7 @@ class Cabinet:
             p = parse(html)
             form = next((f for f in p.forms if any(i["type"] == "password" for i in f["inputs"])), None)
             if not form:
-                if self._logged_in(html):
+                if self._logged_in(html, final):
                     return final
                 raise LoginError("на сторінці входу не знайдено форму з паролем")
             data, user_done = self._form_data(form, login, password)
@@ -384,12 +384,12 @@ class Cabinet:
             if "rate_limited" in final or re.search(r"занадто багато спроб|too many", html, re.I):
                 raise RateLimited("кабінет тимчасово заблокував вхід: «Занадто багато спроб». Зачекайте 1–2 години "
                                   "і не натискайте перевірку повторно — кожна спроба продовжує блокування")
-            if self.status < 400 and self._logged_in(html):
+            if self.status < 400 and self._logged_in(html, final):
                 return final
             # перевірити сесію: чи відкривається кабінет
             if self.status < 400:
                 f2, h2, _c = self.get("/", keep_errors=True)
-                if self._logged_in(h2):
+                if self._logged_in(h2, f2):
                     return f2
             # повідомлення сайту: <div class="page-error">…</div> (або flash/alert), інакше — ключові слова
             box = re.search(r'class="[^"]*(?:page-error|flash|alert|error|notice)[^"]*"[^>]*>(.*?)</(?:div|p|span)>', html,
@@ -406,18 +406,28 @@ class Cabinet:
         raise LoginError(last_err + ". Якщо логін і пароль вірні — натисніть «Завантажити сторінки для діагностики» "
                                     "і надішліть файл розробнику")
 
-    @staticmethod
-    def _logged_in(html):
-        p = parse(html)
-        has_pwd = any(i["type"] == "password" for f in p.forms for i in f["inputs"])
-        return not has_pwd and bool(re.search(r"особовий рахунок|рахунки|вийти|logout|sign_out", html, re.I))
+    def _logged_in(self, html, url=""):
+        return not self._is_login_page(url, html) and bool(re.search(r'href="/logout"|sign_out|Вийти', html, re.I))
 
     def page(self, name, path):
         final, html, _ct = self.get(path)
         self.pages[name] = html
-        if parse(html).forms and any(i["type"] == "password" for f in parse(html).forms for i in f["inputs"]):
+        if self._is_login_page(final, html):
             raise LoginError(f"сесія закрилась на сторінці {path}")
         return html
+
+    @staticmethod
+    def _is_login_page(url, html):
+        """Сторінка входу — форма на /login з логіном і паролем (на інших сторінках бувають поля пароля
+        ключа КЕП для підпису документів — це не вихід із кабінету)."""
+        if re.search(r"/login(\?|$)", urllib.parse.urlsplit(url).path + ("?" if "?" in url else "")):
+            return True
+        for f in parse(html).forms:
+            names = {i["name"] for i in f["inputs"]}
+            if re.search(r"/(login|sign_in|session)", f["action"] or "") and any(i["type"] == "password" for i in f["inputs"]) \
+                    and ({"username", "login", "user[login]", "user[email]", "email"} & names):
+                return True
+        return False
 
 
 def device_fingerprint():
