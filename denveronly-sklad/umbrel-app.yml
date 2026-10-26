@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.41.2"
+version: "1.41.3"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Діагностика помилок: при помилці сервера адміністратор бачить її текст (для розробника), вона ж пишеться в журнал дій і data/errors.log.
+  Послуга «частка» може брати показники з лічильника лінії (охорона, котельна, серверна) — витрата × ціна ділиться між орендарями за %. Кнопки «порівну» і «за площею» для розподілу часток.
 dependencies: []
 path: ""
 defaultUsername: ""

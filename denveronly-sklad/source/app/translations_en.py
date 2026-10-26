@@ -1163,4 +1163,11 @@ EN = {
     'Адрес программы для обработки': 'Program address for the processor',
     'объект': 'site',
     'Новый токен BAS создан — обновите его в обработке BAS': 'New BAS token created — update it in the BAS processor',
+    'Показания брать со счётчика из таблицы показаний': 'Take readings from a meter in the readings table',
+    'свои показания (вкладка «Цены и количества»)': 'own readings (Prices & quantities tab)',
+    'Показания вносятся в таблице показаний': 'Readings are entered in the readings table',
+    'Всем арендаторам со складами поровну': 'Equally among all tenants with warehouses',
+    'Пропорционально площади складов': 'Proportional to warehouse area',
+    'поровну': 'equally',
+    'по площади': 'by area',
 }

@@ -165,6 +165,29 @@ def tenant_share(tenant_id, service_id, period, db=None):
     return r["pct"] if r else 0
 
 
+def main_values(svc, period, db=None):
+    """Загальний лічильник послуги «частка» за місяць -> (показник, попередній, місяць попереднього, коеф.).
+    main_src = "l:<id>" / "m:<id>" — показники беруться з лічильника лінії / складу (таблиця показників),
+    інакше — свої показники послуги (вкладка «Ціни та кількості»)."""
+    db = db or get_db()
+    src = svc["main_src"] if "main_src" in svc.keys() else None
+    if src and re.fullmatch(r"[lm]:\d+", src):
+        kind, mid = src.split(":")
+        tbl, col, mt = ("line_readings", "line_meter_id", "line_meters") if kind == "l" else ("readings", "meter_id", "meters")
+        m = db.execute(f"SELECT * FROM {mt} WHERE id=?", (int(mid),)).fetchone()
+        if m:
+            cur = db.execute(f"SELECT value FROM {tbl} WHERE {col}=? AND period=?", (m["id"], period)).fetchone()
+            prev = db.execute(f"SELECT value, period FROM {tbl} WHERE {col}=? AND period<? AND value IS NOT NULL "
+                              "ORDER BY period DESC LIMIT 1", (m["id"], period)).fetchone()
+            return (cur["value"] if cur else None, prev["value"] if prev else (m["initial_value"] or 0),
+                    prev["period"] if prev else None, m["coef"] or 1)
+    cur = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period=?", (svc["id"], period)).fetchone()
+    prev = db.execute("SELECT value, period FROM service_readings WHERE service_id=? AND period<? AND value IS NOT NULL "
+                      "ORDER BY period DESC LIMIT 1", (svc["id"], period)).fetchone()
+    return (cur["value"] if cur else None, prev["value"] if prev else (svc["main_initial"] or 0),
+            prev["period"] if prev else None, svc["main_coef"] or 1)
+
+
 def share_total(svc, period, db=None):
     """Сума послуги за місяць, що ділиться за %. -> (сума або None, пояснення, витрата або None, ціна або None).
     Із загальним лічильником: витрата × ціна; без нього — ціна місяця і є вся сума."""
@@ -172,13 +195,10 @@ def share_total(svc, period, db=None):
     p, _pp = price_for(svc["id"], period)
     if not svc["has_main"]:
         return (r2(p) if p is not None else None), (f"{fmt_money(p)} грн" if p is not None else ""), None, p
-    cur = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period=?", (svc["id"], period)).fetchone()
-    if not cur or cur["value"] is None:
+    cv, pv, _pp, coef = main_values(svc, period, db)
+    if cv is None:
         return None, "", None, p
-    prev = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period<? AND value IS NOT NULL "
-                      "ORDER BY period DESC LIMIT 1", (svc["id"], period)).fetchone()
-    pv = prev["value"] if prev else (svc["main_initial"] or 0)
-    cons = r2((cur["value"] - pv) * (svc["main_coef"] or 1))
+    cons = r2((cv - pv) * coef)
     if is_kwh(svc["unit"]):
         cons = kwh_round(cons)
     if p is None:

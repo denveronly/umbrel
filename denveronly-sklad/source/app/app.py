@@ -884,12 +884,11 @@ def readings():
     for sv in svcs:
         if sv["mode"] != "share" or not sv["has_main"]:
             continue
-        cur = db.execute("SELECT value FROM service_readings WHERE service_id=? AND period=?", (sv["id"], period)).fetchone()
-        prev = db.execute("SELECT value, period FROM service_readings WHERE service_id=? AND period<? AND value IS NOT NULL "
-                          "ORDER BY period DESC LIMIT 1", (sv["id"], period)).fetchone()
+        cv, pv, pp, _coef = calc.main_values(sv, period, db)
         total, how, cons, _p = calc.share_total(sv, period, db)
-        main_rows.append({"s": sv, "cur": cur["value"] if cur else None,
-                          "prev": prev["value"] if prev else (sv["main_initial"] or 0), "prev_p": prev["period"] if prev else None,
+        src = lines.resolve_src(sv["main_src"]) if sv["main_src"] else None
+        main_rows.append({"s": sv, "cur": cv, "src": src[3] if src else None,
+                          "prev": pv, "prev_p": pp,
                           "cons": cons, "total": total, "how": how, "sum_pct": share_sum(sv["id"], period)})
 
     # количества по договорам (услуги qty)
@@ -1034,9 +1033,11 @@ def services_page():
             else:
                 sid = db.execute("INSERT INTO services(name, unit, mode, sort, active) VALUES (?,?,?,?,?)", vals).lastrowid
             if mode == "share":                       # загальний лічильник (напр. вода) — витрата × ціна = сума на розподіл
-                db.execute("UPDATE services SET has_main=?, main_serial=?, main_coef=?, main_initial=? WHERE id=?",
-                           (1 if request.form.get("has_main") else 0, request.form.get("main_serial", "").strip(),
-                            fnum("main_coef", 1) or 1, fnum("main_initial", 0) or 0, sid))
+                msrc = request.form.get("main_src") or ""
+                msrc = msrc if re.fullmatch(r"[lm]:\d+", msrc) else None
+                db.execute("UPDATE services SET has_main=?, main_serial=?, main_coef=?, main_initial=?, main_src=? WHERE id=?",
+                           (1 if request.form.get("has_main") or msrc else 0, request.form.get("main_serial", "").strip(),
+                            fnum("main_coef", 1) or 1, fnum("main_initial", 0) or 0, msrc, sid))
                 if request.form.get("subscribe_all") and mode not in ("meter", "share"):
                     db.execute("INSERT OR IGNORE INTO tenant_services(tenant_id, service_id) "
                                "SELECT id, ? FROM tenants WHERE active=1", (sid,))
@@ -1056,7 +1057,8 @@ def services_page():
     cp = current_period()
     rows = [dict(r, share_sum=share_sum(r["id"], cp)) if r["mode"] == "share" else dict(r) for r in rows]
     # хто користується кожною послугою: підключені орендарі (кількість / м² / фіксовано) або % (частка)
-    tenants_all = db.execute("SELECT id, name, payment_type FROM tenants WHERE active=1 ORDER BY name").fetchall()
+    tenants_all = db.execute("SELECT t.id, t.name, t.payment_type, (SELECT COALESCE(SUM(w.area), 0) FROM warehouses w "
+                             "WHERE w.tenant_id=t.id) AS area FROM tenants t WHERE t.active=1 ORDER BY t.name").fetchall()
     subs = {}
     for r_ in db.execute("SELECT tenant_id, service_id FROM tenant_services").fetchall():
         subs.setdefault(r_["service_id"], set()).add(r_["tenant_id"])
@@ -1067,7 +1069,7 @@ def services_page():
     months = request.args.get("months", 12, type=int)
     months = months if months in (6, 12, 24, 36) else 12
     return render_template("services.html", rows=rows, ph=price_history(this_month(), months), months=months,
-                           tenants_all=tenants_all, cur_period=cp)
+                           tenants_all=tenants_all, cur_period=cp, srcs=lines.src_options())
 
 
 @app.route("/services/<int:sid>/tenants", methods=["POST"])

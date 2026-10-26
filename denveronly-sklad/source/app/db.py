@@ -531,7 +531,8 @@ END;
 # колонки, які з'явились після першої версії
 MIGRATIONS = {
     "services": {"has_main": "INTEGER NOT NULL DEFAULT 0", "main_serial": "TEXT", "main_coef": "REAL NOT NULL DEFAULT 1",
-                 "main_initial": "REAL NOT NULL DEFAULT 0"},   # загальний лічильник для послуги «частка»
+                 "main_initial": "REAL NOT NULL DEFAULT 0",
+                 "main_src": "TEXT"},   # загальний лічильник для послуги «частка»; main_src — лічильник лінії "l:<id>" / "m:<id>"   # загальний лічильник для послуги «частка»
     "line_meters": {"src": "TEXT"},   # ввідний = наявний лічильник іншої лінії: "m:<id>" | "l:<id>"
     "power_lines": {"has_solar": "INTEGER NOT NULL DEFAULT 1",
                     "parent_id": "INTEGER"},   # сублінія: живиться від іншої лінії, її ввід — споживач на тій лінії   # сонячна генерація на лінії (для субліній — вимкнути)
