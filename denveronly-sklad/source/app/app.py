@@ -102,6 +102,31 @@ def switch_site(sid):
     return resp
 
 
+@app.errorhandler(500)
+def server_error(e):
+    """Помилка 500: деталі — у файл data/errors.log і журнал дій; адміністратору — текст помилки, щоб надіслати розробнику."""
+    import traceback
+    from datetime import datetime as _dt
+    orig = getattr(e, "original_exception", None) or e
+    tb = "".join(traceback.format_exception(type(orig), orig, orig.__traceback__))
+    eid = _dt.now().strftime("%Y%m%d-%H%M%S")
+    try:
+        with open(os.path.join(DATA_DIR, "errors.log"), "a", encoding="utf-8") as f:
+            f.write(f"\n===== {eid} {request.method} {request.full_path}\n{tb}")
+        log("Ошибка сервера", f"{eid} {request.path}: {type(orig).__name__}: {orig}"[:480])
+    except Exception:
+        pass
+    is_admin = bool(g.get("user")) and g.user["role"] == "admin"
+    body = (f"<!doctype html><meta charset=utf-8><title>Помилка</title><body style='font-family:sans-serif;max-width:900px;margin:40px auto'>"
+            f"<h2>Помилка сервера</h2><p>Код помилки: <b>{eid}</b>. Сторінка: <code>{request.path}</code></p>"
+            "<p><a href='javascript:history.back()'>← Назад</a></p>")
+    if is_admin:
+        from markupsafe import escape
+        body += ("<p>Скопіюйте текст нижче і надішліть розробнику:</p>"
+                 f"<pre style='white-space:pre-wrap;background:#f4f4f4;padding:12px;font-size:12px'>{escape(tb[-6000:])}</pre>")
+    return body, 500
+
+
 @app.route("/lang/<code>")
 def set_lang(code):
     """Мова інтерфейсу (cookie на рік); повертає на ту ж сторінку."""
