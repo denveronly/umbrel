@@ -6,7 +6,7 @@
 import io
 import os
 
-from calc import MONTHS_UK_GEN, act_layout, amount_in_words, fmt_money, fmt_num
+from calc import MONTHS_UK_GEN, act_layout, amount_in_words, fmt_money, fmt_num, r2
 
 FONT_DIRS = ["/usr/share/fonts/truetype/dejavu", os.path.join(os.path.dirname(__file__), "fonts")]
 
@@ -39,6 +39,8 @@ def _party(p):
     rows = [p.get("name") or ""]
     if p.get("edrpou"):
         rows.append(f"{'РНОКПП' if p.get('person') else 'ЄДРПОУ/РНОКПП'}: {p['edrpou']}")
+    if p.get("ipn"):
+        rows.append(f"ІПН: {p['ipn']}")
     if p.get("passport"):
         rows.append(p["passport"][:1].upper() + p["passport"][1:])
     if p.get("address"):
@@ -55,7 +57,7 @@ def _company(act):
     c = act["data"]["company"]
     return {"name": c.get("company_name"), "edrpou": c.get("company_edrpou"),
             "address": c.get("company_address"), "iban": c.get("company_iban"),
-            "bank": c.get("company_bank"), "mfo": c.get("company_mfo"), "signer": c.get("company_signer"),
+            "bank": c.get("company_bank"), "mfo": c.get("company_mfo"), "ipn": c.get("company_ipn"), "signer": c.get("company_signer"),
             "position": c.get("company_signer_position"), "basis": c.get("company_basis")}
 
 
@@ -69,9 +71,9 @@ def _tenant(act):
             if t.get("passport_issued"):
                 passport += f", виданий {t['passport_issued']}"
         return {"name": t.get("name"), "edrpou": t.get("edrpou"), "address": t.get("address"), "iban": t.get("iban"),
-                "bank": t.get("bank"), "mfo": t.get("mfo"), "signer": t.get("name"), "position": "", "basis": "", "person": True, "passport": passport}
+                "bank": t.get("bank"), "mfo": t.get("mfo"), "ipn": t.get("ipn"), "signer": t.get("name"), "position": "", "basis": "", "person": True, "passport": passport}
     return {"name": t.get("name"), "edrpou": t.get("edrpou"), "address": t.get("address"),
-            "iban": t.get("iban"), "bank": t.get("bank"), "mfo": t.get("mfo"), "signer": t.get("contact"),
+            "iban": t.get("iban"), "bank": t.get("bank"), "mfo": t.get("mfo"), "ipn": t.get("ipn"), "signer": t.get("contact"),
             "position": t.get("director_position"), "basis": t.get("basis")}
 
 
@@ -138,20 +140,55 @@ def _detail_intro(act):
             f"Період споживання: {_ulabel(act)}." + (f" Підстава: {contract}." if contract else ""))
 
 
+def _vat_rate(act):
+    try:
+        return float(act["data"]["totals"].get("vat_rate") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _gross(lines, rate, total):
+    """Для актів з ПДВ — ціни й суми рядків одразу з ПДВ. Суми рядків підганяються на копійки так,
+    щоб разом точно дорівнювати «Усього з ПДВ». -> [(ціна, сума)] у порядку рядків."""
+    if not rate:
+        return [(l["price"], l["sum"]) for l in lines]
+    k = 1 + rate / 100
+    out = [[l["gross_price"], l["gross"]] if "gross" in l else [r2(l["price"] * k), r2(l["sum"] * k)] for l in lines]
+    diff = r2(total - sum(x[1] for x in out))
+    if out and diff:
+        i = max(range(len(out)), key=lambda j: abs(out[j][1]))
+        out[i][1] = r2(out[i][1] + diff)
+    return [tuple(x) for x in out]
+
+
+def _main_rows(act, lay):
+    rate, main = _vat_rate(act), lay["main"]
+    other = [l for l in main if l.get("group") != "comp"]
+    util_total = lay["util_total"] if rate else lay["util_sum"]
+    go = iter(_gross(other, rate, r2(act["data"]["totals"]["total"] - (util_total if len(other) < len(main) else 0))))
+    # рядок «Компенсація комунальних» = точно підсумок деталізації (з ПДВ — разом з ПДВ)
+    g = [(util_total, util_total) if l.get("group") == "comp" else next(go) for l in main]
+    return [[str(i), l["name"], l["unit"], fmt_num(l["qty"]), fmt_money(p), fmt_money(s)]
+            for i, (l, (p, s)) in enumerate(zip(lay["main"], g), 1)]
+
+
 def _totals_rows(act):
     tt = act["data"]["totals"]
     if tt.get("vat_rate"):
-        return [("Разом без ПДВ:", fmt_money(tt["net"])), (f"ПДВ {tt['vat_rate']}%:", fmt_money(tt["vat"])),
-                ("Всього з ПДВ:", fmt_money(tt["total"]))]
+        return [("Усього з ПДВ:", fmt_money(tt["total"])), (f"у т.ч. ПДВ {tt['vat_rate']}%:", fmt_money(tt["vat"]))]
     return [("Всього (без ПДВ):", fmt_money(tt["total"]))]
 
 
 def _detail_totals_rows(act, lay):
     vr = act["data"]["totals"].get("vat_rate")
     if vr:
-        return [("Разом без ПДВ:", fmt_money(lay["util_sum"])), (f"ПДВ {vr}%:", fmt_money(lay["util_vat"])),
-                ("Всього з ПДВ:", fmt_money(lay["util_total"]))]
+        return [("Усього з ПДВ:", fmt_money(lay["util_total"])), (f"у т.ч. ПДВ {vr}%:", fmt_money(lay["util_vat"]))]
     return [("Всього (без ПДВ):", fmt_money(lay["util_sum"]))]
+
+
+def _prices_note(act):
+    return ("Ціни вказано з ПДВ." if _vat_rate(act) else "Ціни вказано без ПДВ.") + \
+        " Кількість за лічильниками = поточні − попередні показники."
 
 
 def _words(act):
@@ -160,10 +197,12 @@ def _words(act):
     return s + (f", у т.ч. ПДВ {fmt_money(tt['vat'])} грн." if tt.get("vat_rate") else ", без ПДВ.")
 
 
-def _detail_rows(lay):
-    """Рядки таблиці деталізації (текстом)."""
+def _detail_rows(lay, act=None):
+    """Рядки таблиці деталізації (текстом). Для актів з ПДВ — ціни й суми з ПДВ."""
     rows = []
+    g = _gross(lay["util"], _vat_rate(act) if act else 0, lay["util_total"])
     for i, l in enumerate(lay["util"], 1):
+        l = dict(l, price=g[i - 1][0], sum=g[i - 1][1])
         if "service" in l:                                    # структуровані дані
             where = l.get("wh") or "—"
             if l.get("serial"):
@@ -268,8 +307,7 @@ def act_pdf(act, part="all"):
     if part != "detail":
         el += header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
         el += [Paragraph(_intro(act), base), Spacer(1, 3 * mm)]
-        main_rows = [[str(i), l["name"], l["unit"], fmt_num(l["qty"]), fmt_money(l["price"]), fmt_money(l["sum"])]
-                     for i, l in enumerate(lay["main"], 1)]
+        main_rows = _main_rows(act, lay)
         el.append(table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3))
         el += [Spacer(1, 2 * mm), totals(_totals_rows(act)), Spacer(1, 3 * mm),
                Paragraph(_words(act), base), Spacer(1, 2 * mm)]
@@ -286,12 +324,12 @@ def act_pdf(act, part="all"):
         el += header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ",
                       f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         el += [Paragraph(_detail_intro(act), base), Spacer(1, 3 * mm)]
-        el.append(table(DETAIL_HEAD, _detail_rows(lay), [8, 45, 30, 27, 15, 17, 19, 19], 4))
+        el.append(table(DETAIL_HEAD, _detail_rows(lay, act), [8, 45, 30, 27, 15, 17, 19, 19], 4))
         el += [Spacer(1, 2 * mm), totals(_detail_totals_rows(act, lay)), Spacer(1, 3 * mm),
                Paragraph(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
                          + (f", у т.ч. ПДВ {fmt_money(lay['util_vat'])} грн." if lay["util_vat"] else ", без ПДВ."),
                          base),
-               Paragraph("Ціни вказано без ПДВ. Кількість за лічильниками = поточні − попередні показники.", small),
+               Paragraph(_prices_note(act), small),
                Spacer(1, 10 * mm), signatures(full=False)]
 
     doc.build(el)
@@ -394,8 +432,7 @@ def act_docx(act, part="all"):
     if part != "detail":
         header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
         para(_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        main_rows = [[str(i), l["name"], l["unit"], fmt_num(l["qty"]), fmt_money(l["price"]), fmt_money(l["sum"])]
-                     for i, l in enumerate(lay["main"], 1)]
+        main_rows = _main_rows(act, lay)
         table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3)
         for a, b in _totals_rows(act):
             para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
@@ -411,12 +448,12 @@ def act_docx(act, part="all"):
             doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
         header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ", f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         para(_detail_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        table(DETAIL_HEAD, _detail_rows(lay), [8, 45, 30, 27, 15, 17, 19, 19], 4)
+        table(DETAIL_HEAD, _detail_rows(lay, act), [8, 45, 30, 27, 15, 17, 19, 19], 4)
         for a, b in _detail_totals_rows(act, lay):
             para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
         para(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
              + (f", у т.ч. ПДВ {fmt_money(lay['util_vat'])} грн." if lay["util_vat"] else ", без ПДВ."))
-        para("Ціни вказано без ПДВ. Кількість за лічильниками = поточні − попередні показники.", size=9)
+        para(_prices_note(act), size=9)
         signatures(full=False)
 
     buf = io.BytesIO()

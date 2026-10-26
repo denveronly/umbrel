@@ -36,6 +36,7 @@
   <datalist id="positions"><option>{{ _("Директор") }}</option><option>{{ _("Генеральний директор") }}</option><option>{{ _("ФОП") }}</option><option>{{ _("Представник") }}</option></datalist>
   <datalist id="bases"><option>{{ _("Статуту") }}</option><option>{{ _("виписки з ЄДР") }}</option><option>{{ _("довіреності №") }}</option></datalist>
   <label><span class="only-company">{{ _("ЄДРПОУ / РНОКПП") }}</span><span class="only-person">{{ _("РНОКПП (ИНН)") }}</span><input name="edrpou" value="{{ v('edrpou') }}"></label>
+  <label>{{ _("ИНН плательщика ПДВ (ІПН)") }}<input name="ipn" value="{{ v('ipn') }}" inputmode="numeric" maxlength="12" placeholder="123456789012"></label>
   <label>IBAN<input name="iban" value="{{ v('iban') }}"></label>
   <label>{{ _("Банк") }}<input name="bank" value="{{ v('bank') }}" placeholder="АТ КБ «ПриватБанк»"></label>
   <label>{{ _("МФО") }}<input name="mfo" value="{{ v('mfo') }}" inputmode="numeric" maxlength="6" placeholder="305299" style="max-width:140px"></label>

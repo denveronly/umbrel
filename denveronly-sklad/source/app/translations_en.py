@@ -1143,4 +1143,5 @@ EN = {
     'своё название, напр.': 'custom name, e.g.',
     '— сохраняется и для следующих месяцев': '— kept for the following months',
     'МФО': 'Bank code (MFO)',
+    'ИНН плательщика ПДВ (ІПН)': 'VAT number (IPN)',
 }

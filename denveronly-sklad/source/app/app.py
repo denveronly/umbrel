@@ -553,7 +553,7 @@ def tenants():
     return resp
 
 
-TENANT_FIELDS = ["name", "edrpou", "iban", "bank", "mfo", "address", "party_type", "passport_series", "passport_number",
+TENANT_FIELDS = ["name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "party_type", "passport_series", "passport_number",
                  "passport_issued", "contact", "director_position", "basis", "payment_type", "contract_no",
                  "contract_date", "contract_end", "deposit_date", "deposit_note", "activity", "note"]
 
@@ -722,7 +722,7 @@ def tenant_services(tid):
 
 # ---------------- компании-получатели ----------------
 
-COMPANY_FIELDS = ["name", "edrpou", "iban", "bank", "mfo", "address", "signer", "signer_position", "basis", "city",
+COMPANY_FIELDS = ["name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "signer", "signer_position", "basis", "city",
                   "act_prefix", "note"]
 
 

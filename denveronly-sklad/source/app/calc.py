@@ -229,7 +229,8 @@ def build_act(tenant_id, period):
             rent_sum = p["net"]                              # без ПДВ; ПДВ додається в кінці акта
             rate = r2(rent_sum / wh["area"]) if wh["area"] and pt == "bank_vat" else p["rate"]
             lines.append({"group": "rent", "name": f"Оренда «{wh['name']}» за {plabel}",
-                          "unit": "м²", "qty": wh["area"], "price": rate, "sum": rent_sum})
+                          "unit": "м²", "qty": wh["area"], "price": rate, "sum": rent_sum,
+                          **({"gross": p["total"], "gross_price": p["rate"]} if pt == "bank_vat" and vat else {})})
         # об'єднати оренду кількох приміщень в один рядок під назвою обраного приміщення
         merge = tenant["rent_merge_wid"] if "rent_merge_wid" in tenant.keys() else None
         rent = [l for l in lines if l["group"] == "rent"]
@@ -238,8 +239,10 @@ def build_act(tenant_id, period):
             total = r2(sum(l["sum"] for l in rent))
             lines = [l for l in lines if l["group"] != "rent"]
             custom = ((tenant["rent_merge_name"] if "rent_merge_name" in tenant.keys() else "") or "").strip()
+            gross = r2(sum(l.get("gross", 0) for l in rent)) if all("gross" in l for l in rent) else None
             lines.insert(0, {"group": "rent", "name": f"{custom or 'Оренда «' + main['name'] + '»'} за {plabel}",
-                             "unit": "міс.", "qty": 1, "price": total, "sum": total, "merged": len(rent)})
+                             "unit": "міс.", "qty": 1, "price": total, "sum": total, "merged": len(rent),
+                             **({"gross": gross, "gross_price": gross} if gross is not None else {})})
 
     # --- послуги за лічильниками ---
     for wh in uwhs:
@@ -339,8 +342,15 @@ def build_act(tenant_id, period):
                           "only_sum": not svc["has_main"]})
 
     net = r2(sum(l["sum"] for l in lines))
-    vat_sum = r2(net * vat)
-    totals = {"net": net, "vat": vat_sum, "total": r2(net + vat_sum),
+    if vat:
+        # оренда з ПДВ — точна сума з договору (ціна за м² вже з ПДВ), решта — без ПДВ + ПДВ; без копійчаних розбіжностей
+        rent_gross = sum(l["gross"] for l in lines if "gross" in l)
+        rest = r2(sum(l["sum"] for l in lines if "gross" not in l))
+        total = r2(rent_gross + rest + r2(rest * vat))
+        vat_sum = r2(total - net)
+    else:
+        vat_sum, total = 0, net
+    totals = {"net": net, "vat": vat_sum, "total": total,
               "vat_rate": s["vat_rate"] if vat else None}
     return lines, totals, warnings
 
@@ -361,8 +371,10 @@ def act_layout(data):
     util_vat = 0
     if vat_rate and util:
         # ПДВ деталізації = ПДВ акта − ПДВ оренди, щоб суми сходились до копійки
-        rent_net = r2(sum(l["sum"] for l in data["lines"] if l.get("group") not in UTIL_GROUPS))
-        util_vat = r2(data["totals"]["vat"] - r2(rent_net * float(vat_rate) / 100))
+        rent = [l for l in data["lines"] if l.get("group") not in UTIL_GROUPS]
+        rent_net = r2(sum(l["sum"] for l in rent))
+        rent_vat = r2(sum((l["gross"] - l["sum"]) if "gross" in l else l["sum"] * float(vat_rate) / 100 for l in rent))
+        util_vat = r2(data["totals"]["vat"] - rent_vat)
     return {"main": main, "util": util, "util_sum": util_sum, "util_vat": util_vat,
             "util_total": r2(util_sum + util_vat)}
 
@@ -380,7 +392,8 @@ def company_snapshot(c):
     if not c:
         return {}
     return {"company_name": c["name"], "company_edrpou": c["edrpou"], "company_iban": c["iban"],
-            "company_bank": c["bank"], "company_mfo": c["mfo"] if "mfo" in c.keys() else None, "company_address": c["address"], "company_signer": c["signer"],
+            "company_bank": c["bank"], "company_mfo": c["mfo"] if "mfo" in c.keys() else None,
+            "company_ipn": c["ipn"] if "ipn" in c.keys() else None, "company_address": c["address"], "company_signer": c["signer"],
             "company_signer_position": c["signer_position"], "company_basis": c["basis"],
             "company_vat_payer": c["vat_payer"]}
 
