@@ -123,7 +123,12 @@
       <table>
         <thead><tr><th>{{ _("Позиция") }}</th><th class="n">{{ _("К-сть") }}</th><th class="n">{{ _("Ціна") }}</th><th class="n">{{ _("Сума") }}</th></tr></thead>
         <tbody>{% for l in it.lines %}
-          <tr><td>{{ l.name }}</td><td class="n">{{ num(l.qty) }} {{ l.unit }}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
+          <tr><td>{{ l.name }}</td><td class="n">
+            {% if l.svc_id and l.pct is defined %}
+              {% if l.unit != 'послуга' %}{{ num(l.qty) }} {{ l.unit }}<br>{% endif %}
+              {% if not it.act or it.act.status != 'final' %}<span class="pctedit"><input value="{{ l.pct|plain }}" inputmode="decimal" data-tid="{{ it.t.id }}" data-sid="{{ l.svc_id }}" data-orig="{{ l.pct|plain }}" title="{{ _("Доля арендатора, % — действует с") }} {{ period_label(util_period) }}">%</span>
+              {% else %}{{ num(l.pct) }}%{% endif %}
+            {% else %}{{ num(l.qty) }} {{ l.unit }}{% endif %}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
         {% else %}<tr><td colspan="4" class="muted">{{ _("Нечего начислять") }}.</td></tr>{% endfor %}</tbody>
         <tfoot>
           {% set rent_sum = it.lines|selectattr('group', 'equalto', 'rent')|sum(attribute='sum') %}
@@ -172,6 +177,27 @@ document.getElementById('tdlg').addEventListener('click', e => { if (e.target.id
 </script>
 {% endblock %}
 {% block scripts %}
+<style>.pctedit input { width: 58px; padding: 2px 4px; text-align: right; font-size: 12.5px; } .pctedit input.saving { opacity: .5; } .pctedit input.err { border-color: var(--warn); }</style>
+<script>
+document.querySelectorAll('.pctedit input').forEach(inp => {
+  inp.addEventListener('click', e => e.stopPropagation());
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } if (e.key === 'Escape') { inp.value = inp.dataset.orig; inp.blur(); } });
+  inp.addEventListener('blur', async () => {
+    if (inp.value.trim() === inp.dataset.orig) return;
+    inp.classList.add('saving');
+    try {
+      const r = await fetch('/tenants/' + inp.dataset.tid + '/share/' + inp.dataset.sid, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pct: inp.value, from: {{ util_period|tojson }}})});
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      sessionStorage.setItem('openAct', inp.dataset.tid);
+      location.reload();
+    } catch (e) { inp.classList.remove('saving'); inp.classList.add('err'); inp.title = String(e.message || e); }
+  });
+});
+try { const o = sessionStorage.getItem('openAct'); if (o) { sessionStorage.removeItem('openAct');
+  const d = document.querySelector('.gearbtn[data-tid="' + o + '"]')?.closest('details'); if (d) { d.open = true; d.scrollIntoView({block: 'center'}); } } } catch (e) {}
+</script>
 <script>
 // после скачивания обновляем страницу, чтобы появился номер и статус акта
 document.querySelectorAll('form[action$="/acts/make"], form[action$="/acts/make_company"]').forEach(f =>

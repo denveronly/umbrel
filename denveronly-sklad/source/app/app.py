@@ -1071,6 +1071,30 @@ def tenant_shares(tid):
     return redirect(url_for("tenant_edit", tid=tid) + "#shares")
 
 
+@app.route("/tenants/<int:tid>/share/<int:sid>", methods=["POST"])
+def tenant_share_one(tid, sid):
+    """Змінити % орендаря в одній послузі «частка» прямо з акта: діє з місяця from і на наступні."""
+    db = get_db()
+    d = request.get_json(silent=True) or {}
+    frm = d.get("from") or ""
+    try:
+        v = float(str(d.get("pct", "")).replace(",", ".").strip())
+    except ValueError:
+        return jsonify(ok=False, error=_("Неверное число")), 400
+    if not re.fullmatch(r"\d{4}-\d{2}", frm) or not 0 <= v <= 100:
+        return jsonify(ok=False, error=_("Процент — от 0 до 100")), 400
+    sv = db.execute("SELECT name FROM services WHERE id=? AND mode='share'", (sid,)).fetchone()
+    t = db.execute("SELECT name FROM tenants WHERE id=?", (tid,)).fetchone()
+    if not sv or not t:
+        abort(404)
+    db.execute("INSERT INTO tenant_shares(tenant_id, service_id, pct, from_period, username) VALUES (?,?,?,?,?) "
+               "ON CONFLICT(tenant_id, service_id, from_period) DO UPDATE SET pct=excluded.pct",
+               (tid, sid, v, frm, g.user["username"] if g.get("user") else None))
+    db.commit()
+    log("Доли услуг арендатора изменены", f"{t['name']}: {sv['name']} {calc.fmt_num(v)}% с {calc.period_label(frm)}")
+    return jsonify(ok=True, total=share_sum(sid, frm))
+
+
 @app.route("/services", methods=["GET", "POST"])
 def services_page():
     db = get_db()

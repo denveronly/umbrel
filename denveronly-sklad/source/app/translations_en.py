@@ -1290,4 +1290,5 @@ EN = {
     'Один архив: папка на каждую компанию, в ней акты и детализации отдельными файлами': 'One archive: a folder per company with acts and details as separate files',
     'Всё одним архивом': 'Everything in one archive',
     'Пусто — берётся сумма прошлого месяца (серым)': 'Empty — last month’s amount is used (grey)',
+    'Доля арендатора, % — действует с': 'Tenant share, % — effective from',
 }

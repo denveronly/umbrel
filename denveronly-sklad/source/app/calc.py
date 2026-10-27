@@ -374,7 +374,7 @@ def build_act(tenant_id, period):
                      if svc["has_main"] else f"{svc['name']} за {ulabel} — {pct_s}% × {fmt_money(p)}")
             lines.append({"group": "service", "name": lname,
                           "unit": (svc["unit"] or "м³") if svc["has_main"] else "послуга", "qty": qty, "price": p, "sum": r2(total * pct / 100),
-                          "service": svc["name"], "wh": "", "serial": "", "rnote": f"{pct_s}% від {fmt_num(cons)}\u00a0{unit}" if svc["has_main"] else f"{pct_s}%",
+                          "service": svc["name"], "svc_id": svc["id"], "pct": pct, "wh": "", "serial": "", "rnote": f"{pct_s}% від {fmt_num(cons)}\u00a0{unit}" if svc["has_main"] else f"{pct_s}%",
                           # без загального лічильника в деталізації — лише % і сума (без «0,20 × 9 000»)
                           "only_sum": not svc["has_main"]})
 
