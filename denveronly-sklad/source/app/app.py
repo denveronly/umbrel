@@ -27,6 +27,7 @@ import bas
 import guard
 import ha
 import whatsapp
+import homeel
 from audit import log
 from i18n import _
 
@@ -48,6 +49,7 @@ bas.init_app(app)
 guard.init_app(app)
 ha.init_app(app)
 whatsapp.init_app(app)
+homeel.init_app(app)
 sheet.init_app(app)
 
 
@@ -99,7 +101,7 @@ def plain(x):
 
 
 # розділи, на які можна повернутись після перемикання об'єкта (картки конкретних записів — ні: в іншого об'єкта свої id)
-SITE_SECTIONS = ("/", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
+SITE_SECTIONS = ("/", "/home", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
                  "/logs", "/settings", "/companies", "/users")
 
 
@@ -111,6 +113,10 @@ def switch_site(sid):
     nxt = request.args.get("next") or "/"
     sec = "/" + nxt.split("?")[0].strip("/").split("/")[0]
     sec = sec if sec in SITE_SECTIONS else "/"
+    if SITES[sid].get("kind") == "home":             # «Дім» — лише електрика, HA і налаштування
+        sec = sec if sec in ("/home", "/ha", "/settings", "/logs", "/users") else "/home"
+    elif sec == "/home":
+        sec = "/"
     resp = redirect(sec + ("?view=" + request.args["view"] if sec == "/tenants" and request.args.get("view") else ""))
     resp.set_cookie(SITE_COOKIE, sid, max_age=31536000, samesite="Lax")
     return resp
@@ -242,6 +248,9 @@ def fnum(name, default=None):
 
 @app.route("/")
 def index():
+    from db import SITES, current_site
+    if SITES[current_site()].get("kind") == "home":
+        return redirect(url_for("home.page"))
     s = settings()
     return render_template("map.html", plan=s.get("plan_image"),
                            plan_w=s.get("plan_w"), plan_h=s.get("plan_h"),

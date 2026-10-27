@@ -37,7 +37,7 @@
 <body>
 {% if current_user and not embed %}
 <header class="top">
-  {% macro site_icon(kind) %}{% if kind == 'house' %}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 11.2 12 4l9 7.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.5V20h13V9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 20v-5.5h4V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>{% else %}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2.5 9 12 4l9.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 8v12h15V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 20v-8h8v8M8 14.7h8M8 17.4h8" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>{% endif %}{% endmacro %}
+  {% macro site_icon(kind) %}{% if kind == 'home' %}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 11 12 3.8 21 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6.5V4h2.5v4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.5 9.5V20h13V9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 11.5l-2 3.5h4l-2 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>{% elif kind == 'house' %}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 11.2 12 4l9 7.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.5V20h13V9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 20v-5.5h4V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>{% else %}<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M2.5 9 12 4l9.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 8v12h15V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 20v-8h8v8M8 14.7h8M8 17.4h8" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>{% endif %}{% endmacro %}
   <details class="sitesw" id="sitesw">
     <summary class="brand" title="{{ _("Объект") }}">{{ site_icon(SITES[cur_site].icon) }}<span>{{ site_name }}</span><span class="caret">▾</span></summary>
     <div class="sitemenu">
@@ -48,6 +48,10 @@
   </details>
   <nav>
     {% set ep = request.endpoint or '' %}
+    {% if SITES[cur_site].kind == 'home' %}
+    <a href="{{ url_for('home.page') }}" class="{{ 'on' if ep.startswith('home.') }}">⚡ {{ _("Электроэнергия") }}</a>
+    {% if can('settings') %}<a href="{{ url_for('ha.page') }}" class="{{ 'on' if ep.startswith('ha.') }}">🏠 HA</a>{% endif %}
+    {% else %}
     <a href="{{ url_for('index') }}" class="{{ 'on' if ep=='index' }}">{{ _("Основная") }}</a>
     <a href="{{ url_for('tenants') }}" class="{{ 'on' if ep.startswith('tenant') }}">{{ _("Арендаторы") }}</a>
     <a href="{{ url_for('lines.table') }}" class="{{ 'on' if ep in ('readings', 'services_page', 'service_readings_page', 'lines.lines', 'lines.manage', 'lines.table') or ep.startswith('ha.') }}">{{ _("Показания") }}</a>
@@ -56,6 +60,7 @@
     <a href="{{ url_for('warehouses') }}" class="{{ 'on' if ep.startswith('warehouse') }}">{{ _("Склады") }}</a>
     {% if can('yasno') %}<a href="{{ url_for('yasno.page') }}" class="{{ 'on' if ep.startswith('yasno.') }}">⚡ YASNO</a>{% endif %}
     {% if can('ai') %}<a href="{{ url_for('ai.chat') }}" class="{{ 'on' if ep.startswith('ai.') }}">✦ {{ _("ИИ") }}</a>{% endif %}
+    {% endif %}
     {% if can('settings') or can('logs') %}<a href="{{ url_for('settings_page') if can('settings') else url_for('logs.logs') }}" class="{{ 'on' if ep in ('settings_page', 'auth.users', 'companies_page', 'ai_settings_page', 'wa.settings_page') or ep.startswith('logs.') }}" title="{{ _("Настройки") }}">⚙</a>{% endif %}
   </nav>
   <span class="spacer"></span>

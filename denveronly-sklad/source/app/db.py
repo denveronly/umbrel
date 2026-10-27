@@ -13,6 +13,7 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 SITES = {
     "base": {"name": "База", "icon": "warehouse", "dir": ""},
     "office": {"name": "Офис", "icon": "house", "dir": os.path.join("sites", "office")},
+    "home": {"name": "Дом", "icon": "home", "dir": os.path.join("sites", "home"), "kind": "home"},   # лише електрика день/ніч
 }
 MAIN_SITE = "base"
 SITE_COOKIE = "site"

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Электроэнергия") }}{% endblock %}
+{% block head %}
+<style>
+.hgrid { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; }
+.hgrid th, .hgrid td { padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.hgrid th { font-size: 11.5px; text-transform: none; letter-spacing: 0; }
+.hgrid th.z { text-align: center; }
+.hgrid td.c, .hgrid th.c { text-align: right; font-variant-numeric: tabular-nums; }
+.hgrid .day { background: color-mix(in srgb, #e0b000 8%, transparent); }
+.hgrid .night { background: color-mix(in srgb, #3b5bdb 9%, transparent); }
+.hgrid input { width: 92px; text-align: right; padding: 3px 5px; font-size: 13px; background: transparent; border-color: transparent; }
+.hgrid input.dt { width: 92px; text-align: left; }
+.hgrid input:hover { border-color: var(--line); } .hgrid input:focus { background: var(--bg); border-color: var(--accent); }
+.hgrid tr.curp td { background-image: linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent), color-mix(in srgb, var(--accent) 7%, transparent)); }
+.hgrid td.neg { color: var(--warn); font-weight: 600; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="row"><h1 style="margin:0">⚡ {{ _("Электроэнергия") }} <span class="muted" style="font-weight:400">· {{ site_name }}</span></h1><span class="spacer"></span>
+  <form method="get" class="row" style="gap:6px"><span class="muted">{{ _("Период") }}:</span>
+    <select name="months" onchange="this.form.submit()" style="width:auto">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select></form></div>
+<p class="muted">{{ _("Двухзонный счётчик: показания зон «день» и «ночь» на конец месяца. Расход — от предыдущего показания, сумма — по тарифу месяца. Показания можно брать из Home Assistant (Показания → HA → «Вписывать в счётчик» → «Дом: день / ночь»).") }}</p>
+
+<div class="kpis">
+  {% if last %}<div class="kpi"><small class="muted">{{ period_label(last.period) }}</small><b>{{ money(last.sum) }} {{ _("грн") }}</b>
+    <small class="muted">☀ {{ num(last.cd) }} · 🌙 {{ num(last.cn) }} {{ _("кВт·год") }}</small></div>{% endif %}
+  <div class="kpi"><small class="muted">{{ _("С начала") }} {{ year.y }}</small><b>{{ money(year.sum) }} {{ _("грн") }}</b>
+    <small class="muted">{{ num(year.kwh) }} {{ _("кВт·год") }} · ☀ {{ num(year.day) }} · 🌙 {{ num(year.night) }}</small></div>
+  <div class="kpi"><small class="muted">{{ _("Доля ночи") }}</small><b>{{ (year.night / year.kwh * 100)|round(0)|int if year.kwh else '—' }}%</b>
+    <small class="muted">{{ _("чем больше — тем выгоднее двухзонный") }}</small></div>
+  <div class="kpi"><small class="muted">{{ _("Тариф сейчас") }}</small><b>{% if td is not none %}☀ {{ money(td) }} · 🌙 {{ money(tn) }}{% else %}—{% endif %}</b>
+    <small class="muted">{% if tf %}{{ _("с") }} {{ period_label(tf) }}{% else %}{{ _("задайте тариф ниже") }}{% endif %}</small></div>
+</div>
+
+<form method="post" class="card" style="padding:0;overflow:auto">
+<table class="hgrid">
+  <thead>
+    <tr><th rowspan="2">{{ _("Месяц") }}</th><th rowspan="2">{{ _("Дата съёма") }}</th>
+      <th class="z day" colspan="4">☀ {{ _("День") }}</th><th class="z night" colspan="4">🌙 {{ _("Ночь") }}</th>
+      <th class="c" rowspan="2">{{ _("Всего, кВт·год") }}</th><th class="c" rowspan="2">{{ _("Сумма, грн") }}</th></tr>
+    <tr><th class="day c">{{ _("показание") }}</th><th class="day c">{{ _("расход") }}</th><th class="day c">{{ _("цена") }}</th><th class="day c">{{ _("грн") }}</th>
+      <th class="night c">{{ _("показание") }}</th><th class="night c">{{ _("расход") }}</th><th class="night c">{{ _("цена") }}</th><th class="night c">{{ _("грн") }}</th></tr>
+  </thead>
+  <tbody>{% for r in rows %}
+    <tr class="{{ 'curp' if r.period == cur }}"><td><b>{{ period_label(r.period) }}</b></td>
+      <td><input class="dt" name="taken_{{ r.period }}" value="{{ r.taken|dmy if r.taken else '' }}" placeholder="{{ _('дд.мм.рррр') }}"></td>
+      <td class="day c"><input name="day_{{ r.period }}" inputmode="decimal" value="{{ r.day|plain }}" placeholder="—"></td>
+      <td class="day c {{ 'neg' if r.cd is not none and r.cd < 0 }}">{{ num(r.cd) if r.cd is not none else '' }}</td>
+      <td class="day c muted">{{ money(r.pd) if r.pd is not none else '' }}</td>
+      <td class="day c">{{ money(r.sd) if r.sd is not none else '' }}</td>
+      <td class="night c"><input name="night_{{ r.period }}" inputmode="decimal" value="{{ r.night|plain }}" placeholder="—"></td>
+      <td class="night c {{ 'neg' if r.cn is not none and r.cn < 0 }}">{{ num(r.cn) if r.cn is not none else '' }}</td>
+      <td class="night c muted">{{ money(r.pn) if r.pn is not none else '' }}</td>
+      <td class="night c">{{ money(r.sn) if r.sn is not none else '' }}</td>
+      <td class="c">{{ num(r.total_kwh) if r.total_kwh is not none else '' }}</td>
+      <td class="c"><b>{{ money(r.sum) if r.sum is not none else '' }}</b></td></tr>
+  {% endfor %}</tbody>
+</table>
+<div class="row" style="padding:10px 12px"><span class="muted">{{ _("Расход первого месяца появится, когда будет показание предыдущего.") }}</span><span class="spacer"></span><button>{{ _("Сохранить") }}</button></div>
+</form>
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Тариф") }}</h2>
+  <form method="post" class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+    <input type="hidden" name="action" value="tariff">
+    <label>☀ {{ _("День, грн/кВт·год") }}<input name="t_day" id="t_day" inputmode="decimal" value="{{ td|plain if td is not none else '' }}" style="width:120px"></label>
+    <label>🌙 {{ _("Ночь, грн/кВт·год") }}<input name="t_night" id="t_night" inputmode="decimal" value="{{ tn|plain if tn is not none else '' }}" style="width:120px"></label>
+    <button type="button" class="sm ghost" onclick="const d=parseFloat(document.getElementById('t_day').value.replace(',', '.')); if(!isNaN(d)) document.getElementById('t_night').value=(Math.round(d*50)/100).toString().replace('.', ',')">{{ _("ночь = ½ дня") }}</button>
+    <label>{{ _("Действует с месяца") }}<input type="month" name="from_period" value="{{ cur }}" style="width:auto"></label>
+    <button class="sm">{{ _("Сохранить тариф") }}</button>
+  </form>
+  {% if tariffs %}<div class="tablewrap" style="margin-top:10px"><table>
+    <thead><tr><th>{{ _("С месяца") }}</th><th class="n">☀ {{ _("День") }}</th><th class="n">🌙 {{ _("Ночь") }}</th></tr></thead>
+    <tbody>{% for t in tariffs %}<tr><td>{{ period_label(t.from_period) }}</td><td class="n">{{ money(t.day) if t.day is not none else '—' }}</td><td class="n">{{ money(t.night) if t.night is not none else '—' }}</td></tr>{% endfor %}</tbody>
+  </table></div>{% endif %}
+</div>
+{% endblock %}
