@@ -447,7 +447,8 @@ def act_date_text(period, mode=None):
 def company_snapshot(c):
     if not c:
         return {}
-    return {"company_name": c["name"], "company_edrpou": c["edrpou"], "company_iban": c["iban"],
+    legal = (c["legal_name"] or "").strip() if "legal_name" in c.keys() else ""
+    return {"company_name": legal or c["name"], "company_short": c["name"], "company_edrpou": c["edrpou"], "company_iban": c["iban"],
             "company_bank": c["bank"], "company_mfo": c["mfo"] if "mfo" in c.keys() else None,
             "company_ipn": c["ipn"] if "ipn" in c.keys() else None, "company_address": c["address"], "company_signer": c["signer"],
             "company_signer_position": c["signer_position"], "company_basis": c["basis"],

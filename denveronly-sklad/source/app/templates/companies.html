@@ -67,7 +67,8 @@
 {% macro company_form(c) %}
 <form method="post" class="grid">
   {% if c %}<input type="hidden" name="cid" value="{{ c.id }}">{% endif %}
-  <label class="full">{{ _("Название ТОВ / ФОП (как в акте") }})<input name="name" required value="{{ c.name if c else '' }}" placeholder="{{ _("ТОВ «Склади» / ФОП Петренко П.П.") }}"></label>
+  <label class="full">{{ _("Название ТОВ / ФОП (как в акте") }})<input name="legal_name" value="{{ (c.legal_name or '') if c else '' }}" placeholder="{{ (c.name if c else '') or _("Товариство з обмеженою відповідальністю «Склади»") }}"></label>
+  <label class="full">{{ _("Сокращённое название") }} <span class="muted">— {{ _("везде в программе; пусто в полном — в акты пойдёт это") }}</span><input name="name" required value="{{ c.name if c else '' }}" placeholder="{{ _("ТОВ «Склади» / ФОП Петренко П.П.") }}"></label>
   <label>{{ _("ЄДРПОУ / РНОКПП") }}<input name="edrpou" value="{{ c.edrpou or '' if c else '' }}"></label>
   <label>{{ _("ИНН плательщика ПДВ (ІПН)") }}<input name="ipn" value="{{ c.ipn or '' if c else '' }}" inputmode="numeric" maxlength="12"></label>
   <label>IBAN<input name="iban" value="{{ c.iban or '' if c else '' }}"></label>

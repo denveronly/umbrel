@@ -1321,4 +1321,6 @@ EN = {
     'Бухгалтерия': 'Accounting',
     'ФИО': 'Full name',
     'месяц потребления': 'consumption month',
+    'Сокращённое название': 'Short name',
+    'везде в программе; пусто в полном — в акты пойдёт это': 'used everywhere in the app; if the full name is empty, this goes into acts',
 }

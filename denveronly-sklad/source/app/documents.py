@@ -361,9 +361,9 @@ def act_pdf(act, part="all"):
         from xml.sax.saxutils import escape
         left = [Paragraph("Від Орендодавця:", bold), Paragraph(f"<b>{escape(c.get('name') or '')}</b>", base)]
         rightc = [Paragraph("Від Орендаря:", bold), Paragraph(f"<b>{escape(t.get('name') or '')}</b>", base)]
-        if full:
-            left += [Paragraph(escape(x), small) for x in _contact_lines(c)]
-            rightc += [Paragraph(escape(x), small) for x in _contact_lines(t)]
+        if full:                                         # акт: під назвою — повні реквізити сторін
+            left += [Paragraph(escape(x), small) for x in _party(c)[1:] if x]
+            rightc += [Paragraph(escape(x), small) for x in _party(t)[1:] if x]
         rows = [[left, rightc], ["", ""],
                 [Paragraph(_sign_line(c), base), Paragraph(_sign_line(t), base)],
                 [Paragraph("М.П.", small), Paragraph("М.П.", small)]]
@@ -494,9 +494,10 @@ def act_docx(act, part="all"):
             cell.paragraphs[0].add_run(label).bold = True
             if party.get("name"):                           # лише назва сторони жирним
                 cell.add_paragraph().add_run(party["name"]).bold = True
-            if full:
-                for x in _contact_lines(party):
-                    cell.add_paragraph(x).runs[0].font.size = Pt(9)
+            if full:                                        # акт: повні реквізити під назвою
+                for x in _party(party)[1:]:
+                    if x:
+                        cell.add_paragraph(x).runs[0].font.size = Pt(9)
             sc = sig.cell(1, col)
             sc.text = ""
             sc.paragraphs[0].paragraph_format.space_before = Pt(24)

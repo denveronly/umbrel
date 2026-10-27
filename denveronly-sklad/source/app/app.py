@@ -789,7 +789,7 @@ def tenant_services(tid):
 
 # ---------------- компании-получатели ----------------
 
-COMPANY_FIELDS = ["name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "email", "signer", "signer_position", "basis",
+COMPANY_FIELDS = ["name", "legal_name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "email", "signer", "signer_position", "basis",
                   "city", "act_prefix", "note"]
 
 
@@ -1423,7 +1423,8 @@ def _zip_acts(act_ids, fmt, name, part="all"):
         for aid in act_ids:
             act = load_act(aid)
             has_util = bool(calc.act_layout(act["data"])["util"])
-            folder = _folder(act["data"]["company"].get("company_name"))
+            co_ = act["data"]["company"]
+            folder = _folder(co_.get("company_short") or co_.get("company_name"))
             if part == "both":                             # акт і деталізація — окремими файлами в папці компанії
                 z.writestr(f"{folder}/{_fname(act, fmt, 'act')}", _render(act, fmt, "act"))
                 if has_util:

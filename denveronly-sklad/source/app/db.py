@@ -549,7 +549,7 @@ MIGRATIONS = {
     "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT", "mfo": "TEXT", "ipn": "TEXT",
                   "pay_types": "TEXT", "email": "TEXT",
-                  "contacts": "TEXT"},   # contacts — JSON [{role, name, phone, email}] (бухгалтерія, адміністрація…)   # які форми оплати приймає компанія: "cash,bank,bank_vat"; порожньо — будь-які
+                  "contacts": "TEXT", "legal_name": "TEXT"},   # legal_name — повна назва в актах; name — скорочена (у програмі)   # contacts — JSON [{role, name, phone, email}] (бухгалтерія, адміністрація…)   # які форми оплати приймає компанія: "cash,bank,bank_vat"; порожньо — будь-які
     "acts": {"company_id": "INTEGER"},
     "meters": {"name": "TEXT", "sort_order": "INTEGER", "service_id": "INTEGER", "line_id": "INTEGER", "has_reactive": "INTEGER NOT NULL DEFAULT 0",
                "initial_reactive": "REAL NOT NULL DEFAULT 0"},
