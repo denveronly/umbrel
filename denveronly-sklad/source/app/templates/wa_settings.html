@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp{% endblock %}
+{% block content %}
+<h1>{{ _("Настройки") }}</h1>
+{% include "_settings_tabs.html" %}
+
+<div class="card">
+  <h2 style="margin-top:0">WhatsApp Cloud API <span class="muted" style="font-weight:400">· {{ _("акты арендаторам по номеру телефона") }}</span></h2>
+  <details {{ 'open' if not c.phone_id }}><summary><b>{{ _("Как подключить (один раз, ~30 минут)") }}</b></summary>
+    <ol class="muted" style="line-height:1.6">
+      <li>{{ _("developers.facebook.com → «Мои приложения» → «Создать приложение» → тип «Бизнес» → добавить продукт «WhatsApp». Привязать (или создать) бизнес-портфолио Meta.") }}</li>
+      <li>{{ _("WhatsApp → «Настройка API»: добавить свой номер телефона для отправки (номер, на котором НЕ установлен обычный WhatsApp, — его можно перенести, но проще отдельная SIM). Подтвердить по SMS.") }}</li>
+      <li>{{ _("Скопировать «Идентификатор номера телефона» (Phone number ID) — вставить ниже.") }}</li>
+      <li>{{ _("Постоянный токен: business.facebook.com → Настройки компании → Пользователи → «Пользователи системы» → добавить (роль «Администратор») → «Назначить ресурсы»: приложение и аккаунт WhatsApp (полный доступ) → «Создать токен» с разрешениями whatsapp_business_messaging и whatsapp_business_management, срок «Никогда». Вставить ниже.") }}</li>
+      <li>{{ _("WhatsApp Manager → «Шаблоны сообщений» → «Создать»: категория «Служебные» (Utility), название «akt_orendy», язык «Украинский». Заголовок — «Медиа → Документ». Текст, например:") }}
+        <pre style="white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:6px">Добрий день, {{ '{{1}}' }}!
+Надсилаємо акт № {{ '{{2}}' }} за {{ '{{3}}' }}. Сума до оплати: {{ '{{4}}' }} грн.
+Акт і деталізація — у файлі вище.</pre>
+        {{ _("Отправить на проверку — обычно одобряют за минуты–сутки.") }}</li>
+      <li>{{ _("Добавить способ оплаты в WhatsApp Manager (сообщения по шаблону платные, тариф «Utility» для Украины — копейки за сообщение).") }}</li>
+      <li>{{ _("В карточках арендаторов у контактных лиц должны быть телефоны с галочкой «WhatsApp».") }}</li>
+    </ol>
+  </details>
+  <form method="post" class="grid" autocomplete="off" style="margin-top:12px">
+    <label>{{ _("Идентификатор номера (Phone number ID)") }}<input name="phone_id" value="{{ c.phone_id }}" placeholder="123456789012345"></label>
+    <label>{{ _("Постоянный токен") }}<input type="password" name="token" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_token else 'EAAG…' }}"></label>
+    <label>{{ _("Название шаблона") }}<input name="template" value="{{ c.template }}"></label>
+    <label>{{ _("Язык шаблона") }}<input name="lang" value="{{ c.lang }}" placeholder="uk"></label>
+    <label>{{ _("Что отправлять") }}<select name="part"><option value="all" {{ 'selected' if c.part != 'act' }}>{{ _("акт + детализация одним PDF") }}</option><option value="act" {{ 'selected' if c.part == 'act' }}>{{ _("только акт") }}</option></select></label>
+    <label>{{ _("Версия Graph API") }}<input name="version" value="{{ c.version }}"></label>
+    <div class="full row" style="gap:8px;flex-wrap:wrap">
+      <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
+      <input name="test_phone" placeholder="{{ _("ваш номер для теста") }}" style="width:200px">
+      <button class="sm ghost" name="action" value="test" title="{{ _("Отправит стандартный шаблон hello_world — проверка номера и токена") }}">{{ _("Отправить тест") }}</button>
+      {% if c.has_token %}<button class="sm ghost" name="action" value="clear_token" onclick="return confirm({{ _('Удалить токен?')|tojson }})">{{ _("Удалить токен") }}</button>{% endif %}
+    </div>
+    <p class="full muted" style="margin:0">🔒 {{ _("Токен хранится зашифрованным; ключ лежит отдельно от базы и не попадает в бэкапы.") }}
+      {{ _("Отправка — в «Актах»: значок WhatsApp у арендатора или «WhatsApp всем» в строке архива.") }}</p>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Журнал отправки") }}
+    {% if bulk.job %}<span class="muted" style="font-weight:400">· {{ _("последняя рассылка") }} {{ period_label(bulk.period) if bulk.period else '' }}:
+      {% if bulk.done %}{{ _("отправлено") }} {{ bulk.sent }}{% if bulk.errors %}, <span class="warnt">{{ _("ошибок") }} {{ bulk.errors }}</span>{% endif %}{% else %}⏳ {{ _("идёт…") }}{% endif %}</span>{% endif %}</h2>
+  {% if logs %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>{{ _("Время") }}</th><th>{{ _("Арендатор") }}</th><th>{{ _("Акт") }}</th><th>{{ _("Телефон") }}</th><th>{{ _("Статус") }}</th></tr></thead>
+    <tbody>{% for l in logs %}<tr><td class="muted">{{ l.created_at[:16] }}</td><td>{{ l.tenant or '—' }}</td>
+      <td>{% if l.act_id %}<a href="{{ url_for('act_view', aid=l.act_id) }}">№ {{ l.number }}</a> · {{ period_label(l.period) }}{% else %}{{ period_label(l.period) if l.period else '' }}{% endif %}</td>
+      <td>{{ '+' ~ l.phone if l.phone else '—' }}</td>
+      <td>{% if l.status == 'sent' %}<span class="badge">✓ {{ _("отправлено") }}</span>{% else %}<span class="warnt">✗ {{ l.error }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="muted">{{ _("«Отправлено» — WhatsApp принял сообщение. Если у человека нет WhatsApp на этом номере, сообщение не дойдёт (статус доставки видно в WhatsApp Manager).") }}</p>
+  {% else %}<p class="muted">{{ _("Отправок ещё не было.") }}</p>{% endif %}
+</div>
+{% endblock %}

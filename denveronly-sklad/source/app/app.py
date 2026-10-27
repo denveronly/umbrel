@@ -26,6 +26,7 @@ import yasno
 import bas
 import guard
 import ha
+import whatsapp
 from audit import log
 from i18n import _
 
@@ -46,6 +47,7 @@ yasno.init_app(app)
 bas.init_app(app)
 guard.init_app(app)
 ha.init_app(app)
+whatsapp.init_app(app)
 sheet.init_app(app)
 
 
@@ -730,11 +732,11 @@ def tenant_contacts(tid):
     if request.form.get("delete") and cid:
         db.execute("DELETE FROM tenant_contacts WHERE id=? AND tenant_id=?", (cid, tid))
     elif cid:
-        db.execute("UPDATE tenant_contacts SET name=?, position=?, phone=?, email=? WHERE id=? AND tenant_id=?",
-                   vals + [cid, tid])
+        db.execute("UPDATE tenant_contacts SET name=?, position=?, phone=?, email=?, wa=? WHERE id=? AND tenant_id=?",
+                   vals + [1 if request.form.get("wa") else 0, cid, tid])
     elif any(vals):
-        db.execute("INSERT INTO tenant_contacts(tenant_id, name, position, phone, email) VALUES (?,?,?,?,?)",
-                   [tid] + vals)
+        db.execute("INSERT INTO tenant_contacts(tenant_id, name, position, phone, email, wa) VALUES (?,?,?,?,?,?)",
+                   [tid] + vals + [1 if request.form.get("wa", "1") else 0])
     db.commit()
     return redirect(url_for("tenant_edit", tid=tid) + "#people")
 
@@ -1262,6 +1264,7 @@ def acts():
     for c in companies():
         groups[c["id"]] = {"c": c, "rows": [], "tot": {"net": 0, "vat": 0, "total": 0}, "by_pt": {}}
     groups[None] = {"c": None, "rows": [], "tot": {"net": 0, "vat": 0, "total": 0}, "by_pt": {}}
+    wa_ready = whatsapp.ready()
     for t in tenants:
         act = db.execute("SELECT * FROM acts WHERE tenant_id=? AND period=?", (t["id"], period)).fetchone()
         lines, totals, warnings = calc.build_act(t["id"], period)
@@ -1273,6 +1276,7 @@ def acts():
         gl = documents._gross(lines, float(totals.get("vat_rate") or 0), totals["total"])
         rent_g = calc.r2(sum(x[1] for l, x in zip(lines, gl) if l.get("group") == "rent"))
         g["rows"].append({"t": t, "act": act, "lines": lines, "totals": totals, "warnings": warnings,
+                          "wa": ["+" + r["phone"] for r in whatsapp.recipients(t["id"], db)] if wa_ready else [],
                           "gl": gl, "rent_g": rent_g, "svc_g": calc.r2(sum(x[1] for x in gl) - rent_g),
                            "whs": calc.warehouses_of(t["id"], period, db),
                            "changed": bool(act and act["status"] == "draft" and abs(act["total"] - totals["total"]) > 0.005)})
@@ -1281,7 +1285,8 @@ def acts():
         g["by_pt"][t["payment_type"]] = calc.r2(g["by_pt"].get(t["payment_type"], 0) + totals["total"])
     groups = [g for g in groups.values() if g["rows"]]
     grand = calc.r2(sum(g["tot"]["total"] for g in groups))
-    return render_template("acts.html", period=period, groups=groups, grand=grand,
+    return render_template("acts.html", period=period, groups=groups, grand=grand, wa_ready=wa_ready,
+                           wa_count=sum(1 for gr in groups for r in gr["rows"] if r.get("wa") and r["t"]["active"]),
                            util_period=calc.util_period_for(period),
                            prev_p=calc.prev_period(period), next_p=calc.next_period(period))
 

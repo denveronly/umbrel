@@ -56,7 +56,7 @@
     <a href="{{ url_for('warehouses') }}" class="{{ 'on' if ep.startswith('warehouse') }}">{{ _("Склады") }}</a>
     {% if can('yasno') %}<a href="{{ url_for('yasno.page') }}" class="{{ 'on' if ep.startswith('yasno.') }}">⚡ YASNO</a>{% endif %}
     {% if can('ai') %}<a href="{{ url_for('ai.chat') }}" class="{{ 'on' if ep.startswith('ai.') }}">✦ {{ _("ИИ") }}</a>{% endif %}
-    {% if can('settings') or can('logs') %}<a href="{{ url_for('settings_page') if can('settings') else url_for('logs.logs') }}" class="{{ 'on' if ep in ('settings_page', 'auth.users', 'companies_page', 'ai_settings_page') or ep.startswith('logs.') }}" title="{{ _("Настройки") }}">⚙</a>{% endif %}
+    {% if can('settings') or can('logs') %}<a href="{{ url_for('settings_page') if can('settings') else url_for('logs.logs') }}" class="{{ 'on' if ep in ('settings_page', 'auth.users', 'companies_page', 'ai_settings_page', 'wa.settings_page') or ep.startswith('logs.') }}" title="{{ _("Настройки") }}">⚙</a>{% endif %}
   </nav>
   <span class="spacer"></span>
   <div class="usermenu">

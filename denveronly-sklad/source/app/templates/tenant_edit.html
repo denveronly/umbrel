@@ -114,6 +114,7 @@
     <input name="position" value="{{ c.position or '' }}" placeholder="{{ _("Должность") }}">
     <input name="phone" value="{{ c.phone or '' }}" placeholder="{{ _("Телефон") }}" type="tel">
     <input name="email" value="{{ c.email or '' }}" placeholder="Email" type="email">
+    <label class="check" title="{{ _("Отправлять акты в WhatsApp на этот номер") }}" style="white-space:nowrap"><input type="checkbox" name="wa" value="1" {{ 'checked' if c.wa }}> WhatsApp</label>
     <span class="row" style="gap:4px">
       {% if c.phone %}<a class="btn sm ghost" href="tel:{{ c.phone|replace(' ', '') }}" title="{{ _("Позвонить") }}">📞</a>{% endif %}
       <button class="sm ghost" title="{{ _("Сохранить") }}">✓</button>

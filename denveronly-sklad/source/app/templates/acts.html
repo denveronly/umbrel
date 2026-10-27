@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_icons.html" import ico_pdf, ico_doc %}
+{% from "_icons.html" import ico_pdf, ico_doc, ico_wa %}
 {% block title %}{{ _("Акты") }}{% endblock %}
 {% block content %}
 <div class="row">
@@ -40,6 +40,8 @@
   <button class="sm ghost icob" name="fp" value="pdf|all" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|all" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
   <span class="muted">{{ _("Детализации") }}</span>
   <button class="sm ghost icob" name="fp" value="pdf|detail" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|detail" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
+  {% if wa_ready %}<button class="sm ghost icob" formaction="{{ url_for('wa.send_bulk') }}" title="{{ _("Отправить акты всем арендаторам в WhatsApp") }}"
+    onclick="return confirm({{ (_('Отправить акты за') ~ ' ' ~ period_label(period) ~ ' ' ~ _('всем арендаторам с телефоном WhatsApp') ~ ' (' ~ wa_count ~ ')?')|tojson|forceescape }})">{{ ico_wa() }}<small>{{ _("всем") }}</small></button>{% endif %}
 </form>
 {% endif %}
 
@@ -92,6 +94,10 @@
       <span class="btns">
         <button type="button" class="sm ghost gearbtn" title="{{ _("Настройки арендатора") }}" data-tid="{{ it.t.id }}" data-name="{{ it.t.name }}"
                 onclick="event.preventDefault(); event.stopPropagation(); openTenant(this)">⚙</button>
+        {% if wa_ready %}<form method="post" action="{{ url_for('wa.send_one') }}" onclick="event.stopPropagation()" style="margin:0">
+          <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
+          <button class="sm ghost icob" {{ 'disabled' if not it.wa }} title="{{ ('WhatsApp: ' ~ it.wa|join(', ')) if it.wa else _('Нет телефона с галочкой WhatsApp в контактных лицах') }}"
+            onclick="return confirm({{ (_('Отправить акт в WhatsApp') ~ ': ' ~ (it.wa|join(', ')) ~ '?')|tojson|forceescape }})">{{ ico_wa(14) }}</button></form>{% endif %}
         <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()" class="dlgrid">
           <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
           <span class="muted">{{ _("Акт") }}</span>
