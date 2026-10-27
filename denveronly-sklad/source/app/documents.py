@@ -91,9 +91,15 @@ def _party(p):
     bank = ", ".join(x for x in [f"банк {p['bank']}" if p.get("bank") else "", f"МФО {p['mfo']}" if p.get("mfo") else ""] if x)
     if bank:
         rows.append(bank[:1].upper() + bank[1:])
+    return rows + _contact_lines(p)
+
+
+def _contact_lines(p):
+    """Пошта й контактні особи компанії: «Бухгалтерія: Іваненко І., тел. …, e-mail …»."""
+    rows = []
     if p.get("email"):
         rows.append(f"E-mail: {p['email']}")
-    for x in p.get("contacts") or []:                    # контактні особи компанії: «Бухгалтерія: Іваненко І., тел. …, e-mail …»
+    for x in p.get("contacts") or []:
         body = ", ".join(v for v in (x.get("name"), f"тел. {x['phone']}" if x.get("phone") else "",
                                      f"e-mail {x['email']}" if x.get("email") else "") if v)
         if body or x.get("role"):
@@ -351,13 +357,13 @@ def act_pdf(act, part="all"):
         return tb
 
     def signatures(full=True):
+        # під «Від …» — лише назва сторони жирним; в акті ще пошта й контактні особи компанії
+        from xml.sax.saxutils import escape
+        left = [Paragraph("Від Орендодавця:", bold), Paragraph(f"<b>{escape(c.get('name') or '')}</b>", base)]
+        rightc = [Paragraph("Від Орендаря:", bold), Paragraph(f"<b>{escape(t.get('name') or '')}</b>", base)]
         if full:
-            left = [Paragraph("Від Орендодавця:", bold)] + [Paragraph(x, small) for x in _party(c)]
-            rightc = [Paragraph("Від Орендаря:", bold)] + [Paragraph(x, small) for x in _party(t)]
-        else:                                            # деталізація: під «Від …» — назва сторони жирним
-            from xml.sax.saxutils import escape
-            left = [Paragraph("Від Орендодавця:", bold), Paragraph(f"<b>{escape(c.get('name') or '')}</b>", base)]
-            rightc = [Paragraph("Від Орендаря:", bold), Paragraph(f"<b>{escape(t.get('name') or '')}</b>", base)]
+            left += [Paragraph(escape(x), small) for x in _contact_lines(c)]
+            rightc += [Paragraph(escape(x), small) for x in _contact_lines(t)]
         rows = [[left, rightc], ["", ""],
                 [Paragraph(_sign_line(c), base), Paragraph(_sign_line(t), base)],
                 [Paragraph("М.П.", small), Paragraph("М.П.", small)]]
@@ -486,12 +492,11 @@ def act_docx(act, part="all"):
             cell = sig.cell(0, col)
             cell.text = ""
             cell.paragraphs[0].add_run(label).bold = True
-            if full:
-                for x in _party(party):
-                    if x:                                    # порожні реквізити (компанію не вказано) пропускаємо
-                        cell.add_paragraph(x).runs[0].font.size = Pt(9)
-            elif party.get("name"):
+            if party.get("name"):                           # лише назва сторони жирним
                 cell.add_paragraph().add_run(party["name"]).bold = True
+            if full:
+                for x in _contact_lines(party):
+                    cell.add_paragraph(x).runs[0].font.size = Pt(9)
             sc = sig.cell(1, col)
             sc.text = ""
             sc.paragraphs[0].paragraph_format.space_before = Pt(24)
