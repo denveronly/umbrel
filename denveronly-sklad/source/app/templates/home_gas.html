@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Газ") }}{% endblock %}
+{% block head %}
+<style>
+.ggrid { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; }
+.ggrid th, .ggrid td { padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ggrid th { font-size: 11.5px; text-transform: none; letter-spacing: 0; }
+.ggrid th.z { text-align: center; background: color-mix(in srgb, #e8590c 8%, transparent); border-left: 2px solid color-mix(in srgb, #e8590c 50%, transparent); }
+.ggrid td.first, .ggrid th.first { border-left: 2px solid color-mix(in srgb, #e8590c 50%, transparent); }
+.ggrid td.c, .ggrid th.c { text-align: right; font-variant-numeric: tabular-nums; }
+.ggrid input { width: 92px; text-align: right; padding: 3px 5px; font-size: 13px; background: transparent; border-color: transparent; }
+.ggrid input:hover { border-color: var(--line); } .ggrid input:focus { background: var(--bg); border-color: var(--accent); }
+.ggrid tr.curp td { background-image: linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent), color-mix(in srgb, var(--accent) 7%, transparent)); }
+.ggrid td.neg { color: var(--warn); font-weight: 600; }
+.gm { display: grid; grid-template-columns: 1.4fr 1fr 0.8fr 0.5fr auto; gap: 6px; margin-top: 6px; align-items: center; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="row"><h1 style="margin:0">🔥 {{ _("Газ") }} <span class="muted" style="font-weight:400">· {{ site_name }}</span></h1><span class="spacer"></span>
+  <form method="get" class="row" style="gap:6px"><span class="muted">{{ _("Период") }}:</span>
+    <select name="months" onchange="this.form.submit()" style="width:auto">{% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}</select></form></div>
+<p class="muted">{{ _("Показания газовых счётчиков на конец месяца; расход — от предыдущего показания (или начального), сумма — расход всех счётчиков × цена газа месяца.") }}</p>
+
+<div class="kpis">
+  {% if last %}<div class="kpi"><small class="muted">{{ period_label(last.period) }}</small><b>{{ money(last.sum) }} {{ _("грн") }}</b><small class="muted">{{ num(last.total) }} м³</small></div>{% endif %}
+  <div class="kpi"><small class="muted">{{ _("С начала") }} {{ year.y }}</small><b>{{ money(year.sum) }} {{ _("грн") }}</b><small class="muted">{{ num(year.m3) }} м³</small></div>
+  <div class="kpi"><small class="muted">{{ _("Цена газа сейчас") }}</small><b>{{ money(cur_price) if cur_price is not none else '—' }}{% if cur_price is not none %} {{ _("грн/м³") }}{% endif %}</b>
+    <small class="muted">{% if cur_from %}{{ _("с") }} {{ period_label(cur_from) }}{% else %}{{ _("задайте цену ниже") }}{% endif %}</small></div>
+</div>
+
+{% if ms %}
+<form method="post" class="card" style="padding:0;overflow:auto">
+<table class="ggrid">
+  <thead>
+    <tr><th rowspan="2">{{ _("Месяц") }}</th>
+      {% for m in ms %}<th class="z" colspan="2">{{ m.name }}{% if m.serial %} <span class="muted" style="font-weight:400">№{{ m.serial }}</span>{% endif %}</th>{% endfor %}
+      <th class="c first" rowspan="2">{{ _("Всего, м³") }}</th><th class="c" rowspan="2">{{ _("цена") }}</th><th class="c" rowspan="2">{{ _("Сумма, грн") }}</th></tr>
+    <tr>{% for m in ms %}<th class="c first">{{ _("показание") }}</th><th class="c">{{ _("расход") }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>{% for r in rows %}
+    <tr class="{{ 'curp' if r.period == cur }}"><td><b>{{ period_label(r.period) }}</b></td>
+      {% for x in r.cells %}<td class="c first"><input name="v_{{ x.m.id }}_{{ r.period }}" inputmode="decimal" value="{{ x.v|plain }}" placeholder="—"></td>
+        <td class="c {{ 'neg' if x.cons is not none and x.cons < 0 }}">{{ num(x.cons) if x.cons is not none else '' }}</td>{% endfor %}
+      <td class="c first">{{ num(r.total) if r.total is not none else '' }}</td>
+      <td class="c muted">{{ money(r.price) if r.price is not none else '' }}</td>
+      <td class="c"><b>{{ money(r.sum) if r.sum is not none else '' }}</b></td></tr>
+  {% endfor %}</tbody>
+</table>
+<div class="row" style="padding:10px 12px"><span class="spacer"></span><button>{{ _("Сохранить") }}</button></div>
+</form>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Счётчики газа") }}</h2>
+  {% for m in ms %}
+  <form method="post" class="gm"><input type="hidden" name="action" value="meter"><input type="hidden" name="meter_id" value="{{ m.id }}">
+    <input name="name" value="{{ m.name }}" placeholder="{{ _("Название") }}">
+    <input name="serial" value="{{ m.serial or '' }}" placeholder="{{ _("Номер счётчика") }}">
+    <input name="initial" inputmode="decimal" value="{{ m.initial|plain }}" placeholder="{{ _("Начальное показание") }}" title="{{ _("Начальное показание") }}">
+    <input name="sort" type="number" value="{{ m.sort }}" title="{{ _("Порядок") }}">
+    <span class="row" style="gap:4px"><button class="sm ghost">✓</button>
+      <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _('Отключить счётчик? Показания останутся в базе.')|tojson }})">×</button></span>
+  </form>
+  {% endfor %}
+  <form method="post" class="gm"><input type="hidden" name="action" value="meter">
+    <input name="name" placeholder="{{ _("Котёл, плита, баня…") }}" required>
+    <input name="serial" placeholder="{{ _("Номер счётчика") }}">
+    <input name="initial" inputmode="decimal" placeholder="{{ _("Начальное показание") }}">
+    <input name="sort" type="number" value="{{ (ms|length + 1) * 10 }}">
+    <button class="sm">＋ {{ _("Добавить") }}</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Цена газа") }}</h2>
+  <form method="post" class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+    <input type="hidden" name="action" value="tariff">
+    <label>{{ _("Цена, грн/м³") }}<input name="price" inputmode="decimal" value="{{ cur_price|plain if cur_price is not none else '' }}" style="width:120px"></label>
+    <label>{{ _("Действует с месяца") }}<input type="month" name="from_period" value="{{ cur }}" style="width:auto"></label>
+    <button class="sm">{{ _("Сохранить тариф") }}</button>
+  </form>
+  {% if tariffs %}<div class="tablewrap" style="margin-top:10px"><table>
+    <thead><tr><th>{{ _("С месяца") }}</th><th class="n">{{ _("грн/м³") }}</th></tr></thead>
+    <tbody>{% for t in tariffs %}<tr><td>{{ period_label(t.from_period) }}</td><td class="n">{{ money(t.price) if t.price is not none else '—' }}</td></tr>{% endfor %}</tbody>
+  </table></div>{% endif %}
+</div>
+{% endblock %}

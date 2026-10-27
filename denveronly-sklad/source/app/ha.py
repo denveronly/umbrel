@@ -224,7 +224,16 @@ def close_month(sn, period, state=None, force=False):
     if cons is None and reading is None:
         return None
     target, written = sn.get("target") or "", None
-    if target in ("hd:0", "hn:0"):                    # «Дім»: показник зони день / ніч на кінець місяця
+    if target.startswith("g:"):                       # газовий лічильник об'єкта «дім»
+        import homegas
+        mid = int(target[2:])
+        val = reading
+        if sn.get("kind") == "monthly" and cons is not None:
+            prev = homegas.last_before(mid, period, db)
+            val = calc.r2((prev or 0) + cons)
+        if homegas.write_reading(mid, period, val):
+            written = target
+    elif target in ("hd:0", "hn:0"):                    # «Дім»: показник зони день / ніч на кінець місяця
         import homeel
         zone = "day" if target == "hd:0" else "night"
         val = reading
@@ -310,6 +319,11 @@ def _require():
         abort(403)
 
 
+def _gas_meters():
+    import homegas
+    return homegas.meters()
+
+
 def _months_list(n=12):
     out, p = [], _period(date.today())
     for _i in range(n):
@@ -352,7 +366,11 @@ def page():
             base = _last_in(sn["entity"], calc.prev_period(cur))
             month = calc.r2(v - base) if v is not None and base is not None else None
         tg = sn.get("target") or ""
-        if tg in ("hd:0", "hn:0"):
+        if tg.startswith("g:"):
+            gm = db.execute("SELECT name FROM gas_meters WHERE id=?", (int(tg[2:]),)).fetchone() \
+                if db.execute("SELECT 1 FROM sqlite_master WHERE name='gas_meters'").fetchone() else None
+            tlabel = "🔥 " + _("Газ") + f": {gm['name']}" if gm else None
+        elif tg in ("hd:0", "hn:0"):
             tlabel = ("☀ " + _("Дом: день")) if tg == "hd:0" else ("🌙 " + _("Дом: ночь"))
         elif tg.startswith("s:"):
             ln = db.execute("SELECT name FROM power_lines WHERE id=?", (int(tg[2:]),)).fetchone()
@@ -373,6 +391,7 @@ def page():
         status = {}
     return render_template("ha.html", c=c, rows=rows, err=err, periods=periods[1:], hist=hist, status=status,
                            srcs=([{"value": "hd:0", "label": "☀ " + _("Дом: день")}, {"value": "hn:0", "label": "🌙 " + _("Дом: ночь")}]
+                                 + [{"value": f"g:{m['id']}", "label": "🔥 " + _("Газ") + f": {m['name']}"} for m in _gas_meters()]
                                  if SITES[current_site()].get("kind") == "home" else [])
                            + [{"value": f"s:{l['id']}", "label": "☀ " + _("Солнце (выработка за месяц)") + f" — {l['name']}"}
                                  for l in db.execute("SELECT id, name FROM power_lines WHERE active=1 AND has_solar=1 ORDER BY sort, id")]
@@ -434,7 +453,7 @@ def sensor_save():
             return redirect(url_for("ha.page"))
         tgt = f.get("target") or ""
         item = {"entity": eid, "name": (f.get("name") or eid).strip(), "kind": f.get("kind") if f.get("kind") in KINDS else "total",
-                "unit": (f.get("unit") or "").strip(), "target": tgt if re.fullmatch(r"[lms]:\d+|h[dn]:0", tgt) else ""}
+                "unit": (f.get("unit") or "").strip(), "target": tgt if re.fullmatch(r"[lmsg]:\d+|h[dn]:0", tgt) else ""}
         for i, s in enumerate(sensors):
             if s["entity"] == eid:
                 sensors[i] = item

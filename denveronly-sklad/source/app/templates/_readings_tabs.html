@@ -1,5 +1,6 @@
 {% if SITES[cur_site].kind == 'home' %}<div class="tabs">
   <a href="{{ url_for('home.page') }}">⚡ {{ _("Электроэнергия") }}</a>
+  <a href="{{ url_for('gas.page') }}">🔥 {{ _("Газ") }}</a>
   <a href="{{ url_for('ha.page') }}" class="on">🏠 HA</a>
 </div>{% else %}<div class="tabs">
   <a href="{{ url_for('lines.table') }}" class="{{ 'on' if request.endpoint in ('lines.table', 'lines.manage') }}">⚡ {{ _("Электрические показания") }}</a>

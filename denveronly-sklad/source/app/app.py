@@ -28,6 +28,7 @@ import guard
 import ha
 import whatsapp
 import homeel
+import homegas
 from audit import log
 from i18n import _
 
@@ -50,6 +51,7 @@ guard.init_app(app)
 ha.init_app(app)
 whatsapp.init_app(app)
 homeel.init_app(app)
+homegas.init_app(app)
 sheet.init_app(app)
 
 
@@ -101,7 +103,7 @@ def plain(x):
 
 
 # розділи, на які можна повернутись після перемикання об'єкта (картки конкретних записів — ні: в іншого об'єкта свої id)
-SITE_SECTIONS = ("/", "/home", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
+SITE_SECTIONS = ("/", "/home", "/gas", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
                  "/logs", "/settings", "/companies", "/users")
 
 
@@ -114,8 +116,8 @@ def switch_site(sid):
     sec = "/" + nxt.split("?")[0].strip("/").split("/")[0]
     sec = sec if sec in SITE_SECTIONS else "/"
     if SITES[sid].get("kind") == "home":             # «Дім» — лише електрика, HA і налаштування
-        sec = sec if sec in ("/home", "/ha", "/settings", "/logs", "/users") else "/home"
-    elif sec == "/home":
+        sec = sec if sec in ("/home", "/gas", "/ha", "/settings", "/logs", "/users") else "/home"
+    elif sec in ("/home", "/gas"):
         sec = "/"
     resp = redirect(sec + ("?view=" + request.args["view"] if sec == "/tenants" and request.args.get("view") else ""))
     resp.set_cookie(SITE_COOKIE, sid, max_age=31536000, samesite="Lax")

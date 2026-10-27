@@ -14,6 +14,7 @@ SITES = {
     "base": {"name": "База", "icon": "warehouse", "dir": ""},
     "office": {"name": "Офис", "icon": "house", "dir": os.path.join("sites", "office")},
     "home": {"name": "Дом", "icon": "home", "dir": os.path.join("sites", "home"), "kind": "home"},   # лише електрика день/ніч
+    "strakh": {"name": "Страхолесье", "icon": "home", "dir": os.path.join("sites", "strakh"), "kind": "home"},   # + газ
 }
 MAIN_SITE = "base"
 SITE_COOKIE = "site"
