@@ -318,7 +318,7 @@ def act_pdf(act, part="all"):
                Spacer(1, 10 * mm), signatures()]
 
     # ---- аркуш 2: деталізація ----
-    if lay["util"]:
+    if lay["util"] and part != "act":
         if el:
             el.append(PageBreak())
         el += header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ",
@@ -443,7 +443,7 @@ def act_docx(act, part="all"):
         signatures()
 
     # ---- аркуш 2: деталізація ----
-    if lay["util"]:
+    if lay["util"] and part != "act":
         if part != "detail":
             doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
         header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ", f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])

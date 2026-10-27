@@ -1287,4 +1287,6 @@ EN = {
     'накопительный счётчик': 'cumulative meter',
     'свои показания (вкладка «Показатели услуг»)': 'own readings (“Service readings” tab)',
     'сумма, грн': 'amount, UAH',
+    'Один архив: папка на каждую компанию, в ней акты и детализации отдельными файлами': 'One archive: a folder per company with acts and details as separate files',
+    'Всё одним архивом': 'Everything in one archive',
 }

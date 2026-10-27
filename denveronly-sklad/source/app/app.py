@@ -1330,13 +1330,19 @@ def _send_act(act, fmt, inline=False, part="all"):
 def _part():
     fp = request.values.get("fp", "")
     part = fp.split("|")[1] if "|" in fp else request.values.get("part")
-    return "detail" if part == "detail" else "all"
+    return part if part in ("detail", "both") else "all"
 
 
 def _fmt():
     fp = request.values.get("fp", "")
     f = fp.split("|")[0] if fp else request.values.get("fmt", "pdf")
     return "docx" if f == "docx" else "pdf"
+
+
+def _folder(name):
+    """Назва папки компанії в архіві: лапки -> «», без недопустимих у Windows символів."""
+    n = re.sub(r'"([^"]*)"?', r"«\1»", name or "Без компанії")
+    return re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|\r\n]+', " ", n)).strip().strip(".")[:80] or "Без компанії"
 
 
 def _zip_acts(act_ids, fmt, name, part="all"):
@@ -1346,9 +1352,15 @@ def _zip_acts(act_ids, fmt, name, part="all"):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for aid in act_ids:
             act = load_act(aid)
-            if part == "detail" and not calc.act_layout(act["data"])["util"]:
+            has_util = bool(calc.act_layout(act["data"])["util"])
+            folder = _folder(act["data"]["company"].get("company_name"))
+            if part == "both":                             # акт і деталізація — окремими файлами в папці компанії
+                z.writestr(f"{folder}/{_fname(act, fmt, 'act')}", _render(act, fmt, "act"))
+                if has_util:
+                    z.writestr(f"{folder}/{_fname(act, fmt, 'detail')}", _render(act, fmt, "detail"))
+                continue
+            if part == "detail" and not has_util:
                 continue                                   # без комунальних — деталізації немає
-            folder = re.sub(r'[\\/:*?"<>|]+', "_", act["data"]["company"].get("company_name") or "Без компании")
             z.writestr(f"{folder}/{_fname(act, fmt, part)}", _render(act, fmt, part))
     buf.seek(0)
     return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=name)
@@ -1373,7 +1385,7 @@ def acts_zip():
 
 
 def _zip_name(period, fmt, part, who=None):
-    kind = "Деталізації" if part == "detail" else "Акти"
+    kind = {"detail": "Деталізації", "both": "Акти та деталізації"}.get(part, "Акти")
     return f"{kind} {calc.period_label(period)}{' — ' + who if who else ''} ({fmt.upper()}).zip"
 
 

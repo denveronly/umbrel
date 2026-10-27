@@ -34,6 +34,8 @@
 <form method="post" action="{{ url_for('acts_make_company') }}" class="card archbar">
   <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="all">
   <b>{{ _("Архив за") }} {{ period_label(period) }}</b><span class="muted">{{ _("все арендаторы, по папкам компаний") }}</span><span class="spacer"></span>
+  <span class="muted" title="{{ _("Один архив: папка на каждую компанию, в ней акты и детализации отдельными файлами") }}"><b>{{ _("Всё одним архивом") }}</b></span>
+  <button class="sm icob" name="fp" value="pdf|both" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm icob" name="fp" value="docx|both" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
   <span class="muted">{{ _("Акты + дет.") }}</span>
   <button class="sm ghost icob" name="fp" value="pdf|all" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|all" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
   <span class="muted">{{ _("Детализации") }}</span>
@@ -124,6 +126,12 @@
           <tr><td>{{ l.name }}</td><td class="n">{{ num(l.qty) }} {{ l.unit }}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
         {% else %}<tr><td colspan="4" class="muted">{{ _("Нечего начислять") }}.</td></tr>{% endfor %}</tbody>
         <tfoot>
+          {% set rent_sum = it.lines|selectattr('group', 'equalto', 'rent')|sum(attribute='sum') %}
+          {% set svc_sum = (it.lines|sum(attribute='sum')) - rent_sum %}
+          {% if it.lines %}
+          <tr class="muted"><td colspan="3" class="n">{{ _("Аренда") }}</td><td class="n">{{ money(rent_sum) }}</td></tr>
+          <tr><td colspan="3" class="n"><b>{{ _("Услуги") }}</b></td><td class="n"><b>{{ money(svc_sum) }}</b></td></tr>
+          {% endif %}
           {% if it.totals.vat_rate %}
           <tr><td colspan="3" class="n">{{ _("Без ПДВ") }}</td><td class="n">{{ money(it.totals.net) }}</td></tr>
           <tr><td colspan="3" class="n">{{ _("ПДВ") }} {{ it.totals.vat_rate }}%</td><td class="n">{{ money(it.totals.vat) }}</td></tr>
