@@ -561,13 +561,18 @@ PARTY_FIELDS = ("name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "part
 def tenant_snapshot(tenant, db=None):
     """Орендар для акта. Додатковий договір (parent_id) — реквізити з основної картки, договір і склади — свої."""
     d = dict(tenant)
+    base = tenant
     if "parent_id" in tenant.keys() and tenant["parent_id"]:
         db = db or get_db()
         p = db.execute("SELECT * FROM tenants WHERE id=?", (tenant["parent_id"],)).fetchone()
         if p:
+            base = p
             for f in PARTY_FIELDS:
                 if f in p.keys():
                     d[f] = p[f]
+    d["display_name"] = tenant["name"]                       # назва в програмі
+    legal = base["legal_name"] if "legal_name" in base.keys() else None
+    d["name"] = (legal or "").strip() or base["name"]          # в акт — повна назва ТОВ / ФОП
     return d
 
 

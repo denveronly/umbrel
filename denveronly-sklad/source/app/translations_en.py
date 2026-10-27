@@ -1311,4 +1311,8 @@ EN = {
     'Создать карточку ещё одного договора этого арендатора?': 'Create a card for another contract of this tenant?',
     'Отдельный акт по своим складам и своим долям услуг': 'Separate act for its own warehouses and service shares',
     'Ещё один договор': 'Another contract',
+    'Название в программе': 'Name in the app',
+    'короткое, для списков; в акты не идёт': 'short, for lists; not used in acts',
+    'Берётся из основной карточки': 'Taken from the main card',
+    'Майстер': 'Master',
 }

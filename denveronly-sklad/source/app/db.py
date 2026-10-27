@@ -535,7 +535,7 @@ MIGRATIONS = {
                  "main_src": "TEXT"},   # загальний лічильник для послуги «частка»; main_src — лічильник лінії "l:<id>" / "m:<id>"   # загальний лічильник для послуги «частка»
     "line_meters": {"src": "TEXT"},   # ввідний = наявний лічильник іншої лінії: "m:<id>" | "l:<id>"
     "power_lines": {"has_solar": "INTEGER NOT NULL DEFAULT 1",
-                    "parent_id": "INTEGER"},   # сублінія: живиться від іншої лінії, її ввід — споживач на тій лінії   # сонячна генерація на лінії (для субліній — вимкнути)
+                    "parent_id": "INTEGER", "legal_name": "TEXT"},   # legal_name — назва в актах (порожньо = як у програмі)   # сублінія: живиться від іншої лінії, її ввід — споживач на тій лінії   # сонячна генерація на лінії (для субліній — вимкнути)
     "users": {"perms": "TEXT NOT NULL DEFAULT 'economics'", "pin_hash": "TEXT"},   # pin_hash — PIN адміністратора для видалення   # права оператора (через кому); раніше Економіку бачили всі
     "warehouses": {"rate_vat": "REAL", "price_m2": "REAL", "category_id": "INTEGER", "adjacent_area": "REAL",
                    "row_no": "TEXT", "description": "TEXT", "tenant_since": "TEXT"},
@@ -544,7 +544,7 @@ MIGRATIONS = {
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
                 "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT",
-                "parent_id": "INTEGER"},   # parent_id — додатковий договір того ж орендаря (реквізити з основної картки)
+                "parent_id": "INTEGER", "legal_name": "TEXT"},   # legal_name — назва в актах (порожньо = як у програмі)   # parent_id — додатковий договір того ж орендаря (реквізити з основної картки)
     "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
     "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT", "mfo": "TEXT", "ipn": "TEXT",

@@ -117,7 +117,7 @@ def month_totals(period, today_period, detail=False):
                 lines, totals, _w = calc.build_act(a["tenant_id"], period)
                 pt, src = active[a["tenant_id"]]["payment_type"], "draft_recalc"
         it = _add(res, pt, lines, totals)
-        it.update(tenant_id=a["tenant_id"], name=(d.get("tenant") or {}).get("name") or "?", src=src,
+        it.update(tenant_id=a["tenant_id"], name=(d.get("tenant") or {}).get("display_name") or (d.get("tenant") or {}).get("name") or "?", src=src,
                   act_id=a["id"], number=a["number"])
         items.append(it)
         res["acts"] += 1

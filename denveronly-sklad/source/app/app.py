@@ -584,7 +584,7 @@ def tenants():
     return resp
 
 
-TENANT_FIELDS = ["name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "party_type", "passport_series", "passport_number",
+TENANT_FIELDS = ["name", "legal_name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "party_type", "passport_series", "passport_number",
                  "passport_issued", "contact", "director_position", "basis", "payment_type", "contract_no",
                  "contract_date", "contract_end", "deposit_date", "deposit_note", "activity", "note"]
 
@@ -605,6 +605,8 @@ def tenant_add_contract(tid):
     new = db.execute(f"INSERT INTO tenants({', '.join(cols)}, name, company_id, active, parent_id) "
                      f"VALUES ({', '.join('?' * len(cols))}, ?, ?, 1, ?)",
                      vals + [f"{root['name']} (договір {n + 1})", root["company_id"], root["id"]]).lastrowid
+    if not (root["legal_name"] or "").strip():               # повна назва для актів — та сама, що в основній картці
+        db.execute("UPDATE tenants SET legal_name=? WHERE id=?", (root["name"], new))
     db.commit()
     log("Добавлен договор арендатора", f"{root['name']}: договор {n + 1}")
     flash(_("Создана карточка ещё одного договора. Укажите № и дату договора, добавьте склады и доли услуг."))
