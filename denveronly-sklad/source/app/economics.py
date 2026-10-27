@@ -102,6 +102,7 @@ def month_totals(period, today_period, detail=False):
     db = get_db()
     res = {k: 0.0 for k in FORMS}
     res.update(vat=0.0, total=0.0, acts=0, estimated=0, rent=0.0, util=0.0)
+    res["svc"] = {}                                   # комунальні по послугах: {назва: {sum, qty, unit}}
     items = []
     seen = set()
     future = period >= today_period
@@ -135,6 +136,8 @@ def month_totals(period, today_period, detail=False):
     for k in list(res):
         if isinstance(res[k], float):
             res[k] = calc.r2(res[k])
+    for v in res["svc"].values():
+        v["sum"], v["qty"] = calc.r2(v["sum"]), calc.r2(v["qty"])
     if detail:
         order = {"cash": 0, "bank": 1, "bank_vat": 2}
         res["items"] = sorted(items, key=lambda i: (order.get(i["pt"], 9), i["name"].lower()))
@@ -153,6 +156,11 @@ def _add(res, pt, lines, totals):
             rent += l["sum"] * k
         else:
             util += l["sum"] * k
+            name = l.get("service") or l.get("name") or "?"
+            sv = res["svc"].setdefault(name, {"sum": 0.0, "qty": 0.0, "unit": l.get("unit") or ""})
+            sv["sum"] += l["sum"] * k
+            if l.get("unit") and l.get("unit") != "послуга":
+                sv["qty"] += l.get("qty") or 0
     res["rent"] += rent
     res["util"] += util
     return {"pt": pt, "rent": calc.r2(rent), "util": calc.r2(util), "total": totals["total"]}
@@ -206,6 +214,27 @@ def economics():
         rate, rate_date = rate_on(min(first, today))
         rows.append({"period": p, "label": i18n.period_label_ui(p), **t, "rate": rate, "rate_date": rate_date,
                      "usd": calc.r2(t["total"] / rate) if rate else None})
+    # ---- комунальні: по послугах і місяцях + порівняння з рахунками YASNO за електрику ----
+    order = {r["name"]: (r["sort"], r["name"]) for r in db.execute("SELECT name, sort FROM services")}
+    svc_names = sorted({n for r in rows for n in r["svc"]}, key=lambda n: order.get(n, (9999, n)))
+    util_rows = [{"name": n, "unit": next((r["svc"][n]["unit"] for r in rows if n in r["svc"]), ""),
+                  "cells": [r["svc"].get(n) for r in rows]} for n in svc_names]
+    util_shift = s.get("util_shift", "1") == "1"
+    yasno = {}
+    try:
+        for b in db.execute("SELECT period, SUM(amount) AS amount, SUM(kwh) AS kwh FROM yasno_bills "
+                            "WHERE planned=0 AND period IS NOT NULL GROUP BY period"):
+            yasno[b["period"]] = {"amount": b["amount"], "kwh": b["kwh"]}
+    except Exception:  # noqa — таблиці ще немає
+        pass
+    for r in rows:
+        up = calc.prev_period(r["period"]) if util_shift else r["period"]
+        r["uperiod"] = up
+        el = [v for v in r["svc"].values() if "квт" in (v["unit"] or "").lower()]
+        r["el_sum"] = calc.r2(sum(v["sum"] for v in el))
+        r["el_kwh"] = calc.r2(sum(v["qty"] for v in el))
+        r["yasno"] = yasno.get(up)
+
     now_rate, now_rate_date = rate_on(today)
     sel = next((r for r in rows if r["period"] == cur), rows[-1])
     sel["items"] = month_totals(sel["period"], cur, detail=True)["items"]
@@ -216,6 +245,7 @@ def economics():
              "total": [r["total"] for r in rows], "usd": [r["usd"] for r in rows],
              "rate": [r["rate"] for r in rows], "estimated": [bool(r["estimated"]) for r in rows]}
     return render_template("economics.html", rows=rows, sel=sel, sums=sums, chart=chart, months=n, cur=cur,
+                           util_rows=util_rows,
                            now_rate=now_rate, now_rate_date=now_rate_date, fx_error=fx_error,
                            util_shift=s.get("util_shift", "1") == "1", today=today.isoformat())
 

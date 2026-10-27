@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.45.4"
+version: "1.46.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Акти: у рядках послуг «частка» замість «0,10 послуга» — поле «10 %», яке можна змінити прямо з акта (діє з місяця комунальних і далі).
+  Економіка: блок «Комунальні» — виставлено орендарям по послугах і місяцях, електроенергія проти рахунків YASNO. У «З чого склалось» — рядок «Усього».
 dependencies: []
 path: ""
 defaultUsername: ""

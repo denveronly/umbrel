@@ -103,6 +103,9 @@ td.est { color: var(--muted); }
         <td class="n">{{ money(it.rent) }}</td><td class="n">{{ money(it.util) if it.util else '' }}</td><td class="n">{{ money(it.total) }}</td></tr>
       {% endfor %}
     </tbody>{% endif %}{% endfor %}
+    <tfoot><tr class="ptrow"><td colspan="3"><b>{{ _("Всего") }}</b> <span class="muted">({{ sel['items']|length }})</span></td>
+      <td class="n"><b>{{ money(sel['items']|sum(attribute='rent')) }}</b></td><td class="n"><b>{{ money(sel['items']|sum(attribute='util')) }}</b></td>
+      <td class="n"><b>{{ money(sel['items']|sum(attribute='total')) }}</b></td></tr></tfoot>
   </table></div>
   <p class="muted">{{ _("Сумма месяца = аренда за этот месяц + коммунальные из акта, поэтому может быть больше, чем «Разом» в таблице арендаторов (там только аренда). Утверждённые акты — как зафиксированы; черновики текущего месяца пересчитываются по актуальным ценам и складам.") }}</p>
 </details>
@@ -129,6 +132,39 @@ td.est { color: var(--muted); }
     <p class="muted" style="margin:0 0 6px">{{ _("на 1-е число месяца") }}</p>
     <div class="chart" id="ch-rate"></div>
   </div>
+</div>
+
+<!-- комунальні -->
+<div class="card" id="util">
+  <h2 style="margin-top:0">{{ _("Коммунальные") }} <span class="muted" style="font-weight:400">· {{ _("в актах за") }} {{ sel.label }} ({{ _("потребление") }} {{ period_label(sel.uperiod) }})</span></h2>
+  <div class="kpis">
+    <div class="kpi"><small class="muted">{{ _("Выставлено арендаторам") }}</small><b>{{ money(sel.util) }}</b><small class="muted">{{ _("все коммунальные и эксплуатационные") }}</small></div>
+    <div class="kpi"><small class="muted">{{ _("Электроэнергия выставлено") }}</small><b>{{ money(sel.el_sum) }}</b><small class="muted">{{ num(sel.el_kwh) }} {{ _("кВт·год") }}</small></div>
+    {% if sel.yasno %}
+    <div class="kpi"><small class="muted">{{ _("Счёт YASNO") }} · {{ period_label(sel.uperiod) }}</small><b>{{ money(sel.yasno.amount) }}</b><small class="muted">{{ num(sel.yasno.kwh) if sel.yasno.kwh else '—' }} {{ _("кВт·год") }}</small></div>
+    {% set diff = sel.el_sum - (sel.yasno.amount or 0) %}
+    <div class="kpi {{ 'kgood' if diff >= 0 else 'kbad' }}"><small>{{ _("Разница (выставлено − YASNO)") }}</small><b>{{ money(diff) }}</b>
+      {% if sel.yasno.kwh %}<small>{{ num(sel.el_kwh - sel.yasno.kwh) }} {{ _("кВт·год") }}</small>{% endif %}</div>
+    {% endif %}
+  </div>
+  {% if util_rows %}
+  <div class="tablewrap" style="margin-top:10px"><table>
+    <thead><tr><th>{{ _("Услуга") }}</th>{% for r in rows|reverse %}<th class="n {{ 'curm' if r.period == sel.period }}">{{ r.label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for u in util_rows %}<tr><td><b>{{ u.name }}</b>{% if u.unit and u.unit != 'послуга' %} <span class="muted">{{ u.unit }}</span>{% endif %}</td>
+        {% for c in u.cells|reverse %}<td class="n">{% if c %}{{ money(c.sum) }}{% if c.qty and u.unit != 'послуга' %}<br><span class="muted">{{ num(c.qty) }}</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td>{{ _("Коммунальные всего") }}</td>{% for r in rows|reverse %}<td class="n"><b>{{ money(r.util) }}</b></td>{% endfor %}</tr>
+      {% if rows|selectattr('yasno')|list %}
+      <tr><td>{{ _("Счёт YASNO (электроэнергия)") }}</td>{% for r in rows|reverse %}<td class="n">{% if r.yasno %}{{ money(r.yasno.amount) }}<br><span class="muted">{{ num(r.yasno.kwh) if r.yasno.kwh else '' }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}</tr>
+      <tr><td>{{ _("Электроэнергия: выставлено − YASNO") }}</td>{% for r in rows|reverse %}<td class="n">{% if r.yasno %}{% set d = r.el_sum - (r.yasno.amount or 0) %}<span class="{{ 'warnt' if d < 0 }}">{{ money(d) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}</tr>
+      {% endif %}
+    </tfoot>
+  </table></div>
+  <p class="muted">{{ _("Суммы — как в актах (с ПДВ для арендаторов с ПДВ). Под суммой — количество (кВт·год, м³, т…). Счёт YASNO — за месяц потребления (коммунальные в акте за ноябрь — это октябрь).") }}</p>
+  {% else %}<p class="muted">{{ _("Коммунальных в актах за эти месяцы нет.") }}</p>{% endif %}
 </div>
 
 <!-- таблиця -->
