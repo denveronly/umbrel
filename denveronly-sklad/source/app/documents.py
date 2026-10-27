@@ -182,11 +182,19 @@ def _intro(act):
             + (f" згідно з {contract}" if contract else "") + ":")
 
 
-def _detail_intro(act):
+def _detail_intro_parts(act):
+    """Вступ деталізації частинами [(текст, жирний)] — назви сторін жирним."""
     d = act["data"]
     contract = _contract(act)
-    return (f"Орендодавець: {_company(act)['name'] or ''}. Орендар: {d['tenant']['name']}. "
-            f"Період споживання: {_ulabel(act)}." + (f" Підстава: Договір{contract[len('Договором'):]}." if contract else ""))
+    return [("Орендодавець: ", False), (_company(act)["name"] or "", True), (". Орендар: ", False),
+            (d["tenant"]["name"], True),
+            (f". Період споживання: {_ulabel(act)}." + (f" Підстава: Договір{contract[len('Договором'):]}." if contract else ""),
+             False)]
+
+
+def _detail_intro(act):
+    from xml.sax.saxutils import escape
+    return "".join(f"<b>{escape(t)}</b>" if b else escape(t) for t, b in _detail_intro_parts(act))
 
 
 def _vat_rate(act):
@@ -292,6 +300,11 @@ def act_pdf(act, part="all"):
     if "DejaVu" not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(TTFont("DejaVu", _font("DejaVuSans.ttf")))
         pdfmetrics.registerFont(TTFont("DejaVu-Bold", _font("DejaVuSans-Bold.ttf")))
+        from reportlab.lib.fonts import addMapping            # щоб <b>…</b> у тексті брав жирний DejaVu
+        addMapping("DejaVu", 0, 0, "DejaVu")
+        addMapping("DejaVu", 1, 0, "DejaVu-Bold")
+        addMapping("DejaVu", 0, 1, "DejaVu")
+        addMapping("DejaVu", 1, 1, "DejaVu-Bold")
 
     base = ParagraphStyle("b", fontName="DejaVu", fontSize=9, leading=12)
     small = ParagraphStyle("s", parent=base, fontSize=8, leading=10)
@@ -341,9 +354,10 @@ def act_pdf(act, part="all"):
         if full:
             left = [Paragraph("Від Орендодавця:", bold)] + [Paragraph(x, small) for x in _party(c)]
             rightc = [Paragraph("Від Орендаря:", bold)] + [Paragraph(x, small) for x in _party(t)]
-        else:
-            left = [Paragraph("Від Орендодавця:", bold)]
-            rightc = [Paragraph("Від Орендаря:", bold)]
+        else:                                            # деталізація: під «Від …» — назва сторони жирним
+            from xml.sax.saxutils import escape
+            left = [Paragraph("Від Орендодавця:", bold), Paragraph(f"<b>{escape(c.get('name') or '')}</b>", base)]
+            rightc = [Paragraph("Від Орендаря:", bold), Paragraph(f"<b>{escape(t.get('name') or '')}</b>", base)]
         rows = [[left, rightc], ["", ""],
                 [Paragraph(_sign_line(c), base), Paragraph(_sign_line(t), base)],
                 [Paragraph("М.П.", small), Paragraph("М.П.", small)]]
@@ -379,7 +393,7 @@ def act_pdf(act, part="all"):
         el += [Paragraph(_detail_intro(act), base), Spacer(1, 3 * mm)]
         el.append(table(DETAIL_HEAD, _detail_rows(lay, act), [8, 41, 27, 27, 22, 17, 19, 19], 4))
         el += [Spacer(1, 2 * mm), totals(_detail_totals_rows(act, lay)), Spacer(1, 3 * mm),
-               Paragraph(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
+               Paragraph(f"Сума послуг з обслуговування: {amount_in_words(lay['util_total'])}"
                          + (f", у т.ч. ПДВ {fmt_money(lay['util_vat'])} грн." if lay["util_vat"] else ", без ПДВ."),
                          base),
                Paragraph(_prices_note(act), small),
@@ -476,6 +490,8 @@ def act_docx(act, part="all"):
                 for x in _party(party):
                     if x:                                    # порожні реквізити (компанію не вказано) пропускаємо
                         cell.add_paragraph(x).runs[0].font.size = Pt(9)
+            elif party.get("name"):
+                cell.add_paragraph().add_run(party["name"]).bold = True
             sc = sig.cell(1, col)
             sc.text = ""
             sc.paragraphs[0].paragraph_format.space_before = Pt(24)
@@ -501,11 +517,14 @@ def act_docx(act, part="all"):
         if part != "detail":
             doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
         header(["ПОСЛУГИ З ОБСЛУГОВУВАННЯ", f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
-        para(_detail_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        ip = doc.add_paragraph()
+        ip.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        for txt, b in _detail_intro_parts(act):
+            ip.add_run(txt).bold = b
         table(DETAIL_HEAD, _detail_rows(lay, act), [8, 41, 27, 27, 22, 17, 19, 19], 4)
         for a, b in _detail_totals_rows(act, lay):
             para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
-        para(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
+        para(f"Сума послуг з обслуговування: {amount_in_words(lay['util_total'])}"
              + (f", у т.ч. ПДВ {fmt_money(lay['util_vat'])} грн." if lay["util_vat"] else ", без ПДВ."))
         para(_prices_note(act), size=9)
         signatures(full=False)
