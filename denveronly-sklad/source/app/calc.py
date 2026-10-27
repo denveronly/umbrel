@@ -99,6 +99,21 @@ def tenancies(wid, db=None):
                     "price_m2": w["price_m2"], "area": w["area"], "current": True})
     if out:
         out[0]["start"] = None      # до першого відомого орендаря вважаємо, що склад був у нього (дані до ведення історії)
+    # склад перейшов на інший договір того ж орендаря — з початку місяця переходу він уже в новому договорі
+    # (інакше місяць, у якому переносили склади, лишився б у старому договорі)
+    if len(out) > 1:
+        try:
+            root = {r["id"]: r["parent_id"] or r["id"] for r in db.execute("SELECT id, parent_id FROM tenants")}
+        except Exception:
+            root = {}
+        for a, b in zip(out, out[1:]):
+            if a["tid"] and b["tid"] and a["tid"] != b["tid"] and b["start"] \
+                    and root.get(a["tid"], a["tid"]) == root.get(b["tid"], b["tid"]):
+                from datetime import date as _d, timedelta as _td
+                first = b["start"][:7] + "-01"
+                b["start"] = first
+                if a["end"] is None or a["end"] >= first:
+                    a["end"] = (_d.fromisoformat(first) - _td(days=1)).isoformat()
     return out
 
 
