@@ -571,8 +571,9 @@ def tenant_snapshot(tenant, db=None):
                 if f in p.keys():
                     d[f] = p[f]
     d["display_name"] = tenant["name"]                       # назва в програмі
-    legal = base["legal_name"] if "legal_name" in base.keys() else None
-    d["name"] = (legal or "").strip() or base["name"]          # в акт — повна назва ТОВ / ФОП
+    own = (tenant["legal_name"] or "").strip() if "legal_name" in tenant.keys() else ""
+    legal = (base["legal_name"] or "").strip() if "legal_name" in base.keys() else ""
+    d["name"] = own or legal or base["name"]                   # в акт — повна назва ТОВ / ФОП (своя або з основної картки)
     return d
 
 

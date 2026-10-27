@@ -1315,4 +1315,5 @@ EN = {
     'короткое, для списков; в акты не идёт': 'short, for lists; not used in acts',
     'Берётся из основной карточки': 'Taken from the main card',
     'Майстер': 'Master',
+    'Пусто — как в основной карточке': 'Empty — as in the main card',
 }

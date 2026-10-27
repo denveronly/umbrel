@@ -35,8 +35,8 @@
     <label class="seg"><input type="radio" name="party_type" value="person" {{ 'checked' if person }} onchange="partyType()"><span>{{ _("Физлицо") }}</span></label>
   </div>
   <label class="full"><span class="only-company">{{ _("Название ТОВ / ФОП (как в акте") }})</span><span class="only-person">{{ _("ФИО физлица (как в акте)") }}</span>
-    <input name="legal_name" value="{{ v('legal_name') }}" placeholder="{{ v('name') or _("ТОВ «Приклад» / ФОП Іваненко Іван Іванович") }}"
-      {% if parent %}disabled title="{{ _("Берётся из основной карточки") }}"{% endif %}></label>
+    <input name="legal_name" value="{{ v('legal_name') }}" placeholder="{{ (parent.legal_name or parent.name) if parent else (v('name') or _("ТОВ «Приклад» / ФОП Іваненко Іван Іванович")) }}"
+      {% if parent %}title="{{ _("Пусто — как в основной карточке") }}"{% endif %}></label>
   <label class="full">{{ _("Название в программе") }} <span class="muted">— {{ _("короткое, для списков; в акты не идёт") }}</span>
     <input name="name" required value="{{ v('name') }}" placeholder="{{ _("Майстер") }}"></label>
   <label class="full">{{ _("Вид деятельности") }}<input name="activity" value="{{ v('activity') }}" placeholder="{{ _("Производство мебели, продажа мороженого…") }}"></label>

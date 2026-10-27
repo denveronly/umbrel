@@ -600,13 +600,11 @@ def tenant_add_contract(tid):
     root = db.execute("SELECT * FROM tenants WHERE id=?", (t["parent_id"],)).fetchone() if t["parent_id"] else t
     n = 1 + db.execute("SELECT COUNT(*) FROM tenants WHERE parent_id=?", (root["id"],)).fetchone()[0]
     cols = [f for f in TENANT_FIELDS if f not in ("contract_no", "contract_date", "contract_end", "deposit_date",
-                                                  "deposit_note", "name", "note")]
+                                                  "deposit_note", "name", "legal_name", "note")]
     vals = [root[f] for f in cols]
     new = db.execute(f"INSERT INTO tenants({', '.join(cols)}, name, company_id, active, parent_id) "
                      f"VALUES ({', '.join('?' * len(cols))}, ?, ?, 1, ?)",
                      vals + [f"{root['name']} (договір {n + 1})", root["company_id"], root["id"]]).lastrowid
-    if not (root["legal_name"] or "").strip():               # повна назва для актів — та сама, що в основній картці
-        db.execute("UPDATE tenants SET legal_name=? WHERE id=?", (root["name"], new))
     db.commit()
     log("Добавлен договор арендатора", f"{root['name']}: договор {n + 1}")
     flash(_("Создана карточка ещё одного договора. Укажите № и дату договора, добавьте склады и доли услуг."))
@@ -670,7 +668,7 @@ def tenant_edit(tid=None):
         return redirect(url_for("tenant_edit", tid=tid))
 
     st = settings()
-    parent = db.execute("SELECT id, name FROM tenants WHERE id=?", (t["parent_id"],)).fetchone() if t and t["parent_id"] else None
+    parent = db.execute("SELECT id, name, legal_name FROM tenants WHERE id=?", (t["parent_id"],)).fetchone() if t and t["parent_id"] else None
     root_id = parent["id"] if parent else tid
     siblings = db.execute("SELECT id, name, contract_no, active FROM tenants WHERE (parent_id=? OR id=?) AND id<>? ORDER BY id",
                           (root_id, root_id, tid)).fetchall() if tid else []
