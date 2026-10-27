@@ -319,7 +319,7 @@ def act_pdf(act, part="all"):
         uc = head.index("Од.") if "Од." in head else -1
         for r in rows:
             data.append([Paragraph(str(x), small) if j in wrap_cols
-                         else Paragraph(hyph_fit(x, widths[j] * mm - 12), small_r if j >= num_from else small) if j == uc else x
+                         else Paragraph(str(x), small_r if j >= num_from else small) if j == uc else x
                          for j, x in enumerate(r)])
         tb = Table(data, colWidths=[w * mm for w in widths], repeatRows=1)
         tb.setStyle(TableStyle([
@@ -361,7 +361,7 @@ def act_pdf(act, part="all"):
         el += header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
         el += [Paragraph(_intro(act), base), Spacer(1, 3 * mm)]
         main_rows = _main_rows(act, lay)
-        el.append(table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3))
+        el.append(table(MAIN_HEAD, main_rows, [8, 89, 23, 18, 21, 21], 3))
         el += [Spacer(1, 2 * mm), totals(_totals_rows(act)), Spacer(1, 3 * mm),
                Paragraph(_words(act), base), Spacer(1, 2 * mm)]
         if lay["util"]:
@@ -377,7 +377,7 @@ def act_pdf(act, part="all"):
         el += header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ",
                       f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         el += [Paragraph(_detail_intro(act), base), Spacer(1, 3 * mm)]
-        el.append(table(DETAIL_HEAD, _detail_rows(lay, act), [8, 45, 30, 27, 15, 17, 19, 19], 4))
+        el.append(table(DETAIL_HEAD, _detail_rows(lay, act), [8, 41, 27, 27, 22, 17, 19, 19], 4))
         el += [Spacer(1, 2 * mm), totals(_detail_totals_rows(act, lay)), Spacer(1, 3 * mm),
                Paragraph(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
                          + (f", у т.ч. ПДВ {fmt_money(lay['util_vat'])} грн." if lay["util_vat"] else ", без ПДВ."),
@@ -455,7 +455,7 @@ def act_docx(act, part="all"):
             cells = tbl.add_row().cells
             uc = head.index("Од.") if "Од." in head else -1
             for j, v in enumerate(r):
-                cells[j].text = soft_hyph(v) if j == uc else str(v)
+                cells[j].text = str(v)
                 if j >= num_from:
                     cells[j].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
         for row in tbl.rows:
@@ -487,7 +487,7 @@ def act_docx(act, part="all"):
         header([f"АКТ № {act['number']}", "приймання-передачі наданих послуг"])
         para(_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         main_rows = _main_rows(act, lay)
-        table(MAIN_HEAD, main_rows, [8, 95, 17, 18, 21, 21], 3)
+        table(MAIN_HEAD, main_rows, [8, 89, 23, 18, 21, 21], 3)
         for a, b in _totals_rows(act):
             para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
         para(_words(act))
@@ -502,7 +502,7 @@ def act_docx(act, part="all"):
             doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
         header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ", f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         para(_detail_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        table(DETAIL_HEAD, _detail_rows(lay, act), [8, 45, 30, 27, 15, 17, 19, 19], 4)
+        table(DETAIL_HEAD, _detail_rows(lay, act), [8, 41, 27, 27, 22, 17, 19, 19], 4)
         for a, b in _detail_totals_rows(act, lay):
             para(f"{a} {b}", bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT)
         para(f"Сума компенсації комунальних послуг: {amount_in_words(lay['util_total'])}"
