@@ -1320,4 +1320,5 @@ EN = {
     '— пишутся в акте под реквизитами': '— printed in the act under the requisites',
     'Бухгалтерия': 'Accounting',
     'ФИО': 'Full name',
+    'месяц потребления': 'consumption month',
 }

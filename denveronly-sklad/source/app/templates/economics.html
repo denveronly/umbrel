@@ -136,7 +136,7 @@ td.est { color: var(--muted); }
   </div>
   {% if util_rows %}
   <div class="tablewrap" style="margin-top:10px"><table>
-    <thead><tr><th>{{ _("Услуга") }}</th>{% for r in rows|reverse %}<th class="n {{ 'curm' if r.period == sel.period }}">{{ r.label }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th>{{ _("Услуга") }} <span class="muted" style="text-transform:none">· {{ _("месяц потребления") }}</span></th>{% for r in rows|reverse %}<th class="n {{ 'curm' if r.period == sel.period }}">{{ period_label(r.uperiod) }}<br><span class="muted" style="text-transform:none;font-weight:400">{{ _("в актах за") }} {{ r.label }}</span></th>{% endfor %}</tr></thead>
     <tbody>
       {% for u in util_rows %}<tr><td><b>{{ u.name }}</b>{% if u.unit and u.unit != 'послуга' %} <span class="muted">{{ u.unit }}</span>{% endif %}</td>
         {% for c in u.cells|reverse %}<td class="n">{% if c %}{{ money(c.sum) }}{% if c.qty and u.unit != 'послуга' %}<br><span class="muted">{{ num(c.qty) }}</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}</tr>
