@@ -35,7 +35,7 @@
   <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="all">
   <b>{{ _("Архив за") }} {{ period_label(period) }}</b><span class="muted">{{ _("все арендаторы, по папкам компаний") }}</span><span class="spacer"></span>
   <span class="muted" title="{{ _("Один архив: папка на каждую компанию, в ней акты и детализации отдельными файлами") }}"><b>{{ _("Всё одним архивом") }}</b></span>
-  <button class="sm icob" name="fp" value="pdf|both" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm icob" name="fp" value="docx|both" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
+  <button class="sm ghost icob main" name="fp" value="pdf|both" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob main" name="fp" value="docx|both" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
   <span class="muted">{{ _("Акты + дет.") }}</span>
   <button class="sm ghost icob" name="fp" value="pdf|all" title="PDF zip">{{ ico_pdf() }}<small>zip</small></button><button class="sm ghost icob" name="fp" value="docx|all" title="Word zip">{{ ico_doc() }}<small>zip</small></button>
   <span class="muted">{{ _("Детализации") }}</span>

@@ -263,7 +263,7 @@
     <tr><td><a href="{{ url_for('act_view', aid=a.id) }}">{{ a.number }}</a></td>
       <td>{{ period_label(a.period) }}</td><td class="n">{{ money(a.total) }}</td>
       <td><span class="badge {{ 'off' if a.status == 'draft' }}">{{ _("утверждён") if a.status == 'final' else _("черновик") }}</span></td>
-      <td><a class="icol" href="{{ url_for('act_pdf', aid=a.id) }}" target="_blank" title="PDF">{{ ico_pdf(16) }}</a> <a class="icol" href="{{ url_for('act_docx', aid=a.id) }}" title="Word">{{ ico_doc(16) }}</a></td></tr>
+      <td><a class="icol" href="{{ url_for('act_pdf', aid=a.id) }}" target="_blank" title="PDF">{{ ico_pdf(9) }}</a> <a class="icol" href="{{ url_for('act_docx', aid=a.id) }}" title="Word">{{ ico_doc(9) }}</a></td></tr>
   {% else %}<tr><td colspan="5" class="muted">{{ _("Актов ещё нет") }}.</td></tr>{% endfor %}
   </tbody>
 </table></div>
