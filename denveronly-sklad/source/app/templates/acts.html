@@ -121,27 +121,26 @@
       </form>
       {% endif %}
       <table>
-        <thead><tr><th>{{ _("Позиция") }}</th><th class="n">{{ _("К-сть") }}</th><th class="n">{{ _("Ціна") }}</th><th class="n">{{ _("Сума") }}</th></tr></thead>
+        <thead><tr><th>{{ _("Позиция") }}</th><th class="n">{{ _("К-сть") }}</th><th class="n">{{ _("Ціна") }}{% if it.totals.vat_rate %} {{ _("з ПДВ") }}{% endif %}</th><th class="n">{{ _("Сума") }}{% if it.totals.vat_rate %} {{ _("з ПДВ") }}{% endif %}</th></tr></thead>
         <tbody>{% for l in it.lines %}
           <tr><td>{{ l.name }}</td><td class="n">
             {% if l.svc_id and l.pct is defined %}
               {% if l.unit != 'послуга' %}{{ num(l.qty) }} {{ l.unit }}<br>{% endif %}
               {% if not it.act or it.act.status != 'final' %}<span class="pctedit"><input value="{{ l.pct|plain }}" inputmode="decimal" data-tid="{{ it.t.id }}" data-sid="{{ l.svc_id }}" data-orig="{{ l.pct|plain }}" title="{{ _("Доля арендатора, % — действует с") }} {{ period_label(util_period) }}">%</span>
               {% else %}{{ num(l.pct) }}%{% endif %}
-            {% else %}{{ num(l.qty) }} {{ l.unit }}{% endif %}</td><td class="n">{{ money(l.price) }}</td><td class="n">{{ money(l.sum) }}</td></tr>
+            {% else %}{{ num(l.qty) }} {{ l.unit }}{% endif %}</td><td class="n">{{ money(it.gl[loop.index0][0]) }}</td><td class="n">{{ money(it.gl[loop.index0][1]) }}</td></tr>
         {% else %}<tr><td colspan="4" class="muted">{{ _("Нечего начислять") }}.</td></tr>{% endfor %}</tbody>
         <tfoot>
-          {% set rent_sum = it.lines|selectattr('group', 'equalto', 'rent')|sum(attribute='sum') %}
-          {% set svc_sum = (it.lines|sum(attribute='sum')) - rent_sum %}
           {% if it.lines %}
-          <tr><td colspan="3" class="n"><b>{{ _("Услуги") }}</b></td><td class="n"><b>{{ money(svc_sum) }}</b></td></tr>
-          <tr class="muted"><td colspan="3" class="n">{{ _("Аренда") }}</td><td class="n">{{ money(rent_sum) }}</td></tr>
+          <tr><td colspan="3" class="n"><b>{{ _("Услуги") }}</b></td><td class="n"><b>{{ money(it.svc_g) }}</b></td></tr>
+          <tr class="muted"><td colspan="3" class="n">{{ _("Аренда") }}</td><td class="n">{{ money(it.rent_g) }}</td></tr>
           {% endif %}
           {% if it.totals.vat_rate %}
-          <tr><td colspan="3" class="n">{{ _("Без ПДВ") }}</td><td class="n">{{ money(it.totals.net) }}</td></tr>
-          <tr><td colspan="3" class="n">{{ _("ПДВ") }} {{ it.totals.vat_rate }}%</td><td class="n">{{ money(it.totals.vat) }}</td></tr>
-          {% endif %}
+          <tr><td colspan="3" class="n"><b>{{ _("Всего с ПДВ") }}</b></td><td class="n"><b>{{ money(it.totals.total) }}</b></td></tr>
+          <tr class="muted"><td colspan="3" class="n">{{ _("в т.ч. ПДВ") }} {{ it.totals.vat_rate }}%</td><td class="n">{{ money(it.totals.vat) }}</td></tr>
+          {% else %}
           <tr><td colspan="3" class="n">{{ _("Всего") }}</td><td class="n">{{ money(it.totals.total) }}</td></tr>
+          {% endif %}
         </tfoot>
       </table>
     </div>

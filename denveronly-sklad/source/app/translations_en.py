@@ -1303,4 +1303,5 @@ EN = {
     'Электроэнергия: выставлено − YASNO': 'Electricity: billed − YASNO',
     'Суммы — как в актах (с ПДВ для арендаторов с ПДВ). Под суммой — количество (кВт·год, м³, т…). Счёт YASNO — за месяц потребления (коммунальные в акте за ноябрь — это октябрь).': 'Amounts as in acts (incl. VAT for VAT tenants). Under the amount — quantity (kWh, m³, t…). YASNO bill — for the consumption month (utilities in the November act are for October).',
     'Коммунальных в актах за эти месяцы нет.': 'No utilities in acts for these months.',
+    'з ПДВ': 'incl. VAT',
 }

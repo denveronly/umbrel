@@ -1230,7 +1230,11 @@ def acts():
             d = json.loads(act["data"])
             lines, totals, warnings = d["lines"], d["totals"], []
         g = groups.get(t["company_id"]) or groups[None]
+        # з ПДВ — ціни й суми рядків показуємо одразу з ПДВ (як у PDF), підсумки — з ПДВ
+        gl = documents._gross(lines, float(totals.get("vat_rate") or 0), totals["total"])
+        rent_g = calc.r2(sum(x[1] for l, x in zip(lines, gl) if l.get("group") == "rent"))
         g["rows"].append({"t": t, "act": act, "lines": lines, "totals": totals, "warnings": warnings,
+                          "gl": gl, "rent_g": rent_g, "svc_g": calc.r2(sum(x[1] for x in gl) - rent_g),
                            "whs": calc.warehouses_of(t["id"], period, db),
                            "changed": bool(act and act["status"] == "draft" and abs(act["total"] - totals["total"]) > 0.005)})
         for k in g["tot"]:
