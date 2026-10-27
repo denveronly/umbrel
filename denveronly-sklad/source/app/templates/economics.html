@@ -121,19 +121,6 @@ td.est { color: var(--muted); }
   <div class="chart" id="ch-stack"></div>
 </div>
 
-<div class="charts2">
-  <div class="card chartcard">
-    <h2>{{ _("Всего в долларах, USD") }}</h2>
-    <p class="muted" style="margin:0 0 6px">{{ _("Сумма месяца ÷ курс НБУ на 1-е число") }}</p>
-    <div class="chart" id="ch-usd"></div>
-  </div>
-  <div class="card chartcard">
-    <h2>{{ _("Курс USD (НБУ), грн") }}</h2>
-    <p class="muted" style="margin:0 0 6px">{{ _("на 1-е число месяца") }}</p>
-    <div class="chart" id="ch-rate"></div>
-  </div>
-</div>
-
 <!-- комунальні -->
 <div class="card" id="util">
   <h2 style="margin-top:0">{{ _("Коммунальные") }} <span class="muted" style="font-weight:400">· {{ _("в актах за") }} {{ sel.label }} ({{ _("потребление") }} {{ period_label(sel.uperiod) }})</span></h2>
@@ -297,7 +284,7 @@ td.est { color: var(--muted); }
     xLabels(f, n, xc);
   }
 
-  const draw = () => { stack(); line('ch-usd', D.usd, 'USD', 0); line('ch-rate', D.rate, L.rate, 4); };
+  const draw = () => { stack(); };
   draw();
   let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(draw, 150); });
   window.addEventListener('themechange', draw);
