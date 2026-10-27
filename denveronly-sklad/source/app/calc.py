@@ -554,6 +554,23 @@ def next_act_number(company, period, tenant=None, exclude_id=None):
     return format_act_number(fmt, prefix, period, n, tenant["contract_no"] if tenant else None)
 
 
+PARTY_FIELDS = ("name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "party_type", "passport_series",
+                "passport_number", "passport_issued", "director_position", "basis")
+
+
+def tenant_snapshot(tenant, db=None):
+    """Орендар для акта. Додатковий договір (parent_id) — реквізити з основної картки, договір і склади — свої."""
+    d = dict(tenant)
+    if "parent_id" in tenant.keys() and tenant["parent_id"]:
+        db = db or get_db()
+        p = db.execute("SELECT * FROM tenants WHERE id=?", (tenant["parent_id"],)).fetchone()
+        if p:
+            for f in PARTY_FIELDS:
+                if f in p.keys():
+                    d[f] = p[f]
+    return d
+
+
 def save_act(tenant_id, period, final=False):
     db = get_db()
     tenant = db.execute("SELECT * FROM tenants WHERE id=?", (tenant_id,)).fetchone()
@@ -566,7 +583,7 @@ def save_act(tenant_id, period, final=False):
     lines, totals, warnings = build_act(tenant_id, period)
     snapshot = {
         "lines": lines, "totals": totals,
-        "tenant": dict(tenant),
+        "tenant": tenant_snapshot(tenant, db),
         "company": company_snapshot(company),
         "city": (company["city"] if company else "") or "",
         "period_label": period_label(period),

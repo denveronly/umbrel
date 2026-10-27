@@ -1304,4 +1304,11 @@ EN = {
     'Суммы — как в актах (с ПДВ для арендаторов с ПДВ). Под суммой — количество (кВт·год, м³, т…). Счёт YASNO — за месяц потребления (коммунальные в акте за ноябрь — это октябрь).': 'Amounts as in acts (incl. VAT for VAT tenants). Under the amount — quantity (kWh, m³, t…). YASNO bill — for the consumption month (utilities in the November act are for October).',
     'Коммунальных в актах за эти месяцы нет.': 'No utilities in acts for these months.',
     'з ПДВ': 'incl. VAT',
+    'Создана карточка ещё одного договора. Укажите № и дату договора, добавьте склады и доли услуг.': 'A card for another contract was created. Enter the contract No. and date, add warehouses and service shares.',
+    'Дополнительный договор арендатора': 'Additional contract of tenant',
+    'Реквизиты в актах берутся из основной карточки; склады, доли услуг и акты — свои.': 'Requisites in acts are taken from the main card; warehouses, service shares and acts are its own.',
+    'Договоры': 'Contracts',
+    'Создать карточку ещё одного договора этого арендатора?': 'Create a card for another contract of this tenant?',
+    'Отдельный акт по своим складам и своим долям услуг': 'Separate act for its own warehouses and service shares',
+    'Ещё один договор': 'Another contract',
 }

@@ -589,6 +589,28 @@ TENANT_FIELDS = ["name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "par
                  "contract_date", "contract_end", "deposit_date", "deposit_note", "activity", "note"]
 
 
+@app.route("/tenants/<int:tid>/contract", methods=["POST"])
+def tenant_add_contract(tid):
+    """Ще один договір того ж орендаря: окрема картка зі своїми складами, частками й актами;
+    реквізити в актах — з основної картки."""
+    db = get_db()
+    t = db.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    if not t:
+        abort(404)
+    root = db.execute("SELECT * FROM tenants WHERE id=?", (t["parent_id"],)).fetchone() if t["parent_id"] else t
+    n = 1 + db.execute("SELECT COUNT(*) FROM tenants WHERE parent_id=?", (root["id"],)).fetchone()[0]
+    cols = [f for f in TENANT_FIELDS if f not in ("contract_no", "contract_date", "contract_end", "deposit_date",
+                                                  "deposit_note", "name", "note")]
+    vals = [root[f] for f in cols]
+    new = db.execute(f"INSERT INTO tenants({', '.join(cols)}, name, company_id, active, parent_id) "
+                     f"VALUES ({', '.join('?' * len(cols))}, ?, ?, 1, ?)",
+                     vals + [f"{root['name']} (договір {n + 1})", root["company_id"], root["id"]]).lastrowid
+    db.commit()
+    log("Добавлен договор арендатора", f"{root['name']}: договор {n + 1}")
+    flash(_("Создана карточка ещё одного договора. Укажите № и дату договора, добавьте склады и доли услуг."))
+    return redirect(url_for("tenant_edit", tid=new))
+
+
 @app.route("/tenants/new", methods=["GET", "POST"])
 @app.route("/tenants/<int:tid>", methods=["GET", "POST"])
 def tenant_edit(tid=None):
@@ -646,6 +668,10 @@ def tenant_edit(tid=None):
         return redirect(url_for("tenant_edit", tid=tid))
 
     st = settings()
+    parent = db.execute("SELECT id, name FROM tenants WHERE id=?", (t["parent_id"],)).fetchone() if t and t["parent_id"] else None
+    root_id = parent["id"] if parent else tid
+    siblings = db.execute("SELECT id, name, contract_no, active FROM tenants WHERE (parent_id=? OR id=?) AND id<>? ORDER BY id",
+                          (root_id, root_id, tid)).fetchall() if tid else []
     whs = db.execute("SELECT * FROM warehouses WHERE tenant_id=? ORDER BY name", (tid,)).fetchall() if tid else []
     pt = t["payment_type"] if t else None
     wh_items = [(w, calc.rent_price(w, pt, st)) for w in whs]
@@ -682,7 +708,7 @@ def tenant_edit(tid=None):
         if pos is not None:
             nav_prev = ids[pos - 1] if pos > 0 else None
             nav_next = ids[pos + 1] if pos + 1 < len(ids) else None
-    return render_template("tenant_edit.html", t=t, nav_prev=nav_prev, nav_next=nav_next, usage=usage, carry=carry, use_period=use_period, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
+    return render_template("tenant_edit.html", t=t, parent=parent, siblings=siblings, nav_prev=nav_prev, nav_next=nav_next, usage=usage, carry=carry, use_period=use_period, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
                            subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs, tenancy=tenancy, share_svcs=share_svcs,
                            cur_period=current_period(),
                            tot=tot, companies=companies(), vat=float(st["vat_rate"]), free_prices=free_prices)

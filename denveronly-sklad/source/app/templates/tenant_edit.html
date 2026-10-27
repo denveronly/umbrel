@@ -16,6 +16,16 @@
 {% if nav_next %}<a class="tnav tnav-side right" href="{{ url_for('tenant_edit', tid=nav_next.id) }}" aria-label="{{ _("Следующий") }}"><span>›</span><small>{{ nav_next.name }}</small></a>{% endif %}
 {% endif %}
 <h1>{{ t.name if t else _("Новый арендатор") }}{% if t and not t.active %} <span class="badge off">{{ _("выехал") }}{% if t.moved_out %} {{ t.moved_out }}{% endif %}</span>{% endif %}</h1>
+{% if t %}
+<div class="card" style="padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  {% if parent %}<span>📑 {{ _("Дополнительный договор арендатора") }} <a href="{{ url_for('tenant_edit', tid=parent.id) }}"><b>{{ parent.name }}</b></a>.
+    <span class="muted">{{ _("Реквизиты в актах берутся из основной карточки; склады, доли услуг и акты — свои.") }}</span></span>{% endif %}
+  {% if siblings %}<span class="muted">{{ _("Договоры") }}:</span>{% for x in siblings %}<a class="btn sm ghost" href="{{ url_for('tenant_edit', tid=x.id) }}">{{ x.name }}{% if x.contract_no %} · № {{ x.contract_no }}{% endif %}</a>{% endfor %}{% endif %}
+  <span class="spacer"></span>
+  <form method="post" action="{{ url_for('tenant_add_contract', tid=t.id) }}" onsubmit="return confirm({{ _('Создать карточку ещё одного договора этого арендатора?')|tojson }})">
+    <button class="sm ghost" title="{{ _("Отдельный акт по своим складам и своим долям услуг") }}">＋ {{ _("Ещё один договор") }}</button></form>
+</div>
+{% endif %}
 
 <form method="post" class="card grid">
   <h2 class="full" style="margin:0">{{ _("Арендатор и договор") }}</h2>

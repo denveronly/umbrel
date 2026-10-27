@@ -543,7 +543,8 @@ MIGRATIONS = {
                 "contract_end": "TEXT", "company_id": "INTEGER", "deposit_amount": "REAL",
                 "deposit_date": "TEXT", "deposit_note": "TEXT", "director_position": "TEXT", "basis": "TEXT",
                 "party_type": "TEXT NOT NULL DEFAULT 'company'", "passport_series": "TEXT", "passport_number": "TEXT",
-                "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT"},
+                "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT",
+                "parent_id": "INTEGER"},   # parent_id — додатковий договір того ж орендаря (реквізити з основної картки)
     "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
     "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT", "mfo": "TEXT", "ipn": "TEXT",
