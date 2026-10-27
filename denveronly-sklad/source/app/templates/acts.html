@@ -129,8 +129,8 @@
           {% set rent_sum = it.lines|selectattr('group', 'equalto', 'rent')|sum(attribute='sum') %}
           {% set svc_sum = (it.lines|sum(attribute='sum')) - rent_sum %}
           {% if it.lines %}
-          <tr class="muted"><td colspan="3" class="n">{{ _("Аренда") }}</td><td class="n">{{ money(rent_sum) }}</td></tr>
           <tr><td colspan="3" class="n"><b>{{ _("Услуги") }}</b></td><td class="n"><b>{{ money(svc_sum) }}</b></td></tr>
+          <tr class="muted"><td colspan="3" class="n">{{ _("Аренда") }}</td><td class="n">{{ money(rent_sum) }}</td></tr>
           {% endif %}
           {% if it.totals.vat_rate %}
           <tr><td colspan="3" class="n">{{ _("Без ПДВ") }}</td><td class="n">{{ money(it.totals.net) }}</td></tr>

@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.45.1"
+version: "1.45.2"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Сума вручну (прибирання) переходить на наступні місяці, доки її не змінять. У картці орендаря місяць за замовчуванням — той, за який зараз готуються акти.
+  В акті спершу «Послуги», потім «Оренда».
 dependencies: []
 path: ""
 defaultUsername: ""
