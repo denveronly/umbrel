@@ -85,8 +85,7 @@
     <summary>
       <span class="who"><b>{{ it.t.name }}</b>{% if not it.t.active %} <span class="badge off">{{ _("выехал") }}</span>{% endif %}<br><span class="badge">{{ PAYMENT_TYPES[it.t.payment_type] }}</span>
         {% if it.act %}<a href="{{ url_for('act_view', aid=it.act.id) }}" onclick="event.stopPropagation()">№ {{ it.act.number }}</a>
-          <span class="badge {{ 'off' if it.act.status == 'draft' }}">{{ _("утверждён") if it.act.status == 'final' else _("черновик") }}</span>{% endif %}
-        {% if it.changed %}<span class="badge warnb">{{ _("сумма изменилась") }}</span>{% endif %}
+          {% if it.act.status == 'final' %}<span class="badge">{{ _("утверждён") }}</span>{% endif %}{% endif %}
         {% if it.warnings %}<span class="badge warnb">⚠ {{ it.warnings|length }}</span>{% endif %}
       </span>
       <span class="n"><b>{{ money(it.totals.total) }}</b>{% if it.totals.vat %}<br><span class="muted">{{ _("в т.ч. ПДВ") }} {{ money(it.totals.vat) }}</span>{% endif %}</span>
