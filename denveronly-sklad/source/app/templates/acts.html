@@ -94,12 +94,12 @@
                 onclick="event.preventDefault(); event.stopPropagation(); openTenant(this)">⚙</button>
         <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()" class="dlgrid">
           <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
-          <span class="muted">{{ _("Акт + дет.") }}</span>
-          <button class="sm ghost icob" name="fp" value="pdf|all" title="PDF">{{ ico_pdf() }}</button><button class="sm ghost icob" name="fp" value="docx|all" title="Word">{{ ico_doc() }}</button>
-          {% if it.lines|selectattr('group', 'in', ['util', 'service'])|list %}
+          <span class="muted">{{ _("Акт") }}</span>
+          <button class="sm ghost icob" name="fp" value="pdf|act" title="PDF">{{ ico_pdf() }}</button><button class="sm ghost icob" name="fp" value="docx|act" title="Word">{{ ico_doc() }}</button>
           <span class="muted">{{ _("Детализация") }}</span>
+          {% if it.lines|selectattr('group', 'in', ['util', 'service'])|list %}
           <button class="sm ghost icob" name="fp" value="pdf|detail" title="PDF">{{ ico_pdf() }}</button><button class="sm ghost icob" name="fp" value="docx|detail" title="Word">{{ ico_doc() }}</button>
-          {% endif %}
+          {% else %}<span class="muted" style="text-align:center">—</span><span class="muted" style="text-align:center">—</span>{% endif %}
         </form>
       </span>
     </summary>

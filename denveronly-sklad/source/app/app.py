@@ -1387,7 +1387,7 @@ def _send_act(act, fmt, inline=False, part="all"):
 def _part():
     fp = request.values.get("fp", "")
     part = fp.split("|")[1] if "|" in fp else request.values.get("part")
-    return part if part in ("detail", "both") else "all"
+    return part if part in ("detail", "both", "act") else "all"
 
 
 def _fmt():
