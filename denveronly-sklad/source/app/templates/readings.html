@@ -62,7 +62,7 @@
     <thead><tr><th>{{ _("Контакт") }}</th>{% for sv in qty_svcs %}<th class="n">{{ sv.name }}<br><span class="muted" style="text-transform:none">{{ _("грн") if sv.mode == 'amount' else sv.unit }}</span></th>{% endfor %}</tr></thead>
     <tbody>{% for r in qty_rows %}
       <tr><td>{{ r.t.name }}</td>
-        {% for c in r.cells %}<td class="n"><input name="q_{{ r.t.id }}_{{ c.s.id }}" inputmode="decimal" style="width:90px;text-align:right{{ ';opacity:.45' if not c.sub }}" value="{{ c.qty|plain }}" placeholder="{{ '0' if c.sub else '—' }}" title="{{ '' if c.sub else _('Не подключена — впишите количество, и услуга подключится этому арендатору') }}"></td>{% endfor %}
+        {% for c in r.cells %}<td class="n"><input name="q_{{ r.t.id }}_{{ c.s.id }}" inputmode="decimal" style="width:90px;text-align:right{{ ';opacity:.45' if not c.sub }}" value="{{ c.qty|plain }}" placeholder="{{ (c.carry|plain if c.carry else '0') if c.sub else '—' }}" title="{{ '' if c.sub else _('Не подключена — впишите количество, и услуга подключится этому арендатору') }}"></td>{% endfor %}
       </tr>{% endfor %}
     </tbody>
   </table></div>

@@ -208,6 +208,15 @@ def share_total(svc, period, db=None):
     return r2(cons * p), f"{fmt_num(cons)} {svc['unit']} × {fmt_money(p)}", cons, p
 
 
+def amount_for(tenant_id, service_id, period, db=None):
+    """Сума вручну (прибиральниця) на місяць: внесена за цей місяць або остання раніша — переходить на наступні
+    місяці, доки не змінять (зупинити — зняти галочку послуги в картці орендаря)."""
+    db = db or get_db()
+    row = db.execute("SELECT qty FROM service_usage WHERE tenant_id=? AND service_id=? AND period<=? "
+                     "ORDER BY period DESC LIMIT 1", (tenant_id, service_id, period)).fetchone()
+    return r2(row["qty"]) if row and row["qty"] else 0
+
+
 def build_act(tenant_id, period):
     """Повертає (lines, totals, warnings) для орендаря за місяць акта.
 
@@ -323,9 +332,7 @@ def build_act(tenant_id, period):
                       (tenant_id,)).fetchall()
     for svc in subs:
         if svc["mode"] == "amount":                   # сума вручну цьому орендарю за місяць (напр. прибиральниця)
-            row = db.execute("SELECT qty FROM service_usage WHERE tenant_id=? AND service_id=? AND period=?",
-                             (tenant_id, svc["id"], uperiod)).fetchone()
-            amt = r2(row["qty"]) if row and row["qty"] else 0
+            amt = amount_for(tenant_id, svc["id"], uperiod, db)
             if amt:
                 lines.append({"group": "service", "name": f"{svc['name']} за {ulabel}", "unit": "послуга", "qty": 1,
                               "price": amt, "sum": amt, "service": svc["name"], "wh": "", "serial": "", "rnote": "",

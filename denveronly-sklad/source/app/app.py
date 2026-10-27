@@ -655,10 +655,12 @@ def tenant_edit(tid=None):
     acts = db.execute("SELECT * FROM acts WHERE tenant_id=? ORDER BY period DESC", (tid,)).fetchall() if tid else []
     tot = {"total": calc.r2(sum(p["total"] for _w, p in wh_items)), "vat": calc.r2(sum(p["vat"] for _w, p in wh_items))}
     subs = {r[0] for r in db.execute("SELECT service_id FROM tenant_services WHERE tenant_id=?", (tid,))} if tid else set()
-    use_period = request.args.get("up") if re.fullmatch(r"\d{4}-\d{2}", request.args.get("up") or "") else current_period()
+    use_period = request.args.get("up") if re.fullmatch(r"\d{4}-\d{2}", request.args.get("up") or "") \
+        else calc.util_period_for(acts_default_period())          # місяць споживання для актів, що зараз готуються
     usage = {r["service_id"]: r["qty"] for r in db.execute(
         "SELECT service_id, qty FROM service_usage WHERE tenant_id=? AND period=?", (tid, use_period))} if tid else {}
     all_svcs = [sv for sv in services() if sv["mode"] not in ("meter", "share")]
+    carry = {sv["id"]: calc.amount_for(tid, sv["id"], use_period, db) for sv in all_svcs if sv["mode"] == "amount"} if tid else {}
     meter_svcs = db.execute("SELECT DISTINCT s.name FROM meters m JOIN services s ON s.id=m.service_id "
                             "JOIN warehouses w ON w.id=m.warehouse_id WHERE w.tenant_id=? AND m.active=1",
                             (tid,)).fetchall() if tid else []
@@ -680,7 +682,7 @@ def tenant_edit(tid=None):
         if pos is not None:
             nav_prev = ids[pos - 1] if pos > 0 else None
             nav_next = ids[pos + 1] if pos + 1 < len(ids) else None
-    return render_template("tenant_edit.html", t=t, nav_prev=nav_prev, nav_next=nav_next, usage=usage, use_period=use_period, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
+    return render_template("tenant_edit.html", t=t, nav_prev=nav_prev, nav_next=nav_next, usage=usage, carry=carry, use_period=use_period, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
                            subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs, tenancy=tenancy, share_svcs=share_svcs,
                            cur_period=current_period(),
                            tot=tot, companies=companies(), vat=float(st["vat_rate"]), free_prices=free_prices)
@@ -905,7 +907,8 @@ def readings():
             sub = db.execute("SELECT 1 FROM tenant_services WHERE tenant_id=? AND service_id=?", (t["id"], sv["id"])).fetchone()
             u = db.execute("SELECT qty FROM service_usage WHERE tenant_id=? AND service_id=? AND period=?",
                            (t["id"], sv["id"], period)).fetchone()
-            cells.append({"s": sv, "sub": bool(sub), "qty": u["qty"] if u else None})
+            cells.append({"s": sv, "sub": bool(sub), "qty": u["qty"] if u else None,
+                          "carry": calc.amount_for(t["id"], sv["id"], period, db) if sv["mode"] == "amount" else None})
         qty_rows.append({"t": t, "cells": cells})
     qty_rows.sort(key=lambda r: not any(c["sub"] for c in r["cells"]))      # спершу ті, кому послуга підключена
 

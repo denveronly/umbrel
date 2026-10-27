@@ -219,7 +219,8 @@
         <label class="check"><input type="checkbox" name="service_id" value="{{ sv.id }}" {{ 'checked' if sv.id in subs }}>
           {{ sv.name }} <span class="muted">— {{ _(SERVICE_MODES[sv.mode]) }}</span></label>
         {% if sv.mode in ('qty', 'amount') %}
-          <input name="u_{{ sv.id }}" inputmode="decimal" value="{{ usage.get(sv.id)|plain if usage.get(sv.id) else '' }}" placeholder="0"
+          <input name="u_{{ sv.id }}" inputmode="decimal" value="{{ usage.get(sv.id)|plain if usage.get(sv.id) else '' }}" placeholder="{{ (carry.get(sv.id)|plain) if carry.get(sv.id) else '0' }}"
+                 title="{{ _('Пусто — берётся сумма прошлого месяца (серым)') if sv.mode == 'amount' else '' }}"
                  style="width:110px;text-align:right"><span class="muted">{{ _("грн") if sv.mode == 'amount' else sv.unit }}</span>
         {% endif %}
       </div>
