@@ -71,6 +71,19 @@
   </form>
 </div>
 
+{% if can('settings') %}
+<div class="card">
+  <form method="post" action="{{ url_for('naftogaz.save_settings') }}" class="row" style="gap:10px;flex-wrap:wrap">
+    <input type="hidden" name="back" value="{{ url_for('gas.page') }}">
+    <input type="hidden" name="hour" value="{{ S.naftogaz_hour or 9 }}"><input type="hidden" name="years" value="{{ S.naftogaz_years or 2 }}">
+    <input type="hidden" name="notify_bills" value="{{ '1' if S.naftogaz_notify_bills != '0' else '' }}"><input type="hidden" name="notify_debt" value="{{ '1' if S.naftogaz_notify_debt != '0' else '' }}">
+    <label class="check"><input type="checkbox" name="enabled" value="1" {{ 'checked' if S.naftogaz_enabled == '1' }} onchange="this.form.submit()"> <b>🧾 {{ _("Нафтогаз (my.gas.ua)") }}</b></label>
+    <span class="muted">{{ _("начисления, оплаты и задолженность по счётчикам из кабинета Нафтогаза") }}</span>
+    {% if S.naftogaz_enabled == '1' %}<a class="btn sm ghost" href="{{ url_for('naftogaz.page') }}#settings">{{ _("Настроить") }} →</a>{% endif %}
+  </form>
+</div>
+{% endif %}
+
 <div class="card">
   <h2 style="margin-top:0">{{ _("Цена газа") }}</h2>
   <form method="post" class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">

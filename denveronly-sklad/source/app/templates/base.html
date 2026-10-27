@@ -51,6 +51,7 @@
     {% if SITES[cur_site].kind == 'home' %}
     <a href="{{ url_for('home.page') }}" class="{{ 'on' if ep.startswith('home.') }}">⚡ {{ _("Электроэнергия") }}</a>
     <a href="{{ url_for('gas.page') }}" class="{{ 'on' if ep.startswith('gas.') }}">🔥 {{ _("Газ") }}</a>
+    {% if S.naftogaz_enabled == '1' and can('naftogaz') %}<a href="{{ url_for('naftogaz.page') }}" class="{{ 'on' if ep.startswith('naftogaz.') }}">🧾 {{ _("Нафтогаз") }}</a>{% endif %}
     {% if can('settings') %}<a href="{{ url_for('ha.page') }}" class="{{ 'on' if ep.startswith('ha.') }}">🏠 HA</a>{% endif %}
     {% else %}
     <a href="{{ url_for('index') }}" class="{{ 'on' if ep=='index' }}">{{ _("Основная") }}</a>

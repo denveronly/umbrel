@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Нафтогаз") }}{% endblock %}
+{% block content %}
+<div class="row"><h1 style="margin:0">🧾 {{ _("Нафтогаз") }} <span class="muted" style="font-weight:400">· {{ site_name }}</span></h1><span class="spacer"></span>
+  <form method="post" action="{{ url_for('naftogaz.run_now') }}"><button {{ 'disabled' if not accs }}>{{ _("Проверить кабинет сейчас") }}</button></form></div>
+<p class="muted">{{ _("Кабинет my.gas.ua: начисления, оплаты и задолженность по каждому лицевому счёту (газовому счётчику). Показания облгаза вписываются во вкладку «Газ» соответствующего счётчика (только в пустые клетки).") }}</p>
+
+<div class="kpis">
+  <div class="kpi {{ 'kbad' if total_debt > 0 else ('kgood' if st.time else '') }}"><small>{{ _("Задолженность всего") }}</small>
+    <b>{{ money(total_debt) if st.time else '—' }} {{ _("грн") }}</b><small>{{ accs|length }} {{ _("лицевых счетов") }}</small></div>
+  <div class="kpi"><small class="muted">{{ _("Последняя проверка") }}</small>
+    <b>{% if st.time %}{{ st.time[8:10] }}.{{ st.time[5:7] }} {{ st.time[11:16] }}{% else %}—{% endif %}</b>
+    <small class="{{ 'muted' if st.ok else 'warnt' }}">{% if st.time %}{{ '✓ ' ~ _("успешно") if st.ok else '✗ ' ~ (st.errors|join('; ')) }}{% endif %}</small></div>
+  <div class="kpi"><small class="muted">{{ _("Автопроверка") }}</small>
+    <b>{% if c.enabled %}{{ _("ежедневно с") }} {{ '%02d'|format(c.hour) }}:00{% else %}{{ _("выключена") }}{% endif %}</b>
+    <small class="muted">Telegram: {{ '✓' if c.tg_token and c.tg_chat else _("не настроен") }}</small></div>
+</div>
+
+{% for a in accs %}
+<div class="card">
+  <div class="row" style="gap:10px;flex-wrap:wrap"><h2 style="margin:0">{{ a.name }}</h2>
+    {% if a.meter %}<span class="badge">🔥 {{ a.meter }}</span>{% endif %}
+    {% if a.account_no %}<span class="muted">{{ _("О/Р") }} {{ a.account_no }}{% if a.owner %} · {{ a.owner }}{% endif %}</span>{% endif %}
+    <span class="spacer"></span>
+    {% if a.ok == 0 %}<span class="warnt">✗ {{ a.error }}</span>{% elif a.checked_at %}
+      {% if (a.debt or 0) > 0 %}<span class="badge warnb">{{ _("долг") }} {{ money(a.debt) }} {{ _("грн") }}</span>{% else %}<span class="badge">{{ _("баланс") }} {{ money(a.balance) }} {{ _("грн") }}</span>{% endif %}{% endif %}</div>
+  {% if a.cookie_expired %}<div class="warn" style="margin-top:8px">{{ _("Cookie-сессия протухла — кабинет требует вход заново. Обновите cookie в настройках ниже.") }}</div>{% endif %}
+  {% set bs = bills[a.id] %}
+  {% if bs %}
+  <div class="tablewrap" style="margin-top:10px"><table>
+    <thead><tr><th>{{ _("Месяц") }}</th><th class="n">{{ _("Показание облгаза") }}</th><th class="n">{{ _("Объём, м³") }}</th><th class="n">{{ _("Цена, грн/м³") }}</th>
+      <th class="n">{{ _("Начислено, грн") }}</th><th class="n">{{ _("Оплата, грн") }}</th><th class="n">{{ _("Баланс, грн") }}</th><th>{{ _("Счёт") }}</th></tr></thead>
+    <tbody>{% for b in bs %}<tr><td><b>{{ period_label(b.period) }}</b></td>
+      <td class="n muted">{{ num(b.reading) if b.reading is not none else '—' }}</td>
+      <td class="n">{{ num(b.volume if b.volume is not none else b.consumed) if (b.volume is not none or b.consumed is not none) else '—' }}</td>
+      <td class="n muted">{{ money(b.price) if b.price is not none else '—' }}</td>
+      <td class="n">{{ money(b.accrued) if b.accrued is not none else '—' }}</td>
+      <td class="n">{{ money(b.payment) if b.payment is not none else '—' }}</td>
+      <td class="n {{ 'warnt' if (b.balance or 0) < 0 }}">{{ money(b.balance) if b.balance is not none else '—' }}</td>
+      <td>{% if b.has_invoice %}<span class="badge">PDF</span>{% else %}<span class="muted">{{ b.status or '—' }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="muted">{{ _("Баланс со знаком «минус» — сумма к оплате (задолженность).") }}</p>
+  {% else %}<p class="muted">{{ _("Данных ещё нет — нажмите «Проверить кабинет сейчас».") }}</p>{% endif %}
+</div>
+{% endfor %}
+
+{% if is_admin %}
+<div class="card" id="settings">
+  <h2 style="margin-top:0">{{ _("Настройки") }}</h2>
+  <form method="post" action="{{ url_for('naftogaz.save_settings') }}" class="grid">
+    <label class="check full"><input type="checkbox" name="enabled" value="1" {{ 'checked' if c.enabled }}> {{ _("Нафтогаз включён: проверять кабинет автоматически каждый день") }}</label>
+    <label>{{ _("Проверять с (час)") }}<input name="hour" type="number" min="0" max="23" value="{{ c.hour }}"></label>
+    <label>{{ _("Сколько лет истории тянуть") }}<input name="years" type="number" min="1" max="9" value="{{ c.years }}"></label>
+    <div class="full perms">
+      <label class="check"><input type="checkbox" name="notify_bills" value="1" {{ 'checked' if c.notify_bills }}> {{ _("Telegram: новые счета") }}</label>
+      <label class="check"><input type="checkbox" name="notify_debt" value="1" {{ 'checked' if c.notify_debt }}> {{ _("Telegram: задолженность") }}</label>
+    </div>
+    <div class="full"><button class="sm">{{ _("Сохранить") }}</button> <span class="muted">{{ _("Telegram — токен и chat_id из YASNO (этого объекта или «Базы»).") }}</span></div>
+  </form>
+
+  <h3>{{ _("Лицевые счета") }}</h3>
+  <p class="muted" style="margin-top:0">{{ _("Для каждого счётчика — своя сессия my.gas.ua. Как получить cookie: войдите в my.gas.ua в браузере → DevTools (F12) → «Сеть» → обновите страницу → правой кнопкой по запросу страницы → «Copy → Copy as cURL» → вставьте целиком.") }}</p>
+  {% for a in accs + [None] %}
+  <form method="post" action="{{ url_for('naftogaz.save_settings') }}" class="grid" autocomplete="off" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+    <input type="hidden" name="action" value="account">{% if a %}<input type="hidden" name="acc_id" value="{{ a.id }}">{% endif %}
+    <label>{{ _("Название") }}<input name="name" value="{{ a.name if a else '' }}" placeholder="{{ _('Котёл / Плита / Баня') }}" {{ 'required' if not a }}></label>
+    <label>{{ _("Счётчик газа") }}<select name="gas_meter_id"><option value="">—</option>{% for m in meters %}<option value="{{ m.id }}" {{ 'selected' if a and a.gas_meter_id == m.id }}>{{ m.name }}</option>{% endfor %}</select></label>
+    <label class="full">{{ _("Cookie сессии") }}<textarea name="cookie" rows="2" placeholder="{{ _('сохранён — оставьте пустым, чтобы не менять') if a and a.cookie else 'XSRF-TOKEN=…; …_session=…  ' ~ _('(или «Copy as cURL»)') }}"></textarea></label>
+    <label class="full">{{ _("Адрес кабинета") }}<input name="url" value="{{ (a.url if a else '') or 'https://my.gas.ua' }}"></label>
+    <div class="full row" style="gap:8px;flex-wrap:wrap">
+      <button class="sm">{{ _("Сохранить") if a else '＋ ' ~ _("Добавить") }}</button>
+      <button class="sm ghost" name="test" value="1">{{ _("Сохранить и проверить вход") }}</button>
+      {% if a %}<button class="sm danger" name="delete" value="1" onclick="return confirm({{ _('Удалить лицевой счёт и его данные?')|tojson }})">{{ _("Удалить") }}</button>{% endif %}
+    </div>
+  </form>
+  {% endfor %}
+  <p class="muted">🔒 {{ _("Cookie хранится зашифрованной; ключ лежит отдельно от базы и не попадает в бэкапы. Программа только читает кабинет — оплат не делает.") }}
+    {{ _("Если с сервера вход не проходит (403) — это защита Cloudflare сайта; тогда понадобится вход через встроенный браузер.") }}</p>
+</div>
+{% endif %}
+{% endblock %}

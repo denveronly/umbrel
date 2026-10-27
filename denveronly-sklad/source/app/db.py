@@ -695,7 +695,7 @@ def _seed_from_main(con):
         for row in main.execute(f"SELECT {', '.join(cols)} FROM companies"):
             con.execute(f"INSERT OR IGNORE INTO companies({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", row)
         for k, v in main.execute("SELECT key, value FROM settings"):
-            if k not in SEED_SKIP_SETTINGS and not k.startswith(("yasno_", "tg_")):
+            if k not in SEED_SKIP_SETTINGS and not k.startswith(("yasno_", "naftogaz_", "tg_")):
                 con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?,?)", (k, v))
     finally:
         main.close()

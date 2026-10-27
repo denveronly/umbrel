@@ -18,7 +18,7 @@ bp = Blueprint("auth", __name__)
 ROLES = {"admin": "Администратор", "user": "Оператор"}
 # додаткові права оператора (адміністратор має всі). Користувачами керує лише адміністратор.
 PERMS = {"economics": "Экономика", "logs": "Логи и бэкапы", "settings": "Настройки и компании", "ai": "ИИ-помощник",
-         "yasno": "YASNO (счета за электричество)"}
+         "yasno": "YASNO (счета за электричество)", "naftogaz": "Нафтогаз (счета за газ)"}
 MIN_PASSWORD = 8
 PUBLIC_ENDPOINTS = {"static", "auth.login", "auth.setup", "favicon"}
 
