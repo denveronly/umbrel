@@ -13,6 +13,47 @@ FONT_DIRS = ["/usr/share/fonts/truetype/dejavu", os.path.join(os.path.dirname(__
 MAIN_HEAD = ["№", "Найменування", "Од.", "К-сть", "Ціна, грн", "Сума, грн"]
 DETAIL_HEAD = ["№", "Послуга", "Приміщення", "Показники", "Од.", "К-сть", "Ціна, грн", "Сума, грн"]
 
+VOWELS = set("аеєиіїоуюяaeiouыэё")
+
+
+def _syll_points(word):
+    """Місця для переносу в слові: після голосної перед приголосною (мо|то|го|дин), не ближче 2 літер від країв."""
+    out = []
+    for i in range(2, len(word) - 1):
+        if word[i - 1].lower() in VOWELS and word[i].lower() not in VOWELS and word[i].isalpha():
+            if sum(ch.lower() in VOWELS for ch in word[i:]) and sum(ch.lower() in VOWELS for ch in word[:i]):
+                out.append(i)
+    return out
+
+
+def hyph_fit(text, width_pt, font="DejaVu", size=8):
+    """Одиниця виміру в вузькій колонці PDF: довге слово переноситься з дефісом («мото-<br/>годин»)."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    parts = []
+    for word in str(text or "").split(" "):
+        while stringWidth(word, font, size) > width_pt:
+            pts = [i for i in _syll_points(word) if stringWidth(word[:i] + "-", font, size) <= width_pt]
+            if not pts:
+                break
+            i = pts[-1]
+            parts.append(word[:i] + "-<br/>")
+            word = word[i:]
+        parts.append(word + " ")
+    return "".join(parts).strip()
+
+
+def soft_hyph(text):
+    """Для Word: м'які переноси в довгих словах — Word сам перенесе з дефісом, якщо не влізе."""
+    out = []
+    for word in str(text or "").split(" "):
+        if len(word) >= 7:
+            pts = _syll_points(word)
+            for i in reversed(pts):
+                word = word[:i] + "\u00ad" + word[i:]
+        out.append(word)
+    return " ".join(out)
+
+
 
 def _font(name):
     for d in FONT_DIRS:
@@ -259,6 +300,7 @@ def act_pdf(act, part="all"):
     right = ParagraphStyle("r", parent=small, alignment=TA_RIGHT)
     bold = ParagraphStyle("bo", parent=base, fontName="DejaVu-Bold")
     bold_s = ParagraphStyle("bos", parent=small, fontName="DejaVu-Bold")
+    small_r = ParagraphStyle("sr", parent=small, alignment=2)
 
     d = act["data"]
     lay = act_layout(d)
@@ -274,8 +316,11 @@ def act_pdf(act, part="all"):
         # текстові колонки переносяться в межах клітинки (назва, приміщення, показники)
         wrap_cols = (1, 2, 3) if len(head) > 6 else (1, 2)
         data = [[Paragraph(h, bold_s) for h in head]]
+        uc = head.index("Од.") if "Од." in head else -1
         for r in rows:
-            data.append([Paragraph(str(x), small) if j in wrap_cols else x for j, x in enumerate(r)])
+            data.append([Paragraph(str(x), small) if j in wrap_cols
+                         else Paragraph(hyph_fit(x, widths[j] * mm - 12), small_r if j >= num_from else small) if j == uc else x
+                         for j, x in enumerate(r)])
         tb = Table(data, colWidths=[w * mm for w in widths], repeatRows=1)
         tb.setStyle(TableStyle([
             ("FONT", (0, 0), (-1, -1), "DejaVu", 8),
@@ -408,8 +453,9 @@ def act_docx(act, part="all"):
             cell._tc.get_or_add_tcPr().append(shd)
         for r in rows:
             cells = tbl.add_row().cells
+            uc = head.index("Од.") if "Од." in head else -1
             for j, v in enumerate(r):
-                cells[j].text = str(v)
+                cells[j].text = soft_hyph(v) if j == uc else str(v)
                 if j >= num_from:
                     cells[j].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
         for row in tbl.rows:
