@@ -374,7 +374,7 @@ def act_pdf(act, part="all"):
     if lay["util"] and part != "act":
         if el:
             el.append(PageBreak())
-        el += header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ",
+        el += header(["ПОСЛУГИ З ОБСЛУГОВУВАННЯ",
                       f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         el += [Paragraph(_detail_intro(act), base), Spacer(1, 3 * mm)]
         el.append(table(DETAIL_HEAD, _detail_rows(lay, act), [8, 41, 27, 27, 22, 17, 19, 19], 4))
@@ -500,7 +500,7 @@ def act_docx(act, part="all"):
     if lay["util"] and part != "act":
         if part != "detail":
             doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
-        header(["ДЕТАЛІЗАЦІЯ КОМУНАЛЬНИХ ПОСЛУГ", f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
+        header(["ПОСЛУГИ З ОБСЛУГОВУВАННЯ", f"за {_ulabel(act)} — додаток до акта № {act['number']} від {_act_date(act)}"])
         para(_detail_intro(act)).alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         table(DETAIL_HEAD, _detail_rows(lay, act), [8, 41, 27, 27, 22, 17, 19, 19], 4)
         for a, b in _detail_totals_rows(act, lay):
