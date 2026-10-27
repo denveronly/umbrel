@@ -224,7 +224,14 @@ def close_month(sn, period, state=None, force=False):
     if cons is None and reading is None:
         return None
     target, written = sn.get("target") or "", None
-    if target:
+    if target.startswith("s:"):                       # сонячна генерація лінії: кВт·год за місяць -> «Сонце» лінії
+        lid = int(target[2:])
+        r = db.execute("SELECT kwh FROM line_solar WHERE line_id=? AND period=?", (lid, period)).fetchone()
+        if cons is not None and (not r or r["kwh"] is None):
+            db.execute("INSERT INTO line_solar(line_id, period, kwh) VALUES (?,?,?) "
+                       "ON CONFLICT(line_id, period) DO UPDATE SET kwh=excluded.kwh", (lid, period, calc.r2(cons)))
+            written = target
+    elif target:
         val = reading
         if sn.get("kind") == "monthly" and cons is not None:
             val = calc.r2(_target_prev(target, period) + cons)
@@ -333,10 +340,16 @@ def page():
         else:
             base = _last_in(sn["entity"], calc.prev_period(cur))
             month = calc.r2(v - base) if v is not None and base is not None else None
-        src = L.resolve_src(sn["target"]) if sn.get("target") else None
+        tg = sn.get("target") or ""
+        if tg.startswith("s:"):
+            ln = db.execute("SELECT name FROM power_lines WHERE id=?", (int(tg[2:]),)).fetchone()
+            tlabel = "☀ " + _("Солнце") + f" — {ln['name']}" if ln else None
+        else:
+            src = L.resolve_src(tg) if tg else None
+            tlabel = src[3] if src else None
         rows.append({"s": sn, "value": v, "unit": a.get("unit_of_measurement") or sn.get("unit") or "",
                      "updated": (st.get("last_updated") or "")[:16].replace("T", " "), "error": st.get("error"),
-                     "month": month, "target_label": src[3] if src else None})
+                     "month": month, "target_label": tlabel})
     periods = _months_list(12)
     hist = {}
     for r in db.execute("SELECT * FROM ha_months WHERE period>=?", (periods[-1],)):
@@ -346,7 +359,9 @@ def page():
     except ValueError:
         status = {}
     return render_template("ha.html", c=c, rows=rows, err=err, periods=periods[1:], hist=hist, status=status,
-                           srcs=L.src_options(), cur=cur, cands=cands, cand_err=cand_err, site_name=_(SITES[current_site()]["name"]))
+                           srcs=[{"value": f"s:{l['id']}", "label": "☀ " + _("Солнце (выработка за месяц)") + f" — {l['name']}"}
+                                 for l in db.execute("SELECT id, name FROM power_lines WHERE active=1 AND has_solar=1 ORDER BY sort, id")]
+                           + L.src_options(), cur=cur, cands=cands, cand_err=cand_err, site_name=_(SITES[current_site()]["name"]))
 
 
 @bp.route("/ha/sensors")
@@ -404,7 +419,7 @@ def sensor_save():
             return redirect(url_for("ha.page"))
         tgt = f.get("target") or ""
         item = {"entity": eid, "name": (f.get("name") or eid).strip(), "kind": f.get("kind") if f.get("kind") in KINDS else "total",
-                "unit": (f.get("unit") or "").strip(), "target": tgt if re.fullmatch(r"[lm]:\d+", tgt) else ""}
+                "unit": (f.get("unit") or "").strip(), "target": tgt if re.fullmatch(r"[lms]:\d+", tgt) else ""}
         for i, s in enumerate(sensors):
             if s["entity"] == eid:
                 sensors[i] = item

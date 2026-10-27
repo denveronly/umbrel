@@ -1367,4 +1367,5 @@ EN = {
     'ошибок': 'errors',
     'последняя рассылка': 'last mailing',
     'только акт': 'act only',
+    'Солнце (выработка за месяц)': 'Solar (generated per month)',
 }
