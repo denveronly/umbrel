@@ -451,7 +451,16 @@ def company_snapshot(c):
             "company_bank": c["bank"], "company_mfo": c["mfo"] if "mfo" in c.keys() else None,
             "company_ipn": c["ipn"] if "ipn" in c.keys() else None, "company_address": c["address"], "company_signer": c["signer"],
             "company_signer_position": c["signer_position"], "company_basis": c["basis"],
-            "company_vat_payer": c["vat_payer"]}
+            "company_vat_payer": c["vat_payer"],
+            "company_email": c["email"] if "email" in c.keys() else None,
+            "company_contacts": _contacts(c["contacts"] if "contacts" in c.keys() else None)}
+
+
+def _contacts(raw):
+    try:
+        return [x for x in json.loads(raw or "[]") if isinstance(x, dict)]
+    except ValueError:
+        return []
 
 
 NUM_DEFAULT = "{П}{ММ}{РР}-{NNN}"

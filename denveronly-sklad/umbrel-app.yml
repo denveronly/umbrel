@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.47.5"
+version: "1.48.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  Акти: у кожного орендаря однаково два рядки кнопок — «Акт» окремо і «Деталізація» окремо.
+  Компанії: електронна пошта і контактні особи (Бухгалтерія, Адміністрація, Юридичний відділ… — через «＋»). В актах пишуться під реквізитами орендодавця.
 dependencies: []
 path: ""
 defaultUsername: ""

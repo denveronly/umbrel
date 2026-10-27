@@ -50,6 +50,13 @@ def _party(p):
     bank = ", ".join(x for x in [f"банк {p['bank']}" if p.get("bank") else "", f"МФО {p['mfo']}" if p.get("mfo") else ""] if x)
     if bank:
         rows.append(bank[:1].upper() + bank[1:])
+    if p.get("email"):
+        rows.append(f"E-mail: {p['email']}")
+    for x in p.get("contacts") or []:                    # контактні особи компанії: «Бухгалтерія: Іваненко І., тел. …, e-mail …»
+        body = ", ".join(v for v in (x.get("name"), f"тел. {x['phone']}" if x.get("phone") else "",
+                                     f"e-mail {x['email']}" if x.get("email") else "") if v)
+        if body or x.get("role"):
+            rows.append(f"{x.get('role') or 'Контакт'}: {body}" if body else x["role"])
     return rows
 
 
@@ -58,7 +65,8 @@ def _company(act):
     return {"name": c.get("company_name"), "edrpou": c.get("company_edrpou"),
             "address": c.get("company_address"), "iban": c.get("company_iban"),
             "bank": c.get("company_bank"), "mfo": c.get("company_mfo"), "ipn": c.get("company_ipn"), "signer": c.get("company_signer"),
-            "position": c.get("company_signer_position"), "basis": c.get("company_basis")}
+            "position": c.get("company_signer_position"), "basis": c.get("company_basis"),
+            "email": c.get("company_email"), "contacts": c.get("company_contacts") or []}
 
 
 def _tenant(act):

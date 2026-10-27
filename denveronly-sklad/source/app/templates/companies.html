@@ -54,6 +54,16 @@
   </form>
 </details>
 
+{% macro cc_row(x) %}<div class="ccrow">
+  <input name="cc_role" list="ccroles" value="{{ x.role or '' }}" placeholder="{{ _("Бухгалтерия") }}">
+  <input name="cc_name" value="{{ x.name or '' }}" placeholder="{{ _("ФИО") }}">
+  <input name="cc_phone" value="{{ x.phone or '' }}" placeholder="+380…">
+  <input name="cc_email" type="email" value="{{ x.email or '' }}" placeholder="e-mail">
+  <button type="button" class="sm ghost" title="{{ _("Удалить") }}" onclick="this.closest('.ccrow').remove()">✕</button></div>{% endmacro %}
+<datalist id="ccroles"><option value="Бухгалтерія"><option value="Адміністрація"><option value="Юридичний відділ"><option value="Директор"><option value="Менеджер з оренди"></datalist>
+<style>.ccrow { display: grid; grid-template-columns: 1.1fr 1.3fr 1fr 1.3fr auto; gap: 6px; margin-top: 6px; } @media (max-width: 700px) { .ccrow { grid-template-columns: 1fr 1fr; } }</style>
+<script>function ccAdd(b) { const box = b.closest('.ccbox'); box.querySelector('.cclist').appendChild(box.querySelector('.cctpl').content.cloneNode(true)); box.querySelector('.cclist .ccrow:last-child input').focus(); }</script>
+
 {% macro company_form(c) %}
 <form method="post" class="grid">
   {% if c %}<input type="hidden" name="cid" value="{{ c.id }}">{% endif %}
@@ -67,6 +77,15 @@
   <label>{{ _("Должность") }}<input name="signer_position" list="positions" value="{{ (c.signer_position or '') if c else 'Директор' }}"></label>
   <label>{{ _("Действует на основании") }}<input name="basis" list="bases" value="{{ (c.basis or '') if c else 'Статуту' }}"></label>
   <label class="full">{{ _("Адрес") }}<input name="address" value="{{ c.address or '' if c else '' }}"></label>
+  <label class="full">{{ _("Электронная почта") }}<input name="email" type="email" value="{{ c.email or '' if c else '' }}" placeholder="office@example.com"></label>
+  <div class="full ccbox">
+    <div class="row" style="gap:8px"><b>{{ _("Контактные лица") }}</b> <span class="muted">{{ _("— пишутся в акте под реквизитами") }}</span><span class="spacer"></span>
+      <button type="button" class="sm ghost" onclick="ccAdd(this)">＋ {{ _("Добавить") }}</button></div>
+    <div class="cclist">
+      {% for x in ((c.contacts if c else '')|fromjson) %}{{ cc_row(x) }}{% endfor %}
+    </div>
+    <template class="cctpl">{{ cc_row({}) }}</template>
+  </div>
   <label>{{ _("Город (в шапке акта") }})<input name="city" value="{{ c.city or '' if c else '' }}" placeholder="{{ _("м. Київ") }}"></label>
   <label>{{ _("Префикс номера акта") }}<input name="act_prefix" value="{{ c.act_prefix or '' if c else '' }}" placeholder="{{ _("А-") }}"></label>
   <label class="full">{{ _("Заметка") }}<input name="note" value="{{ c.note or '' if c else '' }}"></label>

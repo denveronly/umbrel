@@ -1316,4 +1316,8 @@ EN = {
     'Берётся из основной карточки': 'Taken from the main card',
     'Майстер': 'Master',
     'Пусто — как в основной карточке': 'Empty — as in the main card',
+    'Электронная почта': 'E-mail',
+    '— пишутся в акте под реквизитами': '— printed in the act under the requisites',
+    'Бухгалтерия': 'Accounting',
+    'ФИО': 'Full name',
 }

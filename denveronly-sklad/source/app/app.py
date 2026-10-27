@@ -80,6 +80,14 @@ def kwh_filter(x):
     return calc.fmt_num(calc.kwh_round(x)) if x is not None and x != "" else ""
 
 
+@app.template_filter("fromjson")
+def fromjson_filter(s):
+    try:
+        return json.loads(s) if s else []
+    except ValueError:
+        return []
+
+
 @app.template_filter("plain")
 def plain(x):
     """Число для поля ввода: 1250.0 -> 1250, 9.10 -> 9.1, None -> ''."""
@@ -781,8 +789,8 @@ def tenant_services(tid):
 
 # ---------------- компании-получатели ----------------
 
-COMPANY_FIELDS = ["name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "signer", "signer_position", "basis", "city",
-                  "act_prefix", "note"]
+COMPANY_FIELDS = ["name", "edrpou", "ipn", "iban", "bank", "mfo", "address", "email", "signer", "signer_position", "basis",
+                  "city", "act_prefix", "note"]
 
 
 @app.route("/companies", methods=["GET", "POST"])
@@ -814,8 +822,13 @@ def companies_page():
         else:
             vals = [request.form.get(f, "").strip() for f in COMPANY_FIELDS]
             pts = ",".join(k for k in PAYMENT_TYPES if request.form.get(f"pt_{k}"))
-            vals += [1 if request.form.get("vat_payer") else 0, 1 if request.form.get("active") else 0, pts]
-            cols = COMPANY_FIELDS + ["vat_payer", "active", "pay_types"]
+            f = request.form
+            contacts = [{"role": r.strip(), "name": n.strip(), "phone": ph.strip(), "email": em.strip()}
+                        for r, n, ph, em in zip(f.getlist("cc_role"), f.getlist("cc_name"), f.getlist("cc_phone"), f.getlist("cc_email"))
+                        if (r + n + ph + em).strip()]
+            vals += [1 if request.form.get("vat_payer") else 0, 1 if request.form.get("active") else 0, pts,
+                     json.dumps(contacts, ensure_ascii=False)]
+            cols = COMPANY_FIELDS + ["vat_payer", "active", "pay_types", "contacts"]
             if not vals[0]:
                 abort(400, _("Название обязательно"))
             if cid:
