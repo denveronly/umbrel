@@ -200,7 +200,9 @@ def economics():
 
     n = request.args.get("months", 12, type=int)
     n = n if n in (6, 12, 24, 36) else 12
-    end = request.args.get("to") or cur
+    # після 15-го — уже наступний місяць (акти за нього готуються наперед: оренда наступного + комунальні поточного)
+    show = calc.next_period(cur) if today.day > 15 else cur
+    end = request.args.get("to") or show
     periods = last_months(end, n)
     start_d = date(int(periods[0][:4]), int(periods[0][5:]), 1)
     fx_error = ensure_rates(start_d, today)
@@ -236,7 +238,7 @@ def economics():
         r["yasno"] = yasno.get(up)
 
     now_rate, now_rate_date = rate_on(today)
-    sel = next((r for r in rows if r["period"] == cur), rows[-1])
+    sel = next((r for r in rows if r["period"] == show), rows[-1])
     sel["items"] = month_totals(sel["period"], cur, detail=True)["items"]
     sums = {k: calc.r2(sum(r[k] for r in rows)) for k in (*FORMS, "vat", "total", "rent", "util")}
     sums["usd"] = calc.r2(sum(r["usd"] or 0 for r in rows))
