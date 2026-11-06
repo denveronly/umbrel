@@ -469,6 +469,37 @@ def warehouse_edit(wid=None):
                            cats=categories(), cur_tenant=cur_tenant, tenancy=tenancy, today=date.today().isoformat())
 
 
+@app.route("/warehouses/<int:wid>/move_out", methods=["POST"])
+def warehouse_move_out(wid):
+    """«З'їхав» з картки складу: звільнити лише цей склад з датою виїзду; оренда за місяць виїзду — по днях.
+    Якщо інших складів в орендаря не лишилось — він стає неактивним."""
+    db = get_db()
+    wh = db.execute("SELECT w.*, t.name AS tname FROM warehouses w JOIN tenants t ON t.id=w.tenant_id WHERE w.id=?",
+                    (wid,)).fetchone()
+    if not wh:
+        abort(404)
+    day = request.form.get("date", "")
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        flash(_("Укажите дату выезда"))
+        return redirect(url_for("warehouse_edit", wid=wid))
+    tid = wh["tenant_id"]
+    last = db.execute("SELECT COALESCE(MAX(id), 0) FROM warehouse_tenancy").fetchone()[0]
+    db.execute("UPDATE warehouses SET tenant_id=NULL WHERE id=?", (wid,))
+    db.execute("UPDATE warehouse_tenancy SET ended=?, moved_out=1 WHERE id>? AND warehouse_id=?", (day, last, wid))
+    left = db.execute("SELECT COUNT(*) FROM warehouses WHERE tenant_id=?", (tid,)).fetchone()[0]
+    if not left:
+        db.execute("UPDATE tenants SET active=0, moved_out=? WHERE id=?", (day, tid))
+    log("Арендатор выехал", f"{wh['tname']}, {day}; освобождён: {wh['name']}", commit=False)
+    db.commit()
+    calc.reset_tenancy_cache()
+    flash(_("Арендатор выехал, склады освобождены") + f": {wh['name']}"
+          + ("" if left else " · " + _("других складов у арендатора нет — он помечен неактивным")))
+    remind_final_act(tid, day[:7])
+    return redirect(url_for("warehouse_edit", wid=wid))
+
+
 @app.route("/tenancy/<int:hid>", methods=["POST"])
 def tenancy_edit(hid):
     """Виправити запис історії оренди (дати, договір, сума) або видалити його."""
@@ -484,11 +515,12 @@ def tenancy_edit(hid):
     else:
         rent = fnum("rent")
         db.execute("UPDATE warehouse_tenancy SET started=?, ended=?, contract_no=?, contract_date=?, rent=?, "
-                   "price_m2=CASE WHEN ? IS NOT NULL AND area > 0 THEN ROUND(? / area, 4) ELSE price_m2 END, note=? "
+                   "price_m2=CASE WHEN ? IS NOT NULL AND area > 0 THEN ROUND(? / area, 4) ELSE price_m2 END, note=?, moved_out=? "
                    "WHERE id=?", (to_iso(request.form.get("started")), to_iso(request.form.get("ended")),
                                   request.form.get("contract_no", "").strip() or None,
                                   to_iso(request.form.get("contract_date")) or request.form.get("contract_date") or None, rent if rent is not None else h["rent"],
-                                  rent, rent, request.form.get("note", "").strip() or None, hid))
+                                  rent, rent, request.form.get("note", "").strip() or None,
+                                  1 if request.form.get("moved_out") else 0, hid))
         log("Запись истории аренды изменена", h["tenant_name"] or "", commit=False)
         flash(_("Сохранено"))
     db.commit()
@@ -727,7 +759,7 @@ def tenant_move_out(tid):
     freed = [r["name"] for r in db.execute("SELECT name FROM warehouses WHERE tenant_id=? ORDER BY name", (tid,))]
     db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))
     # тригер історії ставить «по» = сьогодні — ставимо фактичну дату виїзду
-    db.execute("UPDATE warehouse_tenancy SET ended=? WHERE id>? AND tenant_id=?", (day, last, tid))
+    db.execute("UPDATE warehouse_tenancy SET ended=?, moved_out=1 WHERE id>? AND tenant_id=?", (day, last, tid))
     db.execute("UPDATE tenants SET active=0, moved_out=? WHERE id=?", (day, tid))
     log("Арендатор выехал", f"{t['name']}, {day}" + (f"; освобождены: {', '.join(freed)}" if freed else ""), commit=False)
     db.commit()
@@ -766,7 +798,9 @@ def tenant_edit(tid=None):
             db.execute(f"UPDATE tenants SET {', '.join(f + '=?' for f in cols)} WHERE id=?", vals + [tid])
             if t["active"] and not active:              # виїхав: звільняємо склади, фіксуємо дату
                 freed = [r["name"] for r in db.execute("SELECT name FROM warehouses WHERE tenant_id=?", (tid,))]
+                last = db.execute("SELECT COALESCE(MAX(id), 0) FROM warehouse_tenancy").fetchone()[0]
                 db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))
+                db.execute("UPDATE warehouse_tenancy SET moved_out=1 WHERE id>? AND tenant_id=?", (last, tid))
                 db.execute("UPDATE tenants SET moved_out=date('now','localtime') WHERE id=?", (tid,))
                 log("Арендатор выехал", f"{t['name']}" + (f"; освобождены: {', '.join(freed)}" if freed else ""), commit=False)
                 if freed:

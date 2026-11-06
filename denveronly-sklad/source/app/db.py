@@ -561,6 +561,7 @@ MIGRATIONS = {
                 "passport_issued": "TEXT", "moved_out": "TEXT", "activity": "TEXT",
                 "parent_id": "INTEGER", "legal_name": "TEXT"},   # legal_name — назва в актах (порожньо = як у програмі)   # parent_id — додатковий договір того ж орендаря (реквізити з основної картки)
     "price_history": {"kind": "TEXT NOT NULL DEFAULT 'set'", "pct": "REAL", "area": "REAL"},
+    "warehouse_tenancy": {"moved_out": "INTEGER NOT NULL DEFAULT 0"},   # 1 — оренда закінчилась виїздом орендаря
     "readings": {"reactive": "REAL"},
     "companies": {"signer_position": "TEXT", "basis": "TEXT", "mfo": "TEXT", "ipn": "TEXT",
                   "pay_types": "TEXT", "email": "TEXT",
@@ -589,6 +590,11 @@ def _migrate(con, site=MAIN_SITE):
 
     # історія оренди: тригери на зміну орендаря складу (ловлять усі шляхи — картка складу, орендаря, виїзд, ШІ)
     con.executescript(TENANCY_TRIGGERS)
+    # 1.54.1: позначка «з'їхав» для записів, що закінчились у день виїзду орендаря (одноразово)
+    if not con.execute("SELECT 1 FROM settings WHERE key='tenancy_moved_out_v1'").fetchone():
+        con.execute("UPDATE warehouse_tenancy SET moved_out=1 WHERE ended IS NOT NULL AND EXISTS "
+                    "(SELECT 1 FROM tenants t WHERE t.id=warehouse_tenancy.tenant_id AND t.active=0 AND t.moved_out=warehouse_tenancy.ended)")
+        con.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('tenancy_moved_out_v1', '1')")
     for wid, tsince, cdate in con.execute("SELECT w.id, w.tenant_since, t.contract_date FROM warehouses w "
                                           "JOIN tenants t ON t.id=w.tenant_id").fetchall():
         iso = to_iso(tsince) if tsince else to_iso(cdate)   # дата договору вписується вручну (01.03.2024)

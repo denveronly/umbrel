@@ -10,7 +10,7 @@
         <span class="badge">{{ _("сейчас") }}</span></td>
       <td>{% if c.contract_no %}№ {{ c.contract_no }}{% endif %}{% if c.contract_date %} <span class="muted">{{ _("от") }} {{ c.contract_date|dmy }}</span>{% endif %}{% if not c.contract_no and not c.contract_date %}<span class="muted">—</span>{% endif %}</td>
       <td class="n"><b>{{ money(c.rent) }}</b> {{ _("грн") }}<br><span class="muted">{{ money(c.price_m2) }} {{ _("грн/м²") }}{% if c.pt %} · {{ PAYMENT_TYPES[c.pt] }}{% endif %}</span></td>
-      <td>{{ _("с") }} {{ c.since|dmy if c.since else '…' }}{% if c.since %}<br><span class="muted">{{ c.since|span }}</span>{% endif %}</td>
+      <td>{{ _("Въехал") }}: <b>{{ c.since|dmy if c.since else '…' }}</b><br><span class="muted">{{ _("арендует сейчас") }}{% if c.since %} · {{ c.since|span }}{% endif %}</span></td>
       <td></td>
     </tr>
   {% endfor %}
@@ -21,7 +21,10 @@
         {% if h.note %}<div class="muted">{{ h.note }}</div>{% endif %}</td>
       <td>{% if h.contract_no %}№ {{ h.contract_no }}{% endif %}{% if h.contract_date %} {{ _("от") }} {{ h.contract_date|dmy }}{% endif %}{% if not h.contract_no and not h.contract_date %}—{% endif %}</td>
       <td class="n">{{ money(h.rent) }} {{ _("грн") }}<br>{{ money(h.price_m2) }} {{ _("грн/м²") }}{% if h.payment_type %} · {{ PAYMENT_TYPES[h.payment_type] }}{% endif %}</td>
-      <td>{{ h.started|dmy if h.started else '…' }} — {{ h.ended|dmy if h.ended else '…' }}{% if h.started and h.ended %}<br>{{ h.started|span(h.ended) }}{% endif %}</td>
+      <td>{{ _("Въехал") }}: {{ h.started|dmy if h.started else '…' }}<br>
+        {% if h.moved_out %}<span class="badge off">🚪 {{ _("Съехал") }}</span> <b>{{ h.ended|dmy if h.ended else '…' }}</b>
+        {% else %}{{ _("Аренда до") }}: {{ h.ended|dmy if h.ended else '…' }}{% endif %}
+        {% if h.started and h.ended %}<br><span class="muted">{{ h.started|span(h.ended) }}</span>{% endif %}</td>
       <td class="acts"><details class="tedit"><summary class="btn sm ghost" title="{{ _("Исправить") }}">✎</summary>
         <form method="post" action="{{ url_for('tenancy_edit', hid=h.id) }}" class="grid">
           <input type="hidden" name="next" value="{{ next_url }}">
@@ -31,6 +34,7 @@
           <label>{{ _("Дата договора") }}<input type="date" name="contract_date" value="{{ h.contract_date or '' }}"></label>
           <label>{{ _("Аренда в месяц, грн") }}<input name="rent" inputmode="decimal" value="{{ h.rent|plain }}"></label>
           <label>{{ _("Заметка") }}<input name="note" value="{{ h.note or '' }}"></label>
+          <label class="check"><input type="checkbox" name="moved_out" value="1" {{ 'checked' if h.moved_out }}> {{ _("арендатор съехал") }}</label>
           <div class="full row"><button class="sm">{{ _("Сохранить") }}</button><span class="spacer"></span>
             <button class="sm danger" name="delete" value="1" onclick="return confirm({{ _("Удалить запись из истории аренды?")|tojson|forceescape }})">{{ _("Удалить") }}</button></div>
         </form></details></td>

@@ -4,6 +4,24 @@
 {% block content %}
 <p><a href="{{ url_for('warehouses') }}">← {{ _("Склады") }}</a></p>
 <h1>{{ wh.name if wh else _("Новый склад") }}</h1>
+{% if cur_tenant %}
+<div class="card" style="padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  <span>{{ _("Арендатор") }}: <a href="{{ url_for('tenant_edit', tid=cur_tenant.id) }}"><b>{{ cur_tenant.name }}</b></a>
+    {% if wh.tenant_since %}<span class="muted">· {{ _("с") }} {{ wh.tenant_since|dmy }}</span>{% endif %}</span>
+  <span class="spacer"></span>
+  <details class="moveout">
+    <summary class="btn sm danger">🚪 {{ _("Съехал") }}</summary>
+    <form method="post" action="{{ url_for('warehouse_move_out', wid=wh.id) }}" class="moveout-box"
+          onsubmit="return confirm({{ (_('Арендатор съехал?') ~ ' ' ~ wh.name ~ ' — ' ~ _('станет свободным.'))|tojson|forceescape }})">
+      <label>{{ _("Дата выезда (последний день аренды)") }}
+        <input type="date" name="date" value="{{ today }}" max="{{ today }}" min="{{ wh.tenant_since or '' }}" required></label>
+      <p class="muted">{{ _("Аренда за месяц выезда — только за дни до этой даты.") }}
+        {{ _("Освобождается только этот склад; если других складов у арендатора нет — он станет неактивным.") }}</p>
+      <button class="sm danger">{{ _("Съехал") }}</button>
+    </form>
+  </details>
+</div>
+{% endif %}
 
 <div class="card">
 <form method="post" class="grid">
