@@ -367,13 +367,13 @@ def set_price(wid, new_price, kind="set"):
     return True
 
 
-def remind_final_act(old_tid):
+def remind_final_act(old_tid, um=None):
     """Після зміни/звільнення складу: нагадати сформувати колишньому орендарю акт за місяць виїзду (комунальні)."""
     if not old_tid:
         return
     db = get_db()
     t = db.execute("SELECT name FROM tenants WHERE id=?", (old_tid,)).fetchone()
-    um = this_month()
+    um = um or this_month()
     ap = calc.next_period(um) if settings().get("util_shift", "1") == "1" else um
     if t and not db.execute("SELECT 1 FROM acts WHERE tenant_id=? AND period=?", (old_tid, ap)).fetchone():
         flash(_("Не забудьте сформировать акт для «{t}» за {a} (коммунальные за {u}) во вкладке «Акты» — "
@@ -456,7 +456,15 @@ def warehouse_edit(wid=None):
         if wh and wh["tenant_id"] else None
     tenancy = db.execute("SELECT * FROM warehouse_tenancy WHERE warehouse_id=? ORDER BY COALESCE(ended, '') DESC, id DESC",
                          (wid,)).fetchall() if wid else []
-    return render_template("warehouse_edit.html", wh=wh, tenants=tenants, meters=meters, price=price, pt=pt,
+    plans, before = [], (price["total"] if price else 0, wh["price_m2"] if wh else None)
+    for pl in (calc.price_plans(wid, db) if wh else []):
+        if pl["applied_at"]:
+            continue
+        p_ = calc.rent_price({**dict(wh), "price_m2": pl["price_m2"]}, pt)
+        plans.append({"p": pl, "price": p_, "delta": calc.r2(p_["total"] - before[0]),
+                      "pct": (pl["price_m2"] / before[1] - 1) * 100 if before[1] else None})
+        before = (p_["total"], pl["price_m2"])     # наступне підвищення — від цієї ціни
+    return render_template("warehouse_edit.html", wh=wh, tenants=tenants, meters=meters, price=price, pt=pt, plans=plans,
                            history=history, meter_services=[sv for sv in services() if sv["mode"] == "meter" or (sv["mode"] == "share" and sv["has_main"])], power_lines=power_lines,
                            cats=categories(), cur_tenant=cur_tenant, tenancy=tenancy, today=date.today().isoformat())
 
@@ -511,6 +519,74 @@ def warehouse_raise(wid):
         p = (new / old - 1) * 100 if old else 0
         flash(_("Цена повышена") + f": {calc.fmt_money(old)} → {calc.fmt_money(new)} грн/м² ({p:+.2f}%)")
     return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+
+
+@app.route("/warehouses/<int:wid>/plan", methods=["POST"])
+def price_plan_add(wid):
+    """Запланувати підвищення: нова ціна (за м² або сума за місяць) з дати."""
+    db = get_db()
+    wh = db.execute("SELECT * FROM warehouses WHERE id=?", (wid,)).fetchone()
+    if not wh:
+        abort(404)
+    from db import to_iso
+    day = to_iso(request.form.get("plan_date"))
+    new = fnum("plan_m2")
+    month = fnum("plan_month")
+    if new is None and month is not None and wh["area"]:
+        new = round(month / wh["area"], 4)
+    if not day or not new or new <= 0:
+        flash(_("Укажите новую цену и дату"))
+        return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+    db.execute("INSERT INTO price_plans(warehouse_id, from_date, price_m2, note, username) VALUES (?,?,?,?,?)",
+               (wid, day, new, request.form.get("plan_note", "").strip() or None,
+                g.user["username"] if g.get("user") else None))
+    log("Запланировано повышение цены", f"{wh['name']}: с {day} — {calc.fmt_money(new)} грн/м²", commit=False)
+    db.commit()
+    flash(_("Повышение запланировано") + f": {day[8:10]}.{day[5:7]}.{day[:4]} — {calc.fmt_money(new * (wh['area'] or 0))} "
+          + _("грн/мес"))
+    apply_due_plans()
+    return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+
+
+@app.route("/warehouses/<int:wid>/plan/<int:pid>/delete", methods=["POST"])
+def price_plan_delete(wid, pid):
+    db = get_db()
+    pl = db.execute("SELECT p.*, w.name FROM price_plans p JOIN warehouses w ON w.id=p.warehouse_id "
+                    "WHERE p.id=? AND p.warehouse_id=? AND p.applied_at IS NULL", (pid, wid)).fetchone()
+    if not pl:
+        abort(404)
+    db.execute("DELETE FROM price_plans WHERE id=?", (pid,))
+    log("Плановое повышение отменено", f"{pl['name']}: с {pl['from_date']} — {calc.fmt_money(pl['price_m2'])} грн/м²",
+        commit=False)
+    db.commit()
+    flash(_("Плановое повышение отменено"))
+    return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+
+
+def apply_due_plans():
+    """Настала дата планового підвищення — нова ціна стає діючою (з записом в історію цін)."""
+    db = get_db()
+    try:
+        due = db.execute("SELECT * FROM price_plans WHERE applied_at IS NULL AND from_date<=date('now','localtime') "
+                         "ORDER BY from_date, id").fetchall()
+    except Exception:  # noqa — таблиці ще немає
+        return
+    for pl in due:
+        old = db.execute("SELECT price_m2 FROM warehouses WHERE id=?", (pl["warehouse_id"],)).fetchone()
+        if old is None:
+            continue
+        set_price(pl["warehouse_id"], pl["price_m2"], kind="increase")
+        db.execute("UPDATE price_plans SET applied_at=datetime('now','localtime'), old_price=? WHERE id=?",
+                   (old["price_m2"], pl["id"]))
+    if due:
+        db.commit()
+        calc.reset_tenancy_cache()
+
+
+@app.before_request
+def _apply_due_plans():
+    if g.get("user") and request.endpoint not in (None, "static"):
+        apply_due_plans()
 
 
 @app.route("/warehouses/<int:wid>/price/<int:hid>/delete", methods=["POST"])
@@ -634,6 +710,34 @@ def tenant_add_contract(tid):
     return redirect(url_for("tenant_edit", tid=new))
 
 
+@app.route("/tenants/<int:tid>/move_out", methods=["POST"])
+def tenant_move_out(tid):
+    """Кнопка «З'їхав»: звільнити склади з датою виїзду; оренда за місяць виїзду — лише за дні до виїзду."""
+    db = get_db()
+    t = db.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    if not t:
+        abort(404)
+    day = request.form.get("date", "")
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        flash(_("Укажите дату выезда"))
+        return redirect(url_for("tenant_edit", tid=tid))
+    last = db.execute("SELECT COALESCE(MAX(id), 0) FROM warehouse_tenancy").fetchone()[0]
+    freed = [r["name"] for r in db.execute("SELECT name FROM warehouses WHERE tenant_id=? ORDER BY name", (tid,))]
+    db.execute("UPDATE warehouses SET tenant_id=NULL WHERE tenant_id=?", (tid,))
+    # тригер історії ставить «по» = сьогодні — ставимо фактичну дату виїзду
+    db.execute("UPDATE warehouse_tenancy SET ended=? WHERE id>? AND tenant_id=?", (day, last, tid))
+    db.execute("UPDATE tenants SET active=0, moved_out=? WHERE id=?", (day, tid))
+    log("Арендатор выехал", f"{t['name']}, {day}" + (f"; освобождены: {', '.join(freed)}" if freed else ""), commit=False)
+    db.commit()
+    calc.reset_tenancy_cache()
+    flash(_("Арендатор выехал, склады освобождены") + (": " + ", ".join(freed) if freed else ""))
+    if freed:
+        remind_final_act(tid, day[:7])
+    return redirect(url_for("tenant_edit", tid=tid))
+
+
 @app.route("/tenants/new", methods=["GET", "POST"])
 @app.route("/tenants/<int:tid>", methods=["GET", "POST"])
 def tenant_edit(tid=None):
@@ -733,7 +837,7 @@ def tenant_edit(tid=None):
             nav_next = ids[pos + 1] if pos + 1 < len(ids) else None
     return render_template("tenant_edit.html", t=t, parent=parent, siblings=siblings, nav_prev=nav_prev, nav_next=nav_next, usage=usage, carry=carry, use_period=use_period, wh_items=wh_items, free=free, contacts=contacts, acts=acts,
                            subs=subs, all_svcs=all_svcs, meter_svcs=meter_svcs, tenancy=tenancy, share_svcs=share_svcs,
-                           cur_period=current_period(),
+                           cur_period=current_period(), today=date.today().isoformat(),
                            tot=tot, companies=companies(), vat=float(st["vat_rate"]), free_prices=free_prices)
 
 
@@ -1272,6 +1376,7 @@ def acts():
             t_ = calc.tenancy_for(tens, p)
             if t_ and t_["tid"]:
                 had.add(t_["tid"])
+        had.update(x["tid"] for x in tens if x["tid"] and calc.ended_in(x, period))
     tenants = [t for t in tenants if t["active"] or t["id"] in had]
     groups = {}
     for c in companies():

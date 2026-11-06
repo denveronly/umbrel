@@ -399,6 +399,19 @@ CREATE TABLE IF NOT EXISTS price_history (
     changed_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- заплановані підвищення ціни складу: з дати from_date ціна стає price_m2 (в день настання — у price_history)
+CREATE TABLE IF NOT EXISTS price_plans (
+    id INTEGER PRIMARY KEY,
+    warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+    from_date TEXT NOT NULL,                     -- YYYY-MM-DD
+    price_m2 REAL NOT NULL,
+    note TEXT,
+    username TEXT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    applied_at TEXT,                             -- коли нова ціна стала діючою
+    old_price REAL                               -- ціна до підвищення (записується при застосуванні)
+);
+
 -- курс USD (НБУ)
 CREATE TABLE IF NOT EXISTS fx_rates (
     date TEXT PRIMARY KEY,                       -- YYYY-MM-DD

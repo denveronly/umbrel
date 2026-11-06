@@ -22,6 +22,19 @@
     <span class="muted">{{ _("Реквизиты в актах берутся из основной карточки; склады, доли услуг и акты — свои.") }}</span></span>{% endif %}
   {% if siblings %}<span class="muted">{{ _("Договоры") }}:</span>{% for x in siblings %}<a class="btn sm ghost" href="{{ url_for('tenant_edit', tid=x.id) }}">{{ x.name }}{% if x.contract_no %} · № {{ x.contract_no }}{% endif %}</a>{% endfor %}{% endif %}
   <span class="spacer"></span>
+  {% if t.active %}
+  <details class="moveout">
+    <summary class="btn sm danger">🚪 {{ _("Съехал") }}</summary>
+    <form method="post" action="{{ url_for('tenant_move_out', tid=t.id) }}" class="moveout-box"
+          onsubmit="return confirm({{ _('Арендатор съехал? Его склады станут свободными.')|tojson|forceescape }})">
+      <label>{{ _("Дата выезда (последний день аренды)") }}
+        <input type="date" name="date" value="{{ today }}" max="{{ today }}" required></label>
+      <p class="muted">{{ _("Аренда за месяц выезда — только за дни до этой даты.") }}
+        {% if wh_items %}{{ _("Освободятся") }}: {{ wh_items|map(attribute=0)|map(attribute='name')|join(', ') }}{% endif %}</p>
+      <button class="sm danger">{{ _("Съехал") }}</button>
+    </form>
+  </details>
+  {% endif %}
   <form method="post" action="{{ url_for('tenant_add_contract', tid=t.id) }}" onsubmit="return confirm({{ _('Создать карточку ещё одного договора этого арендатора?')|tojson }})">
     <button class="sm ghost" title="{{ _("Отдельный акт по своим складам и своим долям услуг") }}">＋ {{ _("Ещё один договор") }}</button></form>
 </div>

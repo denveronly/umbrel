@@ -58,6 +58,39 @@
     <button>{{ _("Повысить цену") }}</button>
   </form>
 
+  <label class="check" style="margin-top:8px"><input type="checkbox" id="plan_cb" {{ 'checked' if plans }}
+    onchange="document.getElementById('planbox').hidden = !this.checked"> <b>📅 {{ _("Запланировать повышение") }}</b></label>
+  <div id="planbox" class="raisebox" {{ '' if plans else 'hidden' }}>
+    {% if plans %}
+    <div class="tablewrap"><table class="hist">
+      <thead><tr><th>{{ _("С даты") }}</th><th class="n">{{ _("Новая цена") }}</th><th class="n">{{ _("Разница в месяц") }}</th><th class="n">%</th><th>{{ _("Заметка") }}</th><th></th></tr></thead>
+      <tbody>
+      {% for x in plans %}{% set pl = x.p %}
+        <tr>
+          <td><b>{{ pl.from_date|dmy }}</b><br><span class="muted">{{ pl.username or '' }}</span></td>
+          <td class="n"><b>{{ money(x.price.total) }}</b> {{ _("грн/мес") }}<br><span class="muted">{{ money(pl.price_m2) }} {{ _("грн/м²") }}</span></td>
+          <td class="n"><b class="{{ 'pos' if x.delta >= 0 else 'neg' }}">{{ '+' if x.delta >= 0 else '−' }}{{ money(x.delta|abs) }}</b> {{ _("грн") }}</td>
+          <td class="n">{{ '%+.2f'|format(x.pct) ~ '%' if x.pct is not none else '—' }}</td>
+          <td class="muted">{{ pl.note or '' }}</td>
+          <td><form method="post" action="{{ url_for('price_plan_delete', wid=wh.id, pid=pl.id) }}" style="margin:0">
+            <button class="sm danger" title="{{ _("Отменить") }}" onclick="return confirm({{ _("Отменить плановое повышение?")|tojson|forceescape }})">✕</button></form></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% endif %}
+    <form method="post" action="{{ url_for('price_plan_add', wid=wh.id) }}">
+      <div class="grid" style="display:grid">
+        <label>{{ _("С даты") }}<input type="date" name="plan_date" min="{{ today }}" required></label>
+        <label>{{ _("Новая сумма за месяц, грн") }}<input name="plan_month" id="p_month" inputmode="decimal" placeholder="{{ money(price.total) }}"></label>
+        <label>{{ _("или новая цена за м², грн") }}<input name="plan_m2" id="p_m2" inputmode="decimal" placeholder="{{ money(price.rate) }}"></label>
+        <label>{{ _("Заметка") }}<input name="plan_note" placeholder="{{ _("напр. индексация по договору") }}"></label>
+      </div>
+      <p class="muted">{{ _("В этот день новая цена станет действующей. До того она уже учитывается в актах и в «Економіці» за месяцы с этой даты; с середины месяца — по дням.") }}</p>
+      <button>📅 {{ _("Запланировать") }}</button>
+    </form>
+  </div>
+
   {% if history %}
   <h3 class="phh">{{ _("История цены") }}</h3>
   <div class="tablewrap"><table class="hist">

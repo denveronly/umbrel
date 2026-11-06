@@ -46,6 +46,55 @@ def rent_price(wh, pt=None, s=None):
     return {"rate": r2(rate), "total": total, "net": total, "vat": 0, "pt": pt}
 
 
+# ---------- заплановані підвищення ----------
+
+def price_plans(wid, db=None):
+    """Плани підвищення складу (заплановані й застосовані), за датою."""
+    db = db or get_db()
+    try:
+        return db.execute("SELECT * FROM price_plans WHERE warehouse_id=? ORDER BY from_date, id", (wid,)).fetchall()
+    except Exception:  # noqa — таблиці ще немає
+        return []
+
+
+def price_at(wh, day, plans):
+    """Ціна за м² на дату: запланована (вже настала) > стара ціна застосованого пізніше плану > поточна."""
+    pend = [p for p in plans if not p["applied_at"] and p["from_date"] <= day]
+    if pend:
+        return pend[-1]["price_m2"]
+    later = [p for p in plans if p["applied_at"] and p["from_date"] > day and p["old_price"] is not None]
+    return later[0]["old_price"] if later else wh["price_m2"]
+
+
+def rent_for(wh, pt, period, s=None, start=None, end=None, plans=()):
+    """Оренда складу за місяць: по днях — якщо орендар з'їхав (end) або посеред місяця змінюється ціна (plans).
+    Як rent_price, плюс segs [(з, по, ціна за м², днів)], days, mdays."""
+    from datetime import date as _d, timedelta as _td
+    s = s or settings()
+    ms, me = _month_bounds(period)
+    a, b = max(ms, start or ms), min(me, end or me)
+    mdays = int(me[8:])
+    cuts = [a] + sorted({p["from_date"] for p in plans if a < p["from_date"] <= b})
+    segs = []
+    for i, c in enumerate(cuts):
+        last = (_d.fromisoformat(cuts[i + 1]) - _td(days=1)).isoformat() if i + 1 < len(cuts) else b
+        price = price_at(wh, c, plans)
+        days = (_d.fromisoformat(last) - _d.fromisoformat(c)).days + 1
+        if segs and segs[-1][2] == price:
+            segs[-1] = (segs[-1][0], last, price, segs[-1][3] + days)
+        else:
+            segs.append((c, last, price, days))
+    days = sum(x[3] for x in segs)
+    if len(segs) == 1 and days == mdays:
+        return {**rent_price({**dict(wh), "price_m2": segs[0][2]}, pt, s), "segs": segs, "days": days, "mdays": mdays}
+    total = r2(sum(rent_price({**dict(wh), "price_m2": x[2]}, pt, s)["total"] * x[3] / mdays for x in segs))
+    vat = float(s["vat_rate"]) / 100
+    net = r2(total / (1 + vat)) if pt == "bank_vat" and vat else total
+    rate = r2(total / wh["area"]) if wh["area"] else total
+    return {"rate": rate, "total": total, "net": net, "vat": r2(total - net), "pt": pt,
+            "segs": segs, "days": days, "mdays": mdays}
+
+
 # ---------- лічильники ----------
 
 def previous_value(meter, period):
@@ -131,6 +180,43 @@ def tenancy_for(tens, period):
         if days > best_days or (days == best_days and best is not None):
             best, best_days = t, days
     return best
+
+
+def _overlap_days(t, period):
+    from datetime import date as _d
+    ms, me = _month_bounds(period)
+    s = max(ms, t["start"] or "0000-01-01")
+    e = min(me, t["end"] or "9999-12-31")
+    return (_d.fromisoformat(e) - _d.fromisoformat(s)).days + 1 if s <= e else 0
+
+
+def ended_in(t, period):
+    """Оренда закінчилась (орендар з'їхав) усередині місяця, не в останній день."""
+    return bool(t["end"]) and t["end"][:7] == period and t["end"] < _month_bounds(period)[1]
+
+
+def rent_warehouses_of(tenant_id, period, db=None):
+    """Склади для оренди в акті: [(склад, кінець оренди або None)]. Місяць виїзду — лише за дні до виїзду
+    (навіть якщо більшу частину місяця склад уже мав новий орендар); решта — як warehouses_of, за повний місяць.
+    У складу _current — поточна оренда (до неї застосовуються плани підвищення)."""
+    db = db or get_db()
+    out = []
+    for w, tens in _tenancy_index(db):
+        best = tenancy_for(tens, period)
+        for t in tens:
+            if t["tid"] != tenant_id:
+                continue
+            days = _overlap_days(t, period)
+            if not days or (t is not best and not ended_in(t, period)):
+                continue
+            d = dict(w)
+            if not t["current"]:
+                d["area"] = t["area"] if t["area"] is not None else w["area"]
+                d["price_m2"] = t["price_m2"]
+            d["_current"] = t["current"]
+            out.append((d, t["end"] if ended_in(t, period) else None))
+            break
+    return out
 
 
 def _tenancy_index(db):
@@ -245,8 +331,9 @@ def build_act(tenant_id, period):
     plabel = period_label(period)
     uperiod = util_period_for(period, s)
     # склади — ті, що орендар мав саме в цих місяцях (оренда — за місяць акта, комунальні — за місяць споживання)
-    whs = warehouses_of(tenant_id, period, db)
-    uwhs = warehouses_of(tenant_id, uperiod, db) if uperiod != period else whs
+    rent_whs = rent_warehouses_of(tenant_id, period, db)
+    whs = [w for w, _e in rent_whs]
+    uwhs = warehouses_of(tenant_id, uperiod, db) if uperiod != period else warehouses_of(tenant_id, period, db)
     area = sum(w["area"] or 0 for w in uwhs)
     ulabel = period_label(uperiod)
     lines, warnings = [], []
@@ -275,11 +362,24 @@ def build_act(tenant_id, period):
 
     # --- оренда ---
     if s.get("include_rent") == "1":
-        for wh in whs:
-            p = rent_price(wh, pt, s)
+        dm = lambda iso: f"{iso[8:10]}.{iso[5:7]}"
+        for wh, end in rent_whs:
+            plans = price_plans(wh["id"], db) if wh["_current"] else []
+            p = rent_for(wh, pt, period, s, end=end, plans=plans)
+            name = f"Оренда «{wh['name']}» за {plabel}"
+            if len(p["segs"]) > 1:                           # ціна змінюється посеред місяця — по днях
+                name += " (" + "; ".join(f"з {dm(a)} по {dm(b)} — {fmt_money(x)} грн/м²" for a, b, x, _n in p["segs"]) + ")"
+            elif p["days"] < p["mdays"]:                     # з'їхав посеред місяця — оренда за дні до виїзду
+                name += f", з {dm(p['segs'][0][0])} по {dm(p['segs'][0][1])} ({p['days']} дн. з {p['mdays']})"
+            if end:
+                warnings.append(f"«{wh['name']}»: орендар з'їхав {dm(end)}.{end[:4]} — оренда за {p['days']} дн. з {p['mdays']}")
+            for pl in plans:
+                if not pl["applied_at"] and pl["from_date"][:7] == period:
+                    warnings.append(f"«{wh['name']}»: заплановане підвищення з {dm(pl['from_date'])} — "
+                                    f"{fmt_money(pl['price_m2'])} грн/м²")
             rent_sum = p["net"]                              # без ПДВ; ПДВ додається в кінці акта
             rate = r2(rent_sum / wh["area"]) if wh["area"] and pt == "bank_vat" else p["rate"]
-            lines.append({"group": "rent", "name": f"Оренда «{wh['name']}» за {plabel}",
+            lines.append({"group": "rent", "name": name,
                           "unit": "м²", "qty": wh["area"], "price": rate, "sum": rent_sum,
                           **({"gross": p["total"], "gross_price": p["rate"]} if pt == "bank_vat" and vat else {})})
         # об'єднати оренду кількох приміщень в один рядок під назвою обраного приміщення

@@ -166,6 +166,40 @@ def _add(res, pt, lines, totals):
     return {"pt": pt, "rent": calc.r2(rent), "util": calc.r2(util), "total": totals["total"]}
 
 
+def price_forecast(cur, n=12):
+    """Заплановані підвищення і прогноз оренди на n місяців уперед: без підвищень / з ними (з ПДВ, як в акті)."""
+    db = get_db()
+    s = settings()
+    try:
+        rows = db.execute("SELECT p.*, w.name AS wh_name, w.area, w.price_m2 AS cur_m2, w.tenant_id, t.name AS tenant, "
+                          "t.payment_type FROM price_plans p JOIN warehouses w ON w.id=p.warehouse_id "
+                          "LEFT JOIN tenants t ON t.id=w.tenant_id WHERE p.applied_at IS NULL ORDER BY p.from_date, w.name").fetchall()
+    except Exception:  # noqa — таблиці ще немає
+        return None
+    if not rows:
+        return None
+    plans, prev = [], {}                              # кожне підвищення — від попередньої ціни (поточної або попереднього плану)
+    for r in rows:
+        before = prev.get(r["warehouse_id"], r["cur_m2"])
+        wh = {"area": r["area"], "price_m2": before}
+        old = calc.rent_price(wh, r["payment_type"], s)["total"]
+        new = calc.rent_price({**wh, "price_m2": r["price_m2"]}, r["payment_type"], s)["total"]
+        plans.append({"p": r, "old": old, "new": new, "delta": calc.r2(new - old),
+                      "pct": (r["price_m2"] / before - 1) * 100 if before else None})
+        prev[r["warehouse_id"]] = r["price_m2"]
+    months, p = [], cur
+    whs = db.execute("SELECT w.*, t.payment_type FROM warehouses w JOIN tenants t ON t.id=w.tenant_id").fetchall()
+    wplans = {w["id"]: calc.price_plans(w["id"], db) for w in whs}
+    for _i in range(n):
+        base = calc.r2(sum(calc.rent_for(w, w["payment_type"], p, s)["total"] for w in whs))
+        planned = calc.r2(sum(calc.rent_for(w, w["payment_type"], p, s, plans=wplans[w["id"]])["total"] for w in whs))
+        starts = [x for x in plans if x["p"]["from_date"][:7] == p]
+        months.append({"period": p, "label": i18n.period_label_ui(p), "base": base, "planned": planned,
+                       "delta": calc.r2(planned - base), "starts": starts})
+        p = calc.next_period(p)
+    return {"plans": plans, "months": months, "monthly": calc.r2(sum(x["delta"] for x in plans if x["p"]["tenant_id"]))}
+
+
 def last_months(end_period, n):
     out, p = [], end_period
     for _i in range(n):
@@ -247,7 +281,7 @@ def economics():
              "total": [r["total"] for r in rows], "usd": [r["usd"] for r in rows],
              "rate": [r["rate"] for r in rows], "estimated": [bool(r["estimated"]) for r in rows]}
     return render_template("economics.html", rows=rows, sel=sel, sums=sums, chart=chart, months=n, cur=cur,
-                           util_rows=util_rows,
+                           util_rows=util_rows, forecast=price_forecast(cur),
                            now_rate=now_rate, now_rate_date=now_rate_date, fx_error=fx_error,
                            util_shift=s.get("util_shift", "1") == "1", today=today.isoformat())
 
