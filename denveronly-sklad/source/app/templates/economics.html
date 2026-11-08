@@ -43,6 +43,7 @@ td.est { color: var(--muted); }
 {% endblock %}
 {% block content %}
 <div class="viz-root">
+{% include "_economics_tabs.html" %}
 <div class="econ-head">
   <h1 style="margin:0">{{ _("Экономика") }}</h1>
   <span class="spacer"></span>
@@ -112,36 +113,12 @@ td.est { color: var(--muted); }
 
 {% if forecast %}
 <!-- заплановані підвищення цін: що зміниться наперед -->
-<div class="card" id="plans">
-  <h2 style="margin-top:0">📅 {{ _("Запланированные повышения") }}
-    <span class="muted" style="font-weight:400">· {{ '+' if forecast.monthly >= 0 else '−' }}{{ money(forecast.monthly|abs) }} {{ _("грн/мес после всех повышений") }}</span></h2>
-  <div class="tablewrap"><table class="ecotbl">
-    <thead><tr><th>{{ _("С даты") }}</th><th>{{ _("Склад") }}</th><th>{{ _("Арендатор") }}</th>
-      <th class="n">{{ _("Сейчас") }}</th><th class="n">{{ _("Будет") }}</th><th class="n">{{ _("Разница в месяц") }}</th><th class="n">%</th></tr></thead>
-    <tbody>
-    {% for x in forecast.plans %}{% set pl = x.p %}
-      <tr><td><b>{{ pl.from_date|dmy }}</b></td>
-        <td><a href="{{ url_for('warehouse_edit', wid=pl.warehouse_id) }}#price">{{ pl.wh_name }}</a>{% if pl.note %}<div class="muted">{{ pl.note }}</div>{% endif %}</td>
-        <td>{% if pl.tenant_id %}<a href="{{ url_for('tenant_edit', tid=pl.tenant_id) }}">{{ pl.tenant }}</a> <span class="muted">· {{ PAYMENT_TYPES[pl.payment_type] }}</span>{% else %}<span class="badge off">{{ _("свободен") }}</span>{% endif %}</td>
-        <td class="n">{{ money(x.old) }}</td><td class="n"><b>{{ money(x.new) }}</b></td>
-        <td class="n"><b class="{{ 'pos' if x.delta >= 0 else 'neg' }}">{{ '+' if x.delta >= 0 else '−' }}{{ money(x.delta|abs) }}</b></td>
-        <td class="n">{{ '%+.2f'|format(x.pct) ~ '%' if x.pct is not none else '—' }}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-  <h3 class="phh">{{ _("Аренда по месяцам вперёд, грн") }}</h3>
-  <div class="tablewrap"><table class="ecotbl">
-    <thead><tr><th>{{ _("Месяц") }}</th><th class="n">{{ _("По текущим ценам") }}</th><th class="n">{{ _("С повышениями") }}</th><th class="n">{{ _("Разница") }}</th><th>{{ _("С этого месяца") }}</th></tr></thead>
-    <tbody>
-    {% for m in forecast.months %}
-      <tr{% if m.starts %} class="ptrow"{% endif %}><td>{{ m.label }}</td><td class="n">{{ money(m.base) }}</td>
-        <td class="n"><b>{{ money(m.planned) }}</b></td>
-        <td class="n">{% if m.delta %}<b class="{{ 'pos' if m.delta > 0 else 'neg' }}">{{ '+' if m.delta > 0 else '−' }}{{ money(m.delta|abs) }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td class="muted">{% for x in m.starts %}{{ x.p.wh_name }} {{ _("с") }} {{ x.p.from_date|dmy }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table></div>
-  <p class="muted">{{ _("Только аренда складов, которые сейчас сданы (без коммунальных). Повышение с середины месяца — по дням. В актах новая цена учитывается автоматически, в день повышения она становится действующей.") }}</p>
+<div class="card row" id="plans" style="gap:10px">
+  <span>📅 <b>{{ _("Запланированные повышения") }}: {{ forecast.plans|length }}</b>
+    <span class="muted">· {{ '+' if forecast.monthly >= 0 else '−' }}{{ money(forecast.monthly|abs) }} {{ _("грн/мес после всех повышений") }}
+    · {{ _("ближайшее") }} {{ forecast.plans[0].p.from_date|dmy }}</span></span>
+  <span class="spacer"></span>
+  <a class="btn sm" href="{{ url_for('economics.economics_plans') }}">{{ _("План цен") }} →</a>
 </div>
 {% endif %}
 

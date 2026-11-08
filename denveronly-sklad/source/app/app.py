@@ -562,13 +562,10 @@ def price_plan_add(wid):
         abort(404)
     from db import to_iso
     day = to_iso(request.form.get("plan_date"))
-    new = fnum("plan_m2")
-    month = fnum("plan_month")
-    if new is None and month is not None and wh["area"]:
-        new = round(month / wh["area"], 4)
+    new = _plan_price_from_form(wh, day) if day else None
     if not day or not new or new <= 0:
         flash(_("Укажите новую цену и дату"))
-        return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+        return _plan_back(wid)
     db.execute("INSERT INTO price_plans(warehouse_id, from_date, price_m2, note, username) VALUES (?,?,?,?,?)",
                (wid, day, new, request.form.get("plan_note", "").strip() or None,
                 g.user["username"] if g.get("user") else None))
@@ -577,7 +574,71 @@ def price_plan_add(wid):
     flash(_("Повышение запланировано") + f": {day[8:10]}.{day[5:7]}.{day[:4]} — {calc.fmt_money(new * (wh['area'] or 0))} "
           + _("грн/мес"))
     apply_due_plans()
-    return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+    return _plan_back(wid)
+
+
+def _plan_back(wid):
+    """Куди повернутись після дії з планом: у вкладку «План цін» Економіки (next) або в картку складу."""
+    nxt = request.form.get("next") or ""
+    return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//")
+                    else url_for("warehouse_edit", wid=wid) + "#price")
+
+
+def _plan_base_price(wh, day, exclude_pid=None):
+    """Ціна, від якої рахується підвищення з дати day: попередній незастосований план або поточна ціна."""
+    r = get_db().execute("SELECT price_m2 FROM price_plans WHERE warehouse_id=? AND applied_at IS NULL AND from_date<? "
+                         "AND id IS NOT ? ORDER BY from_date DESC, id DESC LIMIT 1",
+                         (wh["id"], day, exclude_pid)).fetchone()
+    return r["price_m2"] if r else wh["price_m2"]
+
+
+def _plan_price_from_form(wh, day, exclude_pid=None):
+    """Нова ціна за м² з форми: напряму (plan_m2), із суми за місяць (plan_month) або з відсотка (plan_pct)."""
+    def by(k):
+        v = fnum("plan_" + k)
+        if v is None:
+            return None
+        if k == "m2":
+            return v
+        if k == "month":
+            return round(v / wh["area"], 4) if wh["area"] else None
+        base = _plan_base_price(wh, day, exclude_pid)       # pct — від ціни перед цим підвищенням
+        return round(base * (1 + v / 100), 4) if base else None
+    src = request.form.get("plan_src")                      # яке поле змінили останнім — воно головне
+    order = [src] + [k for k in ("m2", "month", "pct") if k != src] if src in ("m2", "month", "pct") \
+        else ["m2", "month", "pct"]
+    for k in order:
+        new = by(k)
+        if new is not None:
+            return new
+    return None
+
+
+@app.route("/plans/<int:pid>/edit", methods=["POST"])
+def price_plan_edit(pid):
+    """Змінити заплановане підвищення: дату, нову ціну (за м² / за місяць / у %) і заметку."""
+    db = get_db()
+    pl = db.execute("SELECT p.*, w.name, w.area, w.price_m2 AS cur_m2 FROM price_plans p "
+                    "JOIN warehouses w ON w.id=p.warehouse_id WHERE p.id=? AND p.applied_at IS NULL", (pid,)).fetchone()
+    if not pl:
+        abort(404)
+    from db import to_iso
+    day = to_iso(request.form.get("plan_date")) or pl["from_date"]
+    wh = {"id": pl["warehouse_id"], "area": pl["area"], "price_m2": pl["cur_m2"]}
+    new = _plan_price_from_form(wh, day, exclude_pid=pid) or pl["price_m2"]
+    if new <= 0:
+        flash(_("Укажите новую цену и дату"))
+        return _plan_back(pl["warehouse_id"])
+    note = request.form.get("plan_note", "").strip() or None
+    db.execute("UPDATE price_plans SET from_date=?, price_m2=?, note=? WHERE id=?", (day, new, note, pid))
+    log("Плановое повышение изменено",
+        f"{pl['name']}: с {pl['from_date']} — {calc.fmt_money(pl['price_m2'])} → с {day} — {calc.fmt_money(new)} грн/м²",
+        commit=False)
+    db.commit()
+    flash(_("Плановое повышение изменено") + f": {pl['name']} — {day[8:10]}.{day[5:7]}.{day[:4]}, "
+          + f"{calc.fmt_money(new * (pl['area'] or 0))} " + _("грн/мес"))
+    apply_due_plans()
+    return _plan_back(pl["warehouse_id"])
 
 
 @app.route("/warehouses/<int:wid>/plan/<int:pid>/delete", methods=["POST"])
@@ -592,7 +653,7 @@ def price_plan_delete(wid, pid):
         commit=False)
     db.commit()
     flash(_("Плановое повышение отменено"))
-    return redirect(url_for("warehouse_edit", wid=wid) + "#price")
+    return _plan_back(wid)
 
 
 def apply_due_plans():

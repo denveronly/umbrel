@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}{{ _("План цен") }} · {{ _("Экономика") }}{% endblock %}
+{% block head %}
+<style>
+.plantbl input { padding: 4px 6px; font-variant-numeric: tabular-nums; }
+.plantbl input.num { width: 96px; text-align: right; }
+.plantbl input.pct { width: 70px; text-align: right; }
+.plantbl .dmy { width: 150px; }
+.plantbl input.note { min-width: 160px; }
+.plantbl td { vertical-align: middle; }
+.plantbl td:nth-child(2), .plantbl td:nth-child(3) { white-space: nowrap; }
+.plantbl tr.dirty td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.plantbl .acts { white-space: nowrap; }
+.plantbl .acts form { display: inline; margin: 0; }
+.planadd { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; }
+</style>
+{% endblock %}
+{% block content %}
+{% include "_economics_tabs.html" %}
+<div class="row" style="gap:12px; margin-bottom:12px">
+  <h1 style="margin:0">📅 {{ _("План цен") }}</h1>
+  {% if forecast %}<span class="muted">{{ forecast.plans|length }} {{ _("запланировано") }} ·
+    <b class="{{ 'pos' if forecast.monthly >= 0 else 'neg' }}">{{ '+' if forecast.monthly >= 0 else '−' }}{{ money(forecast.monthly|abs) }}</b>
+    {{ _("грн/мес после всех повышений") }}</span>{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Запланированные повышения") }}</h2>
+  {% if forecast %}
+  <div class="tablewrap"><table class="ecotbl plantbl">
+    <thead><tr><th>{{ _("С даты") }}</th><th>{{ _("Склад") }}</th><th>{{ _("Арендатор") }}</th>
+      <th class="n">{{ _("Сейчас, грн/мес") }}</th><th class="n">{{ _("На сколько, %") }}</th><th class="n">{{ _("Цена за м²") }}</th>
+      <th class="n">{{ _("Будет, грн/мес") }}</th><th class="n">{{ _("Разница в месяц") }}</th><th>{{ _("Заметка") }}</th><th></th></tr></thead>
+    <tbody>
+    {% for x in forecast.plans %}{% set pl = x.p %}{% set f = 'pf' ~ pl.id %}
+      <tr data-area="{{ pl.area or 0 }}" data-before="{{ x.before or 0 }}" data-old="{{ x.old }}">
+        <td><input type="date" name="plan_date" form="{{ f }}" value="{{ pl.from_date }}" min="{{ today }}" required></td>
+        <td><a href="{{ url_for('warehouse_edit', wid=pl.warehouse_id) }}#price">{{ pl.wh_name }}</a>
+          <div class="muted">{{ money(pl.area or 0) }} м²</div></td>
+        <td>{% if pl.tenant_id %}<a href="{{ url_for('tenant_edit', tid=pl.tenant_id) }}">{{ pl.tenant }}</a>
+          <div class="muted">{{ PAYMENT_TYPES[pl.payment_type] }}</div>{% else %}<span class="badge off">{{ _("свободен") }}</span>{% endif %}</td>
+        <td class="n">{{ money(x.old) }}<div class="muted">{{ money(x.before or 0) }} / м²</div></td>
+        <td class="n"><input class="pct" name="plan_pct" form="{{ f }}" inputmode="decimal" data-k="pct"
+          value="{{ '%.2f'|format(x.pct) if x.pct is not none else '' }}"></td>
+        <td class="n"><input class="num" name="plan_m2" form="{{ f }}" inputmode="decimal" data-k="m2" value="{{ pl.price_m2|round(4) }}"></td>
+        <td class="n"><input class="num" name="plan_month" form="{{ f }}" inputmode="decimal" data-k="month" value="{{ '%.2f'|format(x.new) }}"></td>
+        <td class="n"><b class="delta {{ 'pos' if x.delta >= 0 else 'neg' }}">{{ '+' if x.delta >= 0 else '−' }}{{ money(x.delta|abs) }}</b></td>
+        <td><input class="note" name="plan_note" form="{{ f }}" value="{{ pl.note or '' }}" placeholder="{{ _("напр. индексация по договору") }}"></td>
+        <td class="acts">
+          <form method="post" id="{{ f }}" action="{{ url_for('price_plan_edit', pid=pl.id) }}">
+            <input type="hidden" name="plan_src" value="m2">
+            <input type="hidden" name="next" value="{{ url_for('economics.economics_plans', months=months) }}">
+            <button class="sm" title="{{ _("Сохранить") }}">💾</button></form>
+          <form method="post" action="{{ url_for('price_plan_delete', wid=pl.warehouse_id, pid=pl.id) }}"
+                onsubmit="return confirm('{{ _("Отменить плановое повышение?") }}')">
+            <input type="hidden" name="next" value="{{ url_for('economics.economics_plans', months=months) }}">
+            <button class="sm ghost" title="{{ _("Отменить") }}">✕</button></form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted">{{ _("Меняйте процент, цену за м² или сумму за месяц — остальное пересчитается. Нажмите 💾, чтобы сохранить строку. Процент считается от цены перед этим повышением.") }}</p>
+  {% else %}
+  <p class="muted">{{ _("Плановых повышений пока нет — добавьте ниже или в карточке склада.") }}</p>
+  {% endif %}
+
+  <h3 class="phh">➕ {{ _("Запланировать повышение") }}</h3>
+  <form method="post" id="addplan" action="">
+    <input type="hidden" name="plan_src" id="add_src" value="m2">
+    <input type="hidden" name="next" value="{{ url_for('economics.economics_plans', months=months) }}">
+    <div class="planadd">
+      <label>{{ _("Склад") }}<select id="add_wh" required>
+        <option value="">—</option>
+        {% for w in whs %}<option value="{{ w.id }}" data-url="{{ url_for('price_plan_add', wid=w.id) }}"
+          data-area="{{ w.area or 0 }}" data-price="{{ w.price_m2 or 0 }}">{{ w.name }} — {{ w.tenant or _("свободен") }} ({{ money((w.area or 0) * (w.price_m2 or 0)) }} {{ _("грн/мес") }})</option>{% endfor %}
+      </select></label>
+      <label>{{ _("С даты") }}<input type="date" name="plan_date" min="{{ today }}" required></label>
+      <label>{{ _("На сколько, %") }}<input name="plan_pct" id="add_pct" inputmode="decimal" placeholder="10"></label>
+      <label>{{ _("или новая цена за м², грн") }}<input name="plan_m2" id="add_m2" inputmode="decimal"></label>
+      <label>{{ _("или новая сумма за месяц, грн") }}<input name="plan_month" id="add_month" inputmode="decimal"></label>
+      <label>{{ _("Заметка") }}<input name="plan_note" placeholder="{{ _("напр. индексация по договору") }}"></label>
+      <div><button>{{ _("Запланировать") }}</button></div>
+    </div>
+  </form>
+</div>
+
+{% if forecast %}
+<div class="card">
+  <div class="row" style="gap:8px">
+    <h2 style="margin:0">{{ _("Аренда по месяцам вперёд, грн") }}</h2>
+    <span class="spacer"></span>
+    <form method="get"><select name="months" onchange="this.form.submit()" style="width:auto">
+      {% for m in (6, 12, 24, 36) %}<option value="{{ m }}" {{ 'selected' if months == m }}>{{ m }} {{ _("мес.") }}</option>{% endfor %}
+    </select></form>
+  </div>
+  <div class="tablewrap"><table class="ecotbl">
+    <thead><tr><th>{{ _("Месяц") }}</th><th class="n">{{ _("По текущим ценам") }}</th><th class="n">{{ _("С повышениями") }}</th><th class="n">{{ _("Разница") }}</th><th>{{ _("С этого месяца") }}</th></tr></thead>
+    <tbody>
+    {% for m in forecast.months %}
+      <tr{% if m.starts %} class="ptrow"{% endif %}><td>{{ m.label }}</td><td class="n">{{ money(m.base) }}</td>
+        <td class="n"><b>{{ money(m.planned) }}</b></td>
+        <td class="n">{% if m.delta %}<b class="{{ 'pos' if m.delta > 0 else 'neg' }}">{{ '+' if m.delta > 0 else '−' }}{{ money(m.delta|abs) }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted">{% for x in m.starts %}{{ x.p.wh_name }}{% if x.p.tenant %} ({{ x.p.tenant }}){% endif %} {{ _("с") }} {{ x.p.from_date|dmy }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted">{{ _("Только аренда складов, которые сейчас сданы (без коммунальных). Повышение с середины месяца — по дням. В актах новая цена учитывается автоматически, в день повышения она становится действующей.") }}</p>
+</div>
+{% endif %}
+
+{% if done %}
+<details class="card">
+  <summary><b>{{ _("Уже применённые повышения") }}</b> <span class="muted">({{ done|length }})</span></summary>
+  <div class="tablewrap" style="margin-top:10px"><table class="ecotbl">
+    <thead><tr><th>{{ _("С даты") }}</th><th>{{ _("Склад") }}</th><th class="n">{{ _("Было, грн/м²") }}</th><th class="n">{{ _("Стало, грн/м²") }}</th><th class="n">%</th><th>{{ _("Заметка") }}</th></tr></thead>
+    <tbody>
+    {% for d in done %}
+      <tr><td>{{ d.from_date|dmy }}</td><td><a href="{{ url_for('warehouse_edit', wid=d.warehouse_id) }}#price">{{ d.wh_name }}</a></td>
+        <td class="n">{{ money(d.old_price) if d.old_price is not none else '—' }}</td><td class="n"><b>{{ money(d.price_m2) }}</b></td>
+        <td class="n">{{ '%+.2f'|format((d.price_m2 / d.old_price - 1) * 100) ~ '%' if d.old_price else '—' }}</td>
+        <td class="muted">{{ d.note or '' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</details>
+{% endif %}
+
+<script>
+(function () {
+  const num = v => parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
+  const fx = (v, d) => isFinite(v) ? v.toFixed(d) : '';
+  const fmt = v => Math.abs(v).toLocaleString('uk-UA', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  // взаємний перерахунок: % ↔ ціна за м² ↔ сума за місяць
+  function sync(get, set, area, before, k) {
+    let m2 = NaN;
+    if (k === 'pct') m2 = before * (1 + num(get('pct')) / 100);
+    else if (k === 'm2') m2 = num(get('m2'));
+    else if (k === 'month') m2 = area ? num(get('month')) / area : NaN;
+    if (!isFinite(m2)) return NaN;
+    if (k !== 'pct') set('pct', before ? fx((m2 / before - 1) * 100, 2) : '');
+    if (k !== 'm2') set('m2', fx(m2, 4).replace(/\.?0+$/, ''));
+    if (k !== 'month') set('month', fx(area * m2, 2));
+    return m2;
+  }
+  document.querySelectorAll('.plantbl tbody tr').forEach(tr => {
+    const area = num(tr.dataset.area), before = num(tr.dataset.before), old = num(tr.dataset.old);
+    const el = k => tr.querySelector(`[data-k="${k}"]`);
+    const delta = tr.querySelector('.delta');
+    tr.addEventListener('input', e => {
+      tr.classList.add('dirty');
+      const k = e.target.dataset.k;
+      if (!k) return;
+      document.querySelector(`#${CSS.escape(tr.querySelector('[form]').getAttribute('form'))} [name=plan_src]`).value = k;
+      const m2 = sync(kk => el(kk).value, (kk, v) => { el(kk).value = v; }, area, before, k);
+      if (isFinite(m2) && isFinite(old) && before) {
+        const d = old * (m2 / before - 1);      // та сама форма оплати — сума пропорційна ціні
+        delta.textContent = (d >= 0 ? '+' : '−') + fmt(d);
+        delta.className = 'delta ' + (d >= 0 ? 'pos' : 'neg');
+      }
+    });
+  });
+  // нове підвищення
+  const form = document.getElementById('addplan'), sel = document.getElementById('add_wh');
+  if (!form) return;
+  const ids = {pct: 'add_pct', m2: 'add_m2', month: 'add_month'};
+  const cur = () => sel.selectedOptions[0] || {dataset: {}};
+  sel.addEventListener('change', () => {
+    form.action = cur().dataset.url || '';
+    const o = cur().dataset;
+    document.getElementById('add_m2').placeholder = o.price ? (+o.price).toFixed(2) : '';
+    document.getElementById('add_month').placeholder = o.price ? (o.area * o.price).toFixed(2) : '';
+    const k = ['pct', 'm2', 'month'].find(k => document.getElementById(ids[k]).value);
+    if (k) sync(kk => document.getElementById(ids[kk]).value, (kk, v) => { document.getElementById(ids[kk]).value = v; },
+                num(o.area), num(o.price), k);
+  });
+  Object.entries(ids).forEach(([k, id]) => document.getElementById(id).addEventListener('input', () => {
+    document.getElementById('add_src').value = k;
+    const o = cur().dataset;
+    if (!o.price) return;
+    sync(kk => document.getElementById(ids[kk]).value, (kk, v) => { document.getElementById(ids[kk]).value = v; },
+         num(o.area), num(o.price), k);
+  }));
+  form.addEventListener('submit', e => { if (!form.action || !cur().dataset.url) { e.preventDefault(); sel.focus(); } });
+})();
+</script>
+{% endblock %}

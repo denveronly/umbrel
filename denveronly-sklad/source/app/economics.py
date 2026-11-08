@@ -184,7 +184,7 @@ def price_forecast(cur, n=12):
         wh = {"area": r["area"], "price_m2": before}
         old = calc.rent_price(wh, r["payment_type"], s)["total"]
         new = calc.rent_price({**wh, "price_m2": r["price_m2"]}, r["payment_type"], s)["total"]
-        plans.append({"p": r, "old": old, "new": new, "delta": calc.r2(new - old),
+        plans.append({"p": r, "before": before, "old": old, "new": new, "delta": calc.r2(new - old),
                       "pct": (r["price_m2"] / before - 1) * 100 if before else None})
         prev[r["warehouse_id"]] = r["price_m2"]
     months, p = [], cur
@@ -283,7 +283,28 @@ def economics():
     return render_template("economics.html", rows=rows, sel=sel, sums=sums, chart=chart, months=n, cur=cur,
                            util_rows=util_rows, forecast=price_forecast(cur),
                            now_rate=now_rate, now_rate_date=now_rate_date, fx_error=fx_error,
-                           util_shift=s.get("util_shift", "1") == "1", today=today.isoformat())
+                           util_shift=s.get("util_shift", "1") == "1", today=today.isoformat(), tab="overview")
+
+
+@bp.route("/economics/plans")
+@auth.perm_required("economics")
+def economics_plans():
+    """Вкладка «План цен»: усі заплановані зміни цін (кому, коли, на скільки) з редагуванням і прогнозом."""
+    db = get_db()
+    today = date.today()
+    cur = f"{today.year}-{today.month:02d}"
+    n = request.args.get("months", 12, type=int)
+    n = n if n in (6, 12, 24, 36) else 12
+    forecast = price_forecast(cur, n)
+    whs = db.execute("SELECT w.id, w.name, w.area, w.price_m2, t.name AS tenant FROM warehouses w "
+                     "LEFT JOIN tenants t ON t.id=w.tenant_id ORDER BY (w.tenant_id IS NULL), w.name").fetchall()
+    try:
+        done = db.execute("SELECT p.*, w.name AS wh_name, w.area FROM price_plans p JOIN warehouses w ON w.id=p.warehouse_id "
+                          "WHERE p.applied_at IS NOT NULL ORDER BY p.from_date DESC, p.id DESC LIMIT 30").fetchall()
+    except Exception:  # noqa — таблиці ще немає
+        done = []
+    return render_template("economics_plans.html", forecast=forecast, whs=whs, done=done, months=n,
+                           today=today.isoformat(), tab="plans")
 
 
 def init_app(app):

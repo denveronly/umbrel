@@ -1,0 +1,4 @@
+<div class="tabs">
+  <a href="{{ url_for('economics.economics') }}" class="{{ 'on' if tab == 'overview' }}">{{ _("Обзор") }}</a>
+  <a href="{{ url_for('economics.economics_plans') }}" class="{{ 'on' if tab == 'plans' }}">📅 {{ _("План цен") }}</a>
+</div>
