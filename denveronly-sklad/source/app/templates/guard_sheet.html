@@ -50,6 +50,7 @@ tbody tr.mo td.m { font-size: 12pt; }
 <div class="page">
   <div class="hd">
     <h1>{{ _("Показания счётчиков") }} · {{ site_name }} · {{ pg.title }}</h1>
+    <span class="no">{{ _("Бланк") }} № {{ sheet_id }}</span>
   </div>
   <p class="rule">{{ _("Записывайте только целые цифры счётчика — цифры после запятой (обычно красные или в рамке) НЕ пишите. Пишите разборчиво, одну цифру под другой.") }}</p>
   <table>
@@ -64,7 +65,7 @@ tbody tr.mo td.m { font-size: 12pt; }
       {% endfor %}
     </tbody>
   </table>
-  <div class="foot"><span></span><span class="sid">№ {{ sheet_id }}</span></div>
+  <div class="foot"><span></span><span></span></div>
 </div>
 {% endfor %}
 </body>
