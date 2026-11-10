@@ -4,7 +4,7 @@
 {% block content %}
 <div class="row">
   <h1>{{ _("Показания") }}</h1><span class="spacer"></span>
-  <a class="btn ghost sm" href="{{ url_for('guard.sheet') }}" target="_blank" title="{{ _("Бланк для охраны: месяцы до конца следующего года, распечатать и заполнить от руки") }}">🖨 {{ _("Шаблон для охраны") }}</a>
+  <a class="btn ghost sm" href="{{ url_for('guard.sheet') }}" target="_blank" title="{{ _("Бланк для охраны: месяцы до конца следующего года, распечатать и заполнить от руки") }}">🖨 {{ _("Шаблон для охраны") }}</a>{% if guard_has_sub() %}<a class="btn ghost sm" href="{{ url_for('guard.sheet', kind='sub') }}" target="_blank" title="{{ _("Отдельный бланк: счётчики подлиний (напр. «Офис») и общие счётчики воды") }}">🖨 {{ _("Бланк: подлинии и вода") }}</a>{% endif %}
   <a class="btn ghost sm" href="?period={{ prev_p }}">←</a>
   <form method="get"><input type="month" name="period" value="{{ period }}" onchange="this.form.submit()" style="width:auto"></form>
   <a class="btn ghost sm" href="?period={{ next_p }}">→</a>

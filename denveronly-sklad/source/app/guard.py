@@ -68,20 +68,38 @@ def sheet_periods(today_period):
     return out
 
 
+def _tbl(kind):
+    """Таблиця показників за видом колонки: m — склад, l — лінія, svc — загальний лічильник послуги (вода)."""
+    return {"m": ("readings", "meter_id"), "l": ("line_readings", "line_meter_id"),
+            "svc": ("service_readings", "service_id")}[kind]
+
+
 def _last_value(kind, mid, field, before):
-    tbl, col = ("readings", "meter_id") if kind == "m" else ("line_readings", "line_meter_id")
+    tbl, col = _tbl(kind)
     r = get_db().execute(f"SELECT {field} AS v, period FROM {tbl} WHERE {col}=? AND period<? AND {field} IS NOT NULL "
                          "ORDER BY period DESC LIMIT 1", (mid, before)).fetchone()
     return (r["v"], r["period"]) if r else (None, None)
 
 
-def build_sections(periods):
-    """Секції бланка (лінії + «без лінії»): [{title, groups:[{title, cols:[…]}]}]; кожен лічильник — один раз."""
+def _has_parent_col(db):
+    return any(r["name"] == "parent_id" for r in db.execute("PRAGMA table_info(power_lines)"))
+
+
+def build_sections(periods, kind="main", seen=None):
+    """Секції бланка: [{title, groups:[{title, cols:[…]}]}]; кожен лічильник — один раз.
+    kind="main" — основні лінії + «без лінії»; kind="sub" — сублінії (напр. «Офіс») + загальні лічильники води
+    з «Послуги показники» (окремий бланк). seen — уже взяті в основний бланк лічильники (не дублюємо)."""
     import lines as L
     db = get_db()
-    tabs = [(l["id"], l["name"]) for l in db.execute("SELECT id, name FROM power_lines WHERE active=1 ORDER BY sort, id")]
-    tabs.append((None, _("Без линии")))
-    seen, sections, n = set(), [], 0
+    par = _has_parent_col(db)
+    all_lines = db.execute("SELECT * FROM power_lines WHERE active=1 ORDER BY sort, id").fetchall()
+    if kind == "sub":
+        tabs = [(l["id"], l["name"]) for l in all_lines if par and l["parent_id"]]
+    else:
+        tabs = [(l["id"], l["name"]) for l in all_lines if not (par and l["parent_id"])]
+        tabs.append((None, _("Без линии")))
+    seen = set(seen or ())
+    sections, n = [], 0
     for lid, lname in tabs:
         groups, _bal = L.table_view(lid, periods[:1])
         sec = {"title": lname, "groups": []}
@@ -108,21 +126,43 @@ def build_sections(periods):
                 sec["groups"].append({"title": ttl, "cols": cols})
         if sec["groups"]:
             sections.append(sec)
+    if kind == "sub":                       # вода та інші загальні лічильники послуг «частка» (свої показники)
+        cols = []
+        for sv in db.execute("SELECT * FROM services WHERE mode='share' AND has_main=1 AND active=1 "
+                             "AND (main_src IS NULL OR main_src='') ORDER BY sort, name").fetchall():
+            n += 1
+            last, lastp = _last_value("svc", sv["id"], "value", periods[0])
+            cols.append({"n": n, "kind": "svc", "id": sv["id"], "field": "value", "title": sv["name"],
+                         "sub": " · ".join(x for x in (sv["unit"], f"№{sv['main_serial']}" if sv["main_serial"] else "") if x),
+                         "serial": sv["main_serial"] or "", "line": _("Услуги"), "last": last, "lastp": lastp})
+        if cols:
+            grp = {"title": _("Общие счётчики услуг"), "cols": cols}
+            if sections:                     # на той самий аркуш, що й сублінія (якщо влазить)
+                sections[-1]["groups"].append(grp)
+            else:
+                sections.append({"title": _("Общие счётчики услуг"), "groups": [grp]})
     return sections
+
+
+def sheet_keys(sections):
+    return {(c["kind"], c["id"], c["field"]) for s in sections for gr in s["groups"] for c in gr["cols"]}
 
 
 def _pages(sections):
     """Розбиття секцій на аркуші по PER_PAGE колонок (групи орендарів не розриваються, якщо влазять)."""
     pages = []
     for sec in sections:
+        # рівні частини: 12 лічильників -> 6 + 6, а не 10 + 2
+        total = sum(len(gr["cols"]) for gr in sec["groups"])
+        per = -(-total // -(-total // PER_PAGE)) if total else PER_PAGE
         cur = []
         for gr in sec["groups"]:
             cols = gr["cols"]
             while cols:
-                room = PER_PAGE - sum(len(x["cols"]) for x in cur)
-                if room <= 0 or (len(cols) <= PER_PAGE and len(cols) > room and cur):
+                room = per - sum(len(x["cols"]) for x in cur)
+                if room <= 0:
                     pages.append({"title": sec["title"], "groups": cur})
-                    cur, room = [], PER_PAGE
+                    cur, room = [], per
                 cur.append({"title": gr["title"], "cols": cols[:room]})
                 cols = cols[room:]
         if cur:
@@ -152,11 +192,45 @@ def sheet():
     from app import this_month
     ensure_schema()
     periods = sheet_periods(request.args.get("from") or this_month())
-    sections = build_sections(periods)
+    kind = "sub" if request.args.get("kind") == "sub" else "main"
+    main = build_sections(periods, "main")
+    sections = main if kind == "main" else build_sections(periods, "sub", seen=sheet_keys(main))
     sheet_id = save_sheet(periods, sections) if sections else None
     from db import SITES
-    return render_template("guard_sheet.html", pages=_pages(sections), periods=periods, sheet_id=sheet_id,
+    return render_template("guard_sheet.html", pages=_pages(sections), periods=periods, sheet_id=sheet_id, kind=kind,
                            site_name=_(SITES[current_site()]["name"]))
+
+
+def has_sub_sheet():
+    """Чи є що друкувати в окремому бланку (сублінії або загальні лічильники послуг)."""
+    db = get_db()
+    try:
+        if _has_parent_col(db) and db.execute("SELECT 1 FROM power_lines WHERE active=1 AND parent_id IS NOT NULL").fetchone():
+            return True
+        return bool(db.execute("SELECT 1 FROM services WHERE mode='share' AND has_main=1 AND active=1 "
+                               "AND (main_src IS NULL OR main_src='')").fetchone())
+    except Exception:  # noqa
+        return False
+
+
+@bp.route("/ai/guard/save_svc", methods=["POST"])
+@auth.perm_required("ai")
+def save_svc():
+    """Показники загальних лічильників послуг (вода) з бланка — у «Послуги показники»."""
+    db = get_db()
+    n = 0
+    for k, v in ((request.get_json(silent=True) or {}).get("cells") or {}).items():
+        m = re.fullmatch(r"svc\|(\d+)\|value\|(\d{4}-\d{2})", k)
+        val = parse_num(v)
+        if not m or val is None:
+            continue
+        db.execute("INSERT INTO service_readings(service_id, period, value) VALUES (?,?,?) "
+                   "ON CONFLICT(service_id, period) DO UPDATE SET value=excluded.value", (int(m.group(1)), m.group(2), val))
+        n += 1
+    db.commit()
+    if n:
+        log("Показания услуг с бланка охраны", str(n))
+    return jsonify(ok=True, n=n)
 
 
 # ---------------- розпізнавання ----------------
@@ -303,7 +377,7 @@ def _months_between(a, b):
 
 
 def history(kind, mid, field):
-    tbl, col = ("readings", "meter_id") if kind == "m" else ("line_readings", "line_meter_id")
+    tbl, col = _tbl(kind)
     return [(r["period"], r["v"]) for r in get_db().execute(
         f"SELECT period, {field} AS v FROM {tbl} WHERE {col}=? AND {field} IS NOT NULL ORDER BY period", (mid,))]
 
@@ -446,3 +520,4 @@ def mark_saved(scan_id):
 
 def init_app(app):
     app.register_blueprint(bp)
+    app.jinja_env.globals["guard_has_sub"] = has_sub_sheet

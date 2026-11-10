@@ -90,8 +90,15 @@ if (sb) sb.onclick = async () => {
   if (!Object.keys(cells).length) { document.getElementById('msg').textContent = {{ _("Нечего сохранять")|tojson }}; return; }
   if (bad && !confirm({{ _("Красных (ошибочных) показаний, которые вы не исправили:")|tojson }} + ' ' + bad + '. ' + {{ _("Всё равно сохранить?")|tojson }})) return;
   sb.disabled = true;
-  const r = await fetch({{ url_for('lines.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({cells, table: 1, line_name: {{ (_("бланк охраны") ~ ' № ' ~ (sc.sheet_id or ''))|tojson }}})});
+  // загальні лічильники послуг (вода) — окремо, у «Послуги показники»
+  const svc = {};
+  Object.keys(cells).filter(k => k.startsWith('svc|')).forEach(k => { svc[k] = cells[k]; delete cells[k]; });
+  if (Object.keys(svc).length) {
+    const rs = await fetch({{ url_for('guard.save_svc')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({cells: svc})});
+    if (!rs.ok) { sb.disabled = false; document.getElementById('msg').textContent = {{ _("Ошибка сохранения")|tojson }} + ': ' + (await rs.text()).slice(0, 300); return; }
+  }
+  const r = Object.keys(cells).length ? await fetch({{ url_for('lines.save')|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({cells, table: 1, line_name: {{ (_("бланк охраны") ~ ' № ' ~ (sc.sheet_id or ''))|tojson }}})}) : {ok: true};
   if (!r.ok) { sb.disabled = false; document.getElementById('msg').textContent = {{ _("Ошибка сохранения")|tojson }} + ': ' + (await r.text()).slice(0, 300); return; }
   await fetch({{ url_for('guard.mark_saved', scan_id=sc.id)|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({n})});
   location.href = {{ url_for('lines.table')|tojson }};

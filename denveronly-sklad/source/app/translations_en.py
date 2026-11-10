@@ -1493,4 +1493,6 @@ EN = {
     "Было, грн/м²": "Was, UAH/m²",
     "Стало, грн/м²": "Now, UAH/m²",
     "Плановое повышение изменено": "Planned increase changed",
+    'Отдельный бланк: счётчики подлиний (напр. «Офис») и общие счётчики воды': 'Separate form: sub-line meters (e.g. “Office”) and common water meters',
+    'Бланк: подлинии и вода': 'Form: sub-lines & water',
 }
