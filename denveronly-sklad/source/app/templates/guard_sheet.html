@@ -21,7 +21,7 @@ body { font-family: "DejaVu Sans", Arial, sans-serif; color: #000; background: #
 .rule { font-size: 10.5pt; margin: 0 0 2mm; }
 table { border-collapse: collapse; width: 100%; table-layout: fixed; }
 th, td { border: 1px solid #000; text-align: center; font-size: 11pt; padding: 0.6mm 0.8mm; overflow: hidden; }
-th.m, td.m { width: 42mm; text-align: left; font-weight: 700; font-size: 12pt; white-space: nowrap; }
+th.m, td.m { width: 24mm; text-align: left; font-weight: 700; font-size: 12pt; white-space: nowrap; }
 th.d, td.d { width: 20mm; font-size: 10pt; }
 th.sg, td.sg { width: 20mm; font-size: 10pt; }
 tr.num th { font-size: 20pt; font-weight: 800; padding: 0.3mm; }
@@ -29,6 +29,7 @@ tr.ttl th { font-size: 12pt; font-weight: 700; line-height: 1.15; height: 11mm; 
 tr.num th.m, tr.num th.d, tr.num th.sg { font-size: 11pt; font-weight: 700; }
 tbody tr.mo td { height: 9mm; }
 tbody tr.mo td.m { font-size: 12pt; }
+.foot .sid { font-size: 7pt; color: #777; }
 .foot { font-size: 10pt; margin-top: 2mm; display: flex; justify-content: space-between; }
 @media print {
   body { background: #fff; }
@@ -49,24 +50,21 @@ tbody tr.mo td.m { font-size: 12pt; }
 <div class="page">
   <div class="hd">
     <h1>{{ _("Показания счётчиков") }} · {{ site_name }} · {{ pg.title }}</h1>
-    <span class="pg">{{ _("лист") }} {{ loop.index }} / {{ pages|length }}</span>
-    <span class="no">{{ _("Бланк") }} № {{ sheet_id }}</span>
   </div>
-  <p class="rule">{{ _("Записывайте только целые цифры счётчика — цифры после запятой (обычно красные или в рамке) НЕ пишите. Пишите разборчиво, одну цифру под другой. Ошибку — зачеркните и напишите рядом.") }}</p>
+  <p class="rule">{{ _("Записывайте только целые цифры счётчика — цифры после запятой (обычно красные или в рамке) НЕ пишите. Пишите разборчиво, одну цифру под другой.") }}</p>
   <table>
     <thead>
-      <tr class="num"><th class="m" rowspan="2">{{ _("Месяц") }}</th><th class="d" rowspan="2">{{ _("Дата съёма") }}</th>{% for gr in pg.groups %}{% for c in gr.cols %}<th>{{ c.n }}</th>{% endfor %}{% endfor %}
-        <th class="sg" rowspan="2">{{ _("Подпись") }}</th></tr>
+      <tr class="num"><th class="m" rowspan="2">{{ _("Месяц") }}</th><th class="d" rowspan="2">{{ _("Дата съёма") }}</th>{% for gr in pg.groups %}{% for c in gr.cols %}<th>{{ c.n }}</th>{% endfor %}{% endfor %}</tr>
       <tr class="ttl">{% for gr in pg.groups %}{% for c in gr.cols %}<th>{{ c.title }}</th>{% endfor %}{% endfor %}</tr>
     </thead>
     <tbody>
       {% for p in periods %}
-      <tr class="mo"><td class="m">{{ period_label(p) }}</td><td class="d"></td>
-        {% for i in range(pg.ncols) %}<td></td>{% endfor %}<td class="sg"></td></tr>
+      <tr class="mo"><td class="m">{{ short_month(p) }}</td><td class="d"></td>
+        {% for i in range(pg.ncols) %}<td></td>{% endfor %}</tr>
       {% endfor %}
     </tbody>
   </table>
-  <div class="foot"><span></span><span>№ {{ sheet_id }} · {{ _("лист") }} {{ loop.index }}</span></div>
+  <div class="foot"><span></span><span class="sid">№ {{ sheet_id }}</span></div>
 </div>
 {% endfor %}
 </body>

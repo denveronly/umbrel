@@ -58,6 +58,14 @@ def ensure_schema():
 
 # ---------------- бланк ----------------
 
+SHORT_M = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"]
+
+
+def short_month(p):
+    """«2027-02» -> «лют 27»."""
+    return f"{SHORT_M[int(p[5:7]) - 1]} {p[2:4]}"
+
+
 def sheet_periods(today_period):
     """Від поточного місяця до грудня наступного року (жовтень 2026 -> 15 місяців)."""
     out, p = [], today_period
@@ -252,7 +260,7 @@ def _prep_image(f):
 
 
 PROMPT = """На фото — паперовий бланк показників лічильників, заповнений від руки охоронцем.
-Бланк надрукований програмою: у шапці «Бланк № {sheet_id}», рядки — місяці, колонки — лічильники з номерами 1, 2, 3…
+Бланк надрукований програмою (номер бланка {sheet_id} дрібно внизу аркуша), рядки — місяці (скорочено: «лис 26», «січ 27»), колонки — лічильники з номерами 1, 2, 3…
 (номер колонки надрукований великими цифрами над колонкою, під ним — назва лічильника).
 Можливо кілька фото (кілька аркушів) — колонки на них різні, номери колонок наскрізні.
 
@@ -297,7 +305,7 @@ def run_scan(app, scan_id, images, sheet_row, user_row, site):
                 sheet_id=sheet_row["id"],
                 cols="\n".join(f"{c['n']}: {c['line']} — {c['title']}" + (f" ({c['sub']})" if c.get("sub") else "")
                                for c in cols),
-                rows="\n".join(f"{p} — {calc.period_label(p)}" for p in periods))
+                rows="\n".join(f"{p} — {short_month(p)} ({calc.period_label(p)})" for p in periods))
             res = call_vision(s.get("ai_api_key"), s.get("ai_model") or ai.DEFAULT_MODEL, images, text)
             db.execute("UPDATE guard_scans SET status='done', result=? WHERE id=?",
                        (json.dumps(res, ensure_ascii=False), scan_id))
@@ -521,3 +529,4 @@ def mark_saved(scan_id):
 def init_app(app):
     app.register_blueprint(bp)
     app.jinja_env.globals["guard_has_sub"] = has_sub_sheet
+    app.jinja_env.globals["short_month"] = short_month

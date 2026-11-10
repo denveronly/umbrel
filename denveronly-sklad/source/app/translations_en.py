@@ -1495,4 +1495,5 @@ EN = {
     "Плановое повышение изменено": "Planned increase changed",
     'Отдельный бланк: счётчики подлиний (напр. «Офис») и общие счётчики воды': 'Separate form: sub-line meters (e.g. “Office”) and common water meters',
     'Бланк: подлинии и вода': 'Form: sub-lines & water',
+    'Записывайте только целые цифры счётчика — цифры после запятой (обычно красные или в рамке) НЕ пишите. Пишите разборчиво, одну цифру под другой.': 'Write only the whole digits of the meter — do NOT write digits after the decimal point (usually red or boxed). Write clearly.',
 }
