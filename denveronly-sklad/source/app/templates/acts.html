@@ -31,6 +31,11 @@
 </div>
 
 {% if groups %}
+{% set bas_cos = groups|selectattr('c')|list %}
+{% if bas_cos %}<div class="card archbar">
+  <b>📥 {{ _("Для BAS") }}</b><span class="muted">{{ _("файл актов за") }} {{ period_label(period) }} — {{ _("в BAS: обработка «Загрузить из файла»") }}</span><span class="spacer"></span>
+  {% for grp in bas_cos %}<a class="btn sm ghost" href="{{ url_for('bas.export_file', period=period, company_id=grp.c.id) }}">⤓ {{ grp.c.name }}</a>{% endfor %}
+</div>{% endif %}
 <form method="post" action="{{ url_for('acts_make_company') }}" class="card archbar">
   <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="all">
   <b>{{ _("Архив за") }} {{ period_label(period) }}</b><span class="muted">{{ _("все арендаторы, по папкам компаний") }}</span><span class="spacer"></span>

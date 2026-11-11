@@ -1619,4 +1619,9 @@ EN = {
     'к месяцу': 'back to month',
     'за весь период': 'whole period',
     'Ничего не найдено': 'Nothing found',
+    'Для BAS': 'For BAS',
+    'файл актов за': 'acts file for',
+    'в BAS: обработка «Загрузить из файла»': 'in BAS: «Load from file» processing',
+    'через файл': 'via file',
+    'Акты → блок «Для BAS» → файл компании за месяц. В BAS обработка «Загрузить из файла» создаёт «Реализацию товаров и услуг» и «Счёт на оплату» без проведения. Без сети и токенов. Каждая база BAS — своя организация (по ЄДРПОУ компании).': "Acts → «For BAS» → the company's file for the month. In BAS the «Load from file» processing creates sales and invoices unposted. No network or tokens. Each BAS base is its own organization (by EDRPOU).",
 }

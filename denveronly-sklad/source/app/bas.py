@@ -88,25 +88,14 @@ def _iso_date(s):
     return ""
 
 
-@bp.route("/bas/api/acts")
-def api_acts():
-    """Акти місяця для BAS. ?token=…&period=YYYY-MM&edrpou=<ЄДРПОУ організації>[&site=base|office].
-    Акти (чернетки) формуються/перераховуються так само, як кнопкою в «Актах»; готівкові — не віддаються."""
-    site = request.args.get("site") or "base"
-    if site not in SITES:
-        abort(404)
+def collect(site, period, edrpou="", company_id=None):
+    """Акти місяця для BAS (чернетки перераховуються так само, як кнопкою в «Актах»; готівкові — лише якщо дозволено)."""
     with using_site(site):
         s = settings()
-        tok = s.get("bas_token") or ""
-        if not tok or not hmac.compare_digest(tok, request.args.get("token") or ""):
-            abort(403)
-        period = request.args.get("period") or ""
-        if not re.fullmatch(r"\d{4}-\d{2}", period):
-            abort(400)
-        edrpou = (request.args.get("edrpou") or "").strip()
         db = get_db()
         cos = db.execute("SELECT * FROM companies WHERE active=1").fetchall()
-        cos = [c for c in cos if not edrpou or (c["edrpou"] or "").strip() == edrpou]
+        cos = [c for c in cos if (not edrpou or (c["edrpou"] or "").strip() == edrpou)
+               and (company_id is None or c["id"] == company_id)]
         out = []
         include_cash = s.get("bas_cash") == "1"
         for co in cos:
@@ -119,10 +108,48 @@ def api_acts():
                 act["data"] = json.loads(a["data"])
                 if act["data"]["totals"]["total"]:
                     out.append(_act_payload(act))
+        return out, cos
+
+
+@bp.route("/bas/api/acts")
+def api_acts():
+    """Мережевий варіант (з токеном). ?token=…&period=YYYY-MM&edrpou=<ЄДРПОУ організації>[&site=base|office]."""
+    site = request.args.get("site") or "base"
+    if site not in SITES:
+        abort(404)
+    with using_site(site):
+        tok = settings().get("bas_token") or ""
+    if not tok or not hmac.compare_digest(tok, request.args.get("token") or ""):
+        abort(403)
+    period = request.args.get("period") or ""
+    if not re.fullmatch(r"\d{4}-\d{2}", period):
+        abort(400)
+    edrpou = (request.args.get("edrpou") or "").strip()
+    out, _cos = collect(site, period, edrpou)
+    with using_site(site):
         log("BAS забрал акты", f"{calc.period_label(period)}: {len(out)} шт." + (f", ЄДРПОУ {edrpou}" if edrpou else ""),
             username="BAS")
-        return Response(json.dumps({"period": period, "site": site, "acts": out}, ensure_ascii=False),
-                        mimetype="application/json; charset=utf-8")
+    return Response(json.dumps({"period": period, "site": site, "acts": out}, ensure_ascii=False),
+                    mimetype="application/json; charset=utf-8")
+
+
+@bp.route("/bas/export")
+def export_file():
+    """Файл для BAS без токена й мережі: «Акти» → «Для BAS» → файл -> обробка в BAS «Завантажити з файлу»."""
+    from db import current_site
+    site = current_site()
+    period = request.args.get("period") or ""
+    if not re.fullmatch(r"\d{4}-\d{2}", period):
+        abort(400)
+    cid = request.args.get("company_id", type=int)
+    out, cos = collect(site, period, company_id=cid)
+    name = re.sub(r"[^\w\-]+", "_", (cos[0]["name"] if cid and cos else "usi"), flags=re.U).strip("_")
+    log("Акты выгружены в файл для BAS", f"{calc.period_label(period)}: {len(out)} шт., {name}")
+    get_db().commit()
+    body = json.dumps({"format": "sklady-bas-acts", "version": 1, "period": period, "site": site, "acts": out},
+                      ensure_ascii=False, indent=1).encode("utf-8")
+    return send_file(io.BytesIO(body), mimetype="application/json", as_attachment=True,
+                     download_name=f"BAS_akty_{period}_{name}.json")
 
 
 @bp.route("/bas/settings", methods=["POST"])
