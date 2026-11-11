@@ -1653,4 +1653,6 @@ EN = {
     'Удалить файл': 'Delete file',
     'Файл больше 50 МБ': 'File larger than 50 MB',
     'Добавлено файлов': 'Files added',
+    'Поделиться': 'Share',
+    'Не удалось поделиться': 'Could not share',
 }

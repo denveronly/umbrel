@@ -17,7 +17,9 @@
     <tbody>{% for f in files %}<tr>
       <td><a href="{{ url_for('notes.download', name=f.name) }}" target="_blank" rel="noopener">{{ f.name }}</a></td>
       <td class="muted" style="white-space:nowrap">{{ f.time }}</td><td class="n muted" style="white-space:nowrap">{{ f.size|filesize }}</td>
-      <td class="n" style="white-space:nowrap"><a class="btn sm ghost" href="{{ url_for('notes.download', name=f.name, dl=1) }}">⤓</a>
+      <td class="n" style="white-space:nowrap"><button type="button" class="sm ghost nshare" hidden title="{{ _("Поделиться") }}"
+          data-url="{{ url_for('notes.download', name=f.name) }}" data-name="{{ f.name }}">📤</button>
+        <a class="btn sm ghost" href="{{ url_for('notes.download', name=f.name, dl=1) }}" title="{{ _("Скачать") }}">⤓</a>
         <form method="post" action="{{ url_for('notes.delete', name=f.name) }}" style="display:inline;margin:0">
           <button class="sm danger" onclick="return confirm({{ (_('Удалить файл') ~ ' «' ~ f.name ~ '»?')|tojson|forceescape }})">×</button></form></td>
     </tr>{% endfor %}</tbody></table></div>{% endif %}
@@ -28,6 +30,23 @@
   ['dragover', 'dragenter'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.style.outline = '2px dashed var(--accent)'; }));
   ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.style.outline = ''; }));
   z.addEventListener('drop', e => { if (e.dataTransfer.files.length) { inp.files = e.dataTransfer.files; inp.form.submit(); } });
+  // «Поділитися» (телефон: Telegram, Viber, пошта…) — Web Share API; працює лише через https
+  if (navigator.share) {
+    z.querySelectorAll('.nshare').forEach(b => {
+      b.hidden = false;
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        try {
+          const r = await fetch(b.dataset.url, {credentials: 'same-origin'});
+          const blob = await r.blob();
+          const file = new File([blob], b.dataset.name, {type: blob.type || 'application/octet-stream'});
+          if (navigator.canShare && navigator.canShare({files: [file]})) await navigator.share({files: [file], title: b.dataset.name});
+          else await navigator.share({title: b.dataset.name, url: new URL(b.dataset.url, location.href).href});
+        } catch (e) { if (e.name !== 'AbortError') alert({{ _("Не удалось поделиться")|tojson }} + ': ' + e.message); }
+        b.disabled = false;
+      });
+    });
+  }
 })();
 </script>
 <script>
