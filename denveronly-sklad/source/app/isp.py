@@ -112,7 +112,8 @@ def api_check(c):
     """Вхід через JSON API (POST /api/auth/login {login, password}) — так працює my.cyfra.ua.
     -> (баланс, контекст, cab) або None, якщо такого API на сайті немає (тоді — звичайна форма)."""
     p = urllib.parse.urlsplit(c["url"])
-    cab = Cabinet(f"{p.scheme}://{p.netloc}")
+    host = "my.cyfra.ua" if p.netloc in ("cyfra.ua", "www.cyfra.ua") else p.netloc   # cyfra.ua/auth -> кабінет
+    cab = Cabinet(f"{p.scheme}://{host}")
     tok = _csrf(cab)
     h = {"Accept": "application/json, text/plain, */*", "Referer": f"{cab.base}/login", "Authorization": ""}
     if tok:
