@@ -357,6 +357,17 @@ def _require():
         abort(403)
 
 
+FORMS = re.compile(r"^(?:товариство з обмеженою відповідальністю|приватне акціонерне товариство|акціонерне товариство|"
+                   r"комунальне підприємство|приватне підприємство|фізична особа[- ]підприємець|тов|прат|пат|ат|кп|пп|"
+                   r"фоп|фо-п|дп|сп)\b[\s.]*", re.I)
+
+
+def party_key(name):
+    """Ключ сортування за назвою: без «ТОВ/ФОП/АТ…» і лапок — «ТОВ "УМТ"» стоїть на «У»."""
+    s = re.sub(r"[\"'«»„“”`]", " ", (name or "").strip())
+    return FORMS.sub("", s).strip().lower()
+
+
 def month_ops(data, period):
     """Операції за місяць period ('YYYY-MM') + підсумки надходжень і списань."""
     ops = [o for o in data.get("ops", []) if (o.get("date") or "").startswith(period)]
@@ -384,10 +395,22 @@ def page():
     if q:
         ops = [o for o in ops if q in (o.get("party", "") + " " + o.get("purpose", "") + " " +
                                        o.get("edrpou", "")).lower()]
+    sort = request.args.get("s") if request.args.get("s") in ("date", "name", "in", "out") else "date"
+    desc = request.args.get("d", "1" if sort != "name" else "0") == "1"
+    if sort == "name":
+        ops.sort(key=lambda o: party_key(o.get("party")), reverse=desc)
+    elif sort in ("in", "out"):                      # спершу потрібний бік (за сумою), решта — за датою
+        sign = 1 if sort == "in" else -1
+        side = [o for o in ops if o.get("amount", 0) * sign > 0]
+        rest = [o for o in ops if o.get("amount", 0) * sign <= 0]
+        side.sort(key=lambda o: abs(o.get("amount", 0)), reverse=desc)
+        ops = side + rest
+    elif not desc:
+        ops.reverse()
     cur = next((x for x in c["companies"] if x["slot"] == slot), c["companies"][0])
     return render_template("banks.html", c=c, tabs=tabs, cur=cur, slot=slot, data=data, ops=ops, inc=inc, out=out,
                            period=period, prev=prev, nxt=nxt if nxt <= date.today().strftime("%Y-%m") else "",
-                           q=q, is_admin=g.user["role"] == "admin",
+                           q=q, sort=sort, desc=desc, is_admin=g.user["role"] == "admin",
                            summary={x["slot"]: load(x["slot"]) for x in tabs})
 
 
