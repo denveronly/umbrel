@@ -107,6 +107,151 @@ def _csrf(cab):
     return ""
 
 
+# ───────── Interlan (stat.interlan.com.ua) — Rails/Devise: форма #new_user, user[login] + user[password] ─────────
+
+INTERLAN_HOSTS = ("stat.interlan.com.ua",)
+
+
+def interlan_check(c, hold=None):
+    """Вхід у кабінет Interlan так само, як людина: сторінка входу -> authenticity_token -> POST /users/sign_in,
+    далі головна сторінка кабінету, де шукаємо баланс. -> (баланс, контекст, cab)."""
+    cab = Cabinet("https://stat.interlan.com.ua")
+    if hold is not None:
+        hold["cab"] = cab
+    final, html, _ct = cab.get("/users/sign_in", keep_errors=True)
+    cab.pages["01_sign_in"] = html
+    p = yasno.parse(html)
+    form = next((f for f in p.forms if "sign_in" in (f.get("action") or "") and "by_ip" not in (f.get("action") or "")
+                 and any(i["type"] == "password" for i in f["inputs"])), None)
+    if not form:
+        raise yasno.LoginError(_("кабинет") + ": " + _("на странице входа нет формы с паролем"))
+    token = next((i["value"] for i in form["inputs"] if i["name"] == "authenticity_token"), "") or p.meta.get("csrf-token", "")
+    data = {"utf8": "✓", "authenticity_token": token, "user[login]": c["login"], "user[password]": c["password"],
+            "commit": "Увійти"}
+    final, html, ctype = cab.get("/users/sign_in", data=data, referer=final, keep_errors=True)
+    cab.pages["02_after_sign_in"] = f"<!-- HTTP {cab.status} {final} -->\n" + html
+    if "/users/sign_in" in final and any(i["type"] == "password" for f in yasno.parse(html).forms for i in f["inputs"]):
+        err = re.search(r'class="[^"]*(?:alert|flash|error|notice)[^"]*"[^>]*>\s*(.*?)\s*<', html, re.S)
+        raise yasno.LoginError(_("кабинет") + ": " + (re.sub(r"<[^>]+>|\s+", " ", err.group(1)).strip()[:150]
+                                                      if err else _("неверный логин или пароль")))
+    interlan_parse.due = 0
+    bal, ctx = interlan_parse(html)
+    if bal is None:
+        _f, html, _c = cab.get("/", keep_errors=True)
+        cab.pages["03_home"] = html
+        bal, ctx = interlan_parse(html)
+    if bal is None:
+        bal, ctx = parse_balance(html)
+    if bal is None:
+        for path in ("/profile", "/payments"):
+            try:
+                _f, h2, _c = cab.get(path, keep_errors=True)
+            except Exception:  # noqa
+                continue
+            cab.pages[f"03_{path.strip('/') or 'home'}"] = h2
+            bal, ctx = parse_balance(h2)
+            if bal is not None:
+                break
+    if hold is not None:
+        hold["due"] = getattr(interlan_parse, "due", 0) or 0
+    return bal, ctx, cab
+
+
+def interlan_parse(html):
+    """Плитки головної: «Залишок на рахунку», «За наступний місяць», «Рекомендуємо до оплати». -> (баланс, контекст)."""
+    def amount(v):
+        m = re.search(NUM, re.sub(r"<[^>]+>", " ", v or ""))
+        return _num(m.group(1)) if m else None
+    boxes = {re.sub(r"\s+", " ", k).strip().lower(): amount(v)
+             for k, v in re.findall(r'info-box-text">\s*(.*?)\s*</span>\s*<span class="info-box-number">\s*(.*?)\s*</span>',
+                                    html or "", re.S)}
+    bal = boxes.get("залишок на рахунку")
+    if bal is None:
+        m = re.search(r"На рахунку\s*" + NUM, _text(html))
+        bal = _num(m.group(1)) if m else None
+    if bal is None:
+        return None, ""
+    parts = [(_("Задолженность") if bal < 0 else _("Баланс")) + f" {yasno.money(abs(bal))} грн"]
+    if boxes.get("за наступний місяць") is not None:
+        parts.append(f"наступний місяць {yasno.money(boxes['за наступний місяць'])} грн")
+    if boxes.get("рекомендуємо до оплати"):
+        parts.append(f"рекомендовано до оплати {yasno.money(boxes['рекомендуємо до оплати'])} грн")
+    interlan_parse.due = boxes.get("рекомендуємо до оплати") or 0
+    return bal, " · ".join(parts)
+
+
+# ───────── Diamant (account.diamant.inf.ua) — білінг NoDeny: GET stat.pl?ses&uu&pp, pp = md5(ses + " " + пароль) ─────────
+
+DIAMANT_HOSTS = ("account.diamant.inf.ua",)
+
+
+def _cp1251(raw):
+    try:
+        return raw.decode("cp1251")
+    except UnicodeDecodeError:
+        return raw.decode("utf-8", "replace")
+
+
+def diamant_parse(html):
+    """«На вашому рахунку 335.00 грн», «Разом до сплати 350.00». -> (баланс, контекст, до оплати)."""
+    t = _text(html).replace("&nbsp;", " ")
+    m = re.search(r"На вашому рахунку\s*" + NUM, t, re.I)
+    if not m:
+        return None, "", 0
+    bal = _num(m.group(1))
+    m2 = re.search(r"Разом до сплати\s*,?\s*грн\.?\s*" + NUM, t, re.I)
+    total = _num(m2.group(1)) if m2 else None
+    acc = re.search(r"(дозволено|заблоковано|заборонено|відключено|blocked)", t, re.I)
+    due = max(0.0, round(total - bal, 2)) if total is not None and bal is not None else 0
+    parts = [(_("Задолженность") if bal < 0 else _("Баланс")) + f" {yasno.money(abs(bal))} грн"]
+    if total is not None:
+        parts.append(f"за місяць {yasno.money(total)} грн")
+    if due:
+        parts.append(f"рекомендовано до оплати {yasno.money(due)} грн")
+    if acc and acc.group(1).lower() != "дозволено":
+        parts.append(f"доступ: {acc.group(1)}")
+    return bal, " · ".join(parts), due
+
+
+def diamant_check(c, hold=None):
+    """Вхід як у браузері: сторінка входу дає ses, пароль іде як md5(ses + " " + пароль)."""
+    import hashlib
+    cab = Cabinet("https://account.diamant.inf.ua")
+    if hold is not None:
+        hold["cab"] = cab
+    _f, raw, _ct = cab.get("/cgi-bin/stat.pl", binary=True, keep_errors=True)
+    html = _cp1251(raw)
+    cab.pages["01_login"] = html
+    m = re.search(r"name=['\"]?ses['\"]?\s+value=['\"]?(\d+)", html) or re.search(r"value=['\"]?(\d+)['\"]?\s+name=['\"]?ses", html)
+    if not m:
+        raise yasno.LoginError(_("кабинет") + ": " + _("на странице входа нет формы с паролем"))
+    ses = m.group(1)
+    pp = hashlib.md5(f"{ses} {c['password']}".encode("cp1251", "replace")).hexdigest()
+    q = urllib.parse.urlencode({"ses": ses, "uu": c["login"], "pp": pp})
+    _f, raw, _ct = cab.get("/cgi-bin/stat.pl?" + q, binary=True, keep_errors=True)
+    html = _cp1251(raw)
+    cab.pages["02_home"] = html.replace(pp, "***")
+    bal, ctx, due = diamant_parse(html)
+    if bal is None:
+        if re.search(r"name=['\"]?pp['\"]?", html) and re.search(r"type=['\"]?password", html):
+            raise yasno.LoginError(_("кабинет") + ": " + _("неверный логин или пароль"))
+        raise yasno.LoginError(_("вход есть, но баланс на странице не найден — скачайте страницы для диагностики"))
+    if hold is not None:
+        hold["due"] = due
+    return bal, ctx, cab
+
+
+def provider(url):
+    host = urllib.parse.urlsplit(url or "").netloc.lower()
+    if host in INTERLAN_HOSTS:
+        return "interlan"
+    if host in DIAMANT_HOSTS:
+        return "diamant"
+    if host in ("my.cyfra.ua", "cyfra.ua", "www.cyfra.ua"):
+        return "cyfra"
+    return "generic"
+
+
 def api_check(c, hold=None):
     """Вхід через JSON API (POST /api/auth/login {login, password}) — так працює my.cyfra.ua.
     -> (баланс, контекст, cab) або None, якщо такого API на сайті немає (тоді — звичайна форма)."""
@@ -184,6 +329,11 @@ def config():
         if s.get("isp_migrated") != "1":
             _migrate(s)
             s = settings()
+        if s.get("isp_hour9") != "1":                 # звіт у Telegram — о 9:00 (так попросили)
+            set_setting("isp_hour", "9")
+            set_setting("isp_hour9", "1")
+            get_db().commit()
+            s = settings()
     own_tok, own_chat = s.get("isp_tg_token") or "", (s.get("isp_tg_chat") or "").strip()
     tok, chat = (own_tok, own_chat) if (own_tok and own_chat) else (s.get("tg_token") or "", (s.get("tg_chat") or "").strip())
     acc = []
@@ -191,8 +341,9 @@ def config():
         pw = s.get(f"isp{n}_password") or ""
         acc.append({"slot": n, "name": s.get(f"isp{n}_name") or "", "url": (s.get(f"isp{n}_url") or DEFAULT_URL).rstrip("/"),
                     "login": s.get(f"isp{n}_login") or "", "password": vault.decrypt(pw) if pw else "",
-                    "has_password": bool(pw), "enabled": s.get(f"isp{n}_enabled") == "1"})
-    return {"accounts": acc, "hour": int(s.get("isp_hour") or 10),
+                    "has_password": bool(pw), "enabled": s.get(f"isp{n}_enabled") == "1",
+                    "ip": (s.get(f"isp{n}_ip") or "").strip()})
+    return {"accounts": acc, "hour": int(s.get("isp_hour") or 9),
             "tg_token": vault.decrypt(tok) if tok else "", "tg_chat": chat,
             "own_tg": bool(own_tok and own_chat), "has_own_token": bool(own_tok), "own_chat": own_chat}
 
@@ -272,9 +423,15 @@ def check(slot, kind="manual"):
             raise yasno.LoginError(_("укажите логин и пароль"))
         hold = {}
         try:
-            res = api_check(a, hold)
+            prov = provider(a["url"])
+            if prov == "interlan":                         # свій спосіб входу для Interlan
+                res = interlan_check(a, hold)
+            elif prov == "diamant":                        # NoDeny: md5(ses + пароль)
+                res = diamant_check(a, hold)
+            else:
+                res = api_check(a, hold)                    # спершу JSON API (SPA-кабінети, як my.cyfra.ua)
         finally:
-            cab = hold.get("cab")                            # спершу JSON API (SPA-кабінети, як my.cyfra.ua)
+            cab = hold.get("cab")
         if res:
             bal, ctx, cab = res
         else:
@@ -296,20 +453,11 @@ def check(slot, kind="manual"):
         _dump(cab, a)
         if bal is None:
             raise yasno.LoginError(_("вход есть, но баланс на странице не найден — скачайте страницы для диагностики"))
-        sent = 0
-        prev_debt = (st.get("balance") or 0) < 0
-        if bal < 0 and st.get("notified") != date.today().isoformat():
-            if _tg(c, a, f"🔴 <b>Заборгованість за інтернет: {yasno.money(-bal)} грн</b>\n{yasno._esc(ctx)}"):
-                sent = 1
-                st["notified"] = date.today().isoformat()
-        elif bal >= 0 and prev_debt:
-            if _tg(c, a, f"✅ Інтернет: заборгованість погашено, баланс {yasno.money(bal)} грн"):
-                sent = 1
-        st.update(time=now, ok=True, error="", balance=bal, context=ctx, kind=kind)
+        st.update(time=now, ok=True, error="", balance=bal, context=ctx, kind=kind, due=hold.get("due") or 0)
         if kind == "auto":
             st["last_auto"] = date.today().isoformat()
         _save_status(slot, st)
-        return True, f"{a['name'] or a['login']}: {_('баланс')} {yasno.money(bal)} {_('грн')}" + (", Telegram ✓" if sent else "")
+        return True, f"{a['name'] or a['login']}: {_('баланс')} {yasno.money(bal)} {_('грн')}"
     except Exception as e:  # noqa
         err = str(e)[:300]
         if a:
@@ -323,25 +471,82 @@ def check(slot, kind="manual"):
         lock.release()
 
 
+KEYCAPS = {"1": "1️⃣", "2": "2️⃣", "3": "3️⃣", "4": "4️⃣"}
+
+
+def report_text(c=None):
+    """Одне повідомлення по всіх кабінетах: 1️⃣ назва — баланс · до оплати; борг — 🔴."""
+    c = c or config()
+    now = datetime.now()
+    lines = [f"🌐 <b>Інтернет</b> · {now:%d.%m %H:%M}", ""]
+    for a in used(c):
+        s = status(a["slot"])
+        name = yasno._esc(a["name"] or a["login"])
+        bal = s.get("balance")
+        if bal is None:
+            line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — —"
+        elif bal < 0:
+            line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — 🔴 <b>борг {yasno.money(-bal)}\u00a0грн</b>"
+        else:
+            line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — {yasno.money(bal)}\u00a0грн"
+        if a.get("ip"):
+            line += f"\n   🌍 IP {yasno._esc(a['ip'])}"
+        if (s.get("due") or 0) > 0 and (bal is None or bal >= 0):
+            line += f"\n   🟡 до оплати {yasno.money(s['due'])}\u00a0грн"
+        if s.get("time") and not s.get("ok"):
+            line += f"\n   ⚠️ не вдалося перевірити: {yasno._esc(s.get('error', ''))[:150]}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def send_report(c=None):
+    c = c or config()
+    if not (c["tg_token"] and c["tg_chat"]):
+        return False, _("Telegram не настроен")
+    yasno.tg_call(c["tg_token"], "sendMessage", {"chat_id": c["tg_chat"], "parse_mode": "HTML",
+                                                 "text": report_text(c), "disable_web_page_preview": True})
+    return True, _("Отчёт отправлен в Telegram")
+
+
 def _scheduler(app):
+    """Раз на день з години c["hour"]: перевірити всі кабінети, потім одне повідомлення в Telegram.
+    Кілька воркерів gunicorn — тож працює лише той, хто взяв файлове блокування."""
+    import fcntl
     while True:
-        time.sleep(300)
+        time.sleep(120)
+        fd = None
         try:
+            d = os.path.join(DATA_DIR, "isp")
+            os.makedirs(d, exist_ok=True)
+            fd = os.open(os.path.join(d, ".sched.lock"), os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                continue
             with app.app_context():
                 c = config()
                 if datetime.now().hour < c["hour"]:
                     continue
-                for a in c["accounts"]:
-                    if not (a["enabled"] and a["login"] and a["has_password"]):
-                        continue
-                    st = status(a["slot"])
-                    if st.get("last_auto") == date.today().isoformat():
-                        continue
-                    if st.get("time") and datetime.now() - datetime.fromisoformat(st["time"]) < timedelta(hours=1):
-                        continue
-                    check(a["slot"], "auto")
+                today = date.today().isoformat()
+                todo = [a for a in c["accounts"] if a["enabled"] and a["login"] and a["has_password"]]
+                for a in todo:
+                    if status(a["slot"]).get("last_auto") != today:
+                        check(a["slot"], "auto")
+                with using_site(MAIN_SITE):
+                    sent = settings().get("isp_report_sent")
+                if todo and sent != today:
+                    try:
+                        send_report(config())
+                    except Exception:  # noqa
+                        pass
+                    with using_site(MAIN_SITE):
+                        set_setting("isp_report_sent", today)
+                        get_db().commit()
         except Exception:  # noqa
             pass
+        finally:
+            if fd is not None:
+                os.close(fd)
 
 
 def _require():
@@ -367,6 +572,17 @@ def run_now():
     return redirect(url_for("isp.page"))
 
 
+@bp.route("/isp/send", methods=["POST"])
+def send_now():
+    _require()
+    try:
+        ok, msg = send_report()
+    except Exception as e:  # noqa
+        ok, msg = False, "Telegram: " + str(e)[:200]
+    flash(("✓ " if ok else "✗ ") + msg)
+    return redirect(url_for("isp.page"))
+
+
 @bp.route("/isp/settings", methods=["POST"])
 def save_settings():
     if g.user["role"] != "admin":
@@ -384,6 +600,7 @@ def save_settings():
             if (f.get(f"password{n}") or "").strip():
                 set_setting(f"isp{n}_password", vault.encrypt(f.get(f"password{n}").strip()))
             set_setting(f"isp{n}_enabled", "1" if f.get(f"enabled{n}") else "0")
+            set_setting(f"isp{n}_ip", (f.get(f"ip{n}") or "").strip()[:100])
         try:
             set_setting("isp_hour", str(min(23, max(0, int(f.get("hour") or 10)))))
         except ValueError:
@@ -430,7 +647,13 @@ def debug_zip(slot):
                      download_name=f"isp{slot}_debug_{datetime.now():%Y%m%d_%H%M}.zip")
 
 
+PROVIDER_NAMES = {"interlan": "Interlan — вход user[login]/user[password] (Rails)",
+                  "diamant": "Diamant — NoDeny, пароль md5(ses + пароль)",
+                  "cyfra": "Цифра — вход через API", "generic": "обычная форма входа"}
+
+
 def init_app(app):
     app.register_blueprint(bp)
+    app.jinja_env.globals["isp_provider"] = lambda url: PROVIDER_NAMES[provider(url)]
     if os.environ.get("YASNO_SCHED", "1") != "0":
         threading.Thread(target=_scheduler, args=(app,), daemon=True).start()
