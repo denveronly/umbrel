@@ -54,7 +54,23 @@ def config():
                     "password": vault.decrypt(pw) if pw else "", "has_password": bool(pw),
                     "enabled": s.get(f"bank{n}_enabled", "1") == "1"})
     every = int(s.get("banks_every") or 3)
-    return {"companies": out, "every": every, "auto": s.get("banks_auto", "1") == "1"}
+    tok = s.get("banks_tg_token") or ""
+    return {"companies": out, "every": every, "auto": s.get("banks_auto", "1") == "1",
+            "tg_token": vault.decrypt(tok) if tok else "", "has_tg_token": bool(tok),
+            "tg_chat": (s.get("banks_tg_chat") or "").strip(), "report": s.get("banks_report", "1") == "1",
+            "report_times": parse_times(s.get("banks_report_times") or DEFAULT_TIMES)}
+
+
+DEFAULT_TIMES = "09:10, 17:50"
+
+
+def parse_times(txt):
+    """'9:10, 17:50' -> ['09:10', '17:50']."""
+    out = []
+    for h, m in re.findall(r"(\d{1,2})[:.](\d{2})", txt or ""):
+        if int(h) < 24 and int(m) < 60:
+            out.append(f"{int(h):02d}:{m}")
+    return sorted(set(out))
 
 
 def active(c=None):
@@ -333,12 +349,13 @@ def run_async(slots, kind="manual"):
 
 
 def _scheduler(app):
-    """Кожні N годин з 7:00 до 22:00 — оновлюємо всі увімкнені компанії."""
-    time.sleep(90)
+    """Щохвилини: звіт у Telegram у задані години; кожні N годин з 7:00 до 22:00 — оновлення компаній."""
+    time.sleep(60)
     while True:
         try:
             with app.app_context():
                 c = config()
+                report_due(c)
                 h = datetime.now().hour
                 if c["auto"] and 7 <= h <= 22:
                     for x in active(c):
@@ -347,7 +364,134 @@ def _scheduler(app):
                             refresh(x["slot"], "auto")
         except Exception:  # noqa
             pass
-        time.sleep(600)
+        time.sleep(60)
+
+
+# ───────────────────────── звіт у Telegram ─────────────────────────
+
+def _fmt(x):
+    return f"{x:,.2f}".replace(",", " ").replace(".", ",")
+
+
+def _esc(t):
+    return (t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _group(ops, sign):
+    """Сума за контрагентами (без призначення), від більшої. sign=1 — надходження, -1 — списання."""
+    acc = {}
+    for o in ops:
+        a = o.get("amount", 0) * sign
+        if a > 0:
+            k = (o.get("party") or "—").strip()
+            acc[k] = acc.get(k, 0) + a
+    return sorted(acc.items(), key=lambda kv: -kv[1])
+
+
+def report_text(day, label, errors=None):
+    """Одне повідомлення по всіх компаніях: баланс, надходження й списання за день day ('YYYY-MM-DD')."""
+    errors = errors or {}
+    lines = [f"🏦 <b>Стан рахунків</b> · {label}"]
+    for x in [x for x in config()["companies"] if x["name"] and x["enabled"]]:
+        d = load(x["slot"])
+        bal = sum(a.get("balance") or 0 for a in d.get("accounts", []) if a.get("currency", "UAH") == "UAH")
+        lines.append("")
+        lines.append(f"<b>{_esc(x['name'])}</b> — " + (f"<b>{_fmt(bal)} грн</b>" if d.get("accounts") else "—"))
+        if x["slot"] in errors or (d.get("time") and not d.get("ok")):
+            when = d.get("time", "")
+            lines.append(f"⚠️ не вдалося оновити: {_esc(errors.get(x['slot']) or d.get('error', ''))[:150]}"
+                         + (f" (дані на {when[8:10]}.{when[5:7]} {when[11:16]})" if when else ""))
+        ops = [o for o in d.get("ops", []) if o.get("date") == day]
+        for sign, icon, title in ((1, "➕", "Надходження"), (-1, "➖", "Списання")):
+            g_ = _group(ops, sign)
+            if g_:
+                lines.append(f"{icon} {title} {_fmt(sum(v for _k, v in g_))}:")
+                lines += [f"   • {_esc(k)} — {_fmt(v)}" for k, v in g_]
+        if not ops and d.get("accounts"):
+            lines.append("   руху коштів не було")
+    return "\n".join(lines)
+
+
+def _report_period(now, t):
+    """Ранковий звіт (до 12:00) — за вчора (виписка за день уже повна), решта — за сьогодні."""
+    if int(t[:2]) < 12:
+        y = now.date() - timedelta(days=1)
+        return y.isoformat(), f"{now:%d.%m} {t} · рух за вчора, {y:%d.%m}"
+    return now.date().isoformat(), f"{now:%d.%m} {t} · рух за сьогодні"
+
+
+def send_report(t=None, refresh_first=True):
+    """Оновити всі компанії й надіслати звіт. -> (ok, повідомлення)."""
+    c = config()
+    if not (c["tg_token"] and c["tg_chat"]):
+        return False, _("Telegram не настроен")
+    now = datetime.now()
+    t = t or now.strftime("%H:%M")
+    errors = {}
+    if refresh_first:
+        for x in active(c):
+            for _w in range(20):                            # браузер зайнятий автооновленням — чекаємо
+                ok, msg = refresh(x["slot"], "report")
+                if ok or _("Обновление уже выполняется") not in msg:
+                    break
+                time.sleep(15)
+            if not ok:
+                errors[x["slot"]] = msg.split(": ", 1)[-1]
+    day, label = _report_period(now, t)
+    text = report_text(day, label, errors)
+    import yasno
+    for i in range(0, len(text), 3900):                    # ліміт Telegram — 4096 символів
+        yasno.tg_call(c["tg_token"], "sendMessage", {"chat_id": c["tg_chat"], "parse_mode": "HTML",
+                                                     "text": text[i:i + 3900], "disable_web_page_preview": True})
+    return True, _("Отчёт отправлен в Telegram")
+
+
+def report_due(c):
+    """Чи настав час звіту (у межах 2 годин після заданого) і його ще не надсилали сьогодні.
+    Кілька воркерів gunicorn — тому блокування файлом і позначка «надіслано» в базі."""
+    if not (c["report"] and c["tg_token"] and c["tg_chat"] and active(c)):
+        return
+    now = datetime.now()
+    for t in c["report_times"]:
+        at = now.replace(hour=int(t[:2]), minute=int(t[3:]), second=0, microsecond=0)
+        if not (at <= now < at + timedelta(hours=2)):
+            continue
+        key = f"{now:%Y-%m-%d} {t}"
+        os.makedirs(DIR, exist_ok=True)
+        fd = os.open(os.path.join(DIR, ".report.lock"), os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return                                    # інший воркер уже надсилає
+            with using_site(MAIN_SITE):
+                if settings().get("banks_report_sent") == key:
+                    continue
+            ok, msg = False, ""
+            for _try in range(3):                           # браузер міг бути зайнятий автооновленням
+                try:
+                    ok, msg = send_report(t)
+                    break
+                except BankError:
+                    time.sleep(60)
+                except Exception as e:  # noqa
+                    msg = str(e)
+                    break
+            with using_site(MAIN_SITE):
+                set_setting("banks_report_sent", key)
+                set_setting("banks_report_status", json.dumps({"time": now.isoformat(timespec="seconds"),
+                                                               "ok": ok, "msg": msg[:200]}, ensure_ascii=False))
+                get_db().commit()
+        finally:
+            os.close(fd)
+
+
+def report_status():
+    with using_site(MAIN_SITE):
+        try:
+            return json.loads(settings().get("banks_report_status") or "{}")
+        except ValueError:
+            return {}
 
 
 # ───────────────────────── сторінки ─────────────────────────
@@ -410,7 +554,7 @@ def page():
     cur = next((x for x in c["companies"] if x["slot"] == slot), c["companies"][0])
     return render_template("banks.html", c=c, tabs=tabs, cur=cur, slot=slot, data=data, ops=ops, inc=inc, out=out,
                            period=period, prev=prev, nxt=nxt if nxt <= date.today().strftime("%Y-%m") else "",
-                           q=q, sort=sort, desc=desc, is_admin=g.user["role"] == "admin",
+                           q=q, sort=sort, desc=desc, rep=report_status(), is_admin=g.user["role"] == "admin",
                            summary={x["slot"]: load(x["slot"]) for x in tabs})
 
 
@@ -441,6 +585,11 @@ def save_settings():
             if (f.get(f"password{n}") or "").strip():
                 set_setting(f"bank{n}_password", vault.encrypt(f.get(f"password{n}").strip()))
         set_setting("banks_auto", "1" if f.get("auto") else "0")
+        set_setting("banks_report", "1" if f.get("report") else "0")
+        set_setting("banks_report_times", ", ".join(parse_times(f.get("report_times"))) or DEFAULT_TIMES)
+        set_setting("banks_tg_chat", (f.get("tg_chat") or "").strip())
+        if (f.get("tg_token") or "").strip():
+            set_setting("banks_tg_token", vault.encrypt(f.get("tg_token").strip()))
         try:
             set_setting("banks_every", str(min(24, max(1, int(f.get("every") or 3)))))
         except ValueError:
@@ -455,6 +604,14 @@ def save_settings():
     if f.get("action") == "test":
         run_async([x["slot"] for x in active()])
         flash(_("Сохранено. Проверка входа запущена — обновите страницу через минуту"))
+    elif f.get("action") == "report":
+        def run():
+            try:
+                send_report(refresh_first=True)
+            except Exception:  # noqa
+                pass
+        threading.Thread(target=run, daemon=True).start()
+        flash(_("Сохранено. Отчёт придёт в Telegram через 1–2 минуты (сначала обновляются все компании)"))
     else:
         flash(_("Настройки сохранены"))
     return redirect(url_for("banks.page"))

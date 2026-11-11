@@ -99,9 +99,19 @@
       <label class="check"><input type="checkbox" name="auto" value="1" {{ 'checked' if c.auto }}> {{ _("обновлять автоматически (7:00–22:00)") }}</label>
       <label>{{ _("Каждые (часов)") }}<input name="every" type="number" min="1" max="24" value="{{ c.every }}"></label>
     </div>
+    <h3 style="margin:16px 0 6px">✈ Telegram</h3>
+    <div class="grid">
+      <label class="check full"><input type="checkbox" name="report" value="1" {{ 'checked' if c.report }}> {{ _("присылать состояние счетов: баланс, от кого пришло и кому ушло (без назначения)") }}</label>
+      <label>{{ _("Токен бота") }}<input type="password" name="tg_token" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_tg_token else '123456:ABC…' }}"></label>
+      <label>Chat ID<input name="tg_chat" value="{{ c.tg_chat }}" placeholder="-100… / 12345678"></label>
+      <label>{{ _("Время отчётов") }}<input name="report_times" value="{{ c.report_times|join(', ') }}" placeholder="09:10, 17:50"></label>
+      <p class="full muted" style="margin:0">{{ _("Утренний отчёт (до 12:00) — движение за вчера, остальные — за сегодня. Перед отправкой программа обновляет все компании.") }}
+        {% if rep.time %}<br>{{ _("Последний отчёт") }}: {{ rep.time[8:10] }}.{{ rep.time[5:7] }} {{ rep.time[11:16] }} {{ '✓' if rep.ok else '✗ ' ~ rep.msg }}{% endif %}</p>
+    </div>
     <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
       <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
       <button class="sm ghost" name="action" value="test">{{ _("Сохранить и проверить вход") }}</button>
+      <button class="sm ghost" name="action" value="report" {{ 'disabled' if not (c.has_tg_token and c.tg_chat) }}>✈ {{ _("Сохранить и прислать отчёт сейчас") }}</button>
     </div>
     <p class="muted" style="margin:8px 0 0">🔒 {{ _("Используйте гостевого пользователя банка только с правом просмотра, без ключа подписи — тогда программа физически не может делать платежи. Пароли хранятся зашифрованными, ключ не попадает в бэкапы.") }}</p>
   </form>

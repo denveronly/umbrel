@@ -16,7 +16,7 @@
   {% else %}<div class="kpi"><small class="muted">{{ _("Баланс") }}</small><b>—</b></div>{% endif %}
   <div class="kpi"><small class="muted">{{ _("Автопроверка") }}</small>
     <b>{% if c.enabled %}{{ _("ежедневно с") }} {{ '%02d'|format(c.hour) }}:00{% else %}{{ _("выключена") }}{% endif %}</b>
-    <small class="muted">Telegram: {{ '✓' if c.tg_token and c.tg_chat else _("не настроен") }}</small></div>
+    <small class="muted">Telegram: {{ ('✓ ' ~ (_("свой бот") if c.own_tg else "YASNO")) if c.tg_token and c.tg_chat else _("не настроен") }}</small></div>
 </div>
 
 {% if is_admin %}
@@ -29,13 +29,16 @@
     <label>{{ _("Логин") }}<input name="login" value="{{ c.login }}" autocomplete="off"></label>
     <label>{{ _("Пароль") }}<input type="password" name="password" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_password else '' }}"></label>
     <label>{{ _("Проверять с (час)") }}<input name="hour" type="number" min="0" max="23" value="{{ c.hour }}"></label>
+    <label>{{ _("Токен бота") }} (Telegram)<input type="password" name="tg_token" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_own_token else _('пусто — бот из YASNO') }}"></label>
+    <label>Chat ID (Telegram)<input name="tg_chat" value="{{ c.own_chat }}" placeholder="{{ _('пусто — чат из YASNO') }}"></label>
     <div class="full row" style="gap:8px;flex-wrap:wrap">
       <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
+      <button class="sm ghost" name="action" value="tgtest">✈ {{ _("Сохранить и отправить тест в Telegram") }}</button>
       <button class="sm ghost" name="action" value="test">{{ _("Сохранить и проверить вход") }}</button>
       <a class="btn sm ghost" href="{{ url_for('isp.debug_zip') }}">{{ _("Скачать страницы для диагностики") }}</a>
     </div>
     <p class="full muted" style="margin:0">🔒 {{ _("Пароль хранится зашифрованным; ключ лежит отдельно от базы и не попадает в бэкапы. Программа только читает кабинет — оплат не делает.") }}
-      {{ _("Telegram — токен и chat_id из YASNO (этого объекта или «Базы»).") }}</p>
+      {{ _("Пишет в Telegram, только когда баланс уходит в минус (раз в день, пока долг не погашен), и когда долг погашен. Если свой бот и чат не заданы — берутся из YASNO (этого объекта или «Базы»).") }}</p>
   </form>
 </div>
 {% endif %}

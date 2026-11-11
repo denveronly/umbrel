@@ -149,15 +149,19 @@ def api_check(c, hold=None):
 def config():
     s = settings()
     pw = s.get("isp_password") or ""
+    own_tok, own_chat = s.get("isp_tg_token") or "", (s.get("isp_tg_chat") or "").strip()
     tok, chat = s.get("tg_token") or "", (s.get("tg_chat") or "").strip()
-    if not (tok and chat) and current_site() != MAIN_SITE:          # Telegram — як у YASNO; інакше з «Бази»
+    if own_tok and own_chat:                                         # свій бот/чат «Інтернету» має пріоритет
+        tok, chat = own_tok, own_chat
+    elif not (tok and chat) and current_site() != MAIN_SITE:          # Telegram — як у YASNO; інакше з «Бази»
         with using_site(MAIN_SITE):
             m = settings()
             tok, chat = m.get("tg_token") or "", (m.get("tg_chat") or "").strip()
     return {"enabled": s.get("isp_enabled") == "1", "name": s.get("isp_name") or "Цифра",
             "url": (s.get("isp_url") or DEFAULT_URL).rstrip("/"), "login": s.get("isp_login") or "",
             "password": vault.decrypt(pw) if pw else "", "has_password": bool(pw),
-            "hour": int(s.get("isp_hour") or 10), "tg_token": vault.decrypt(tok) if tok else "", "tg_chat": chat}
+            "hour": int(s.get("isp_hour") or 10), "tg_token": vault.decrypt(tok) if tok else "", "tg_chat": chat,
+            "own_tg": bool(own_tok and own_chat), "has_own_token": bool(own_tok), "own_chat": own_chat}
 
 
 def status():
@@ -318,6 +322,9 @@ def save_settings():
     if (f.get("password") or "").strip():
         set_setting("isp_password", vault.encrypt(f.get("password").strip()))
     set_setting("isp_enabled", "1" if f.get("enabled") else "0")
+    set_setting("isp_tg_chat", (f.get("tg_chat") or "").strip())
+    if (f.get("tg_token") or "").strip():
+        set_setting("isp_tg_token", vault.encrypt(f.get("tg_token").strip()))
     try:
         set_setting("isp_hour", str(min(23, max(0, int(f.get("hour") or 10)))))
     except ValueError:
@@ -329,7 +336,14 @@ def save_settings():
         get_db().commit()
     except Exception:  # noqa
         pass
-    if f.get("action") == "test":
+    if f.get("action") == "tgtest":
+        c = config()
+        try:
+            ok = _tg(c, "✅ Тест: повідомлення з програми «Склади» (модуль «Інтернет»)")
+            flash(("✓ Telegram" if ok else "✗ " + _("Telegram не настроен")))
+        except Exception as e:  # noqa
+            flash("✗ Telegram: " + str(e)[:200])
+    elif f.get("action") == "test":
         ok, msg = check("manual")
         flash(("✓ " if ok else "✗ ") + msg)
     else:
