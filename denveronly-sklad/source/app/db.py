@@ -470,7 +470,7 @@ PAYMENT_TYPES = {
 
 
 def _connect(path):
-    con = sqlite3.connect(path)
+    con = sqlite3.connect(path, timeout=30)          # кілька воркерів gunicorn: чекаємо замість «database is locked»
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     return con
@@ -692,7 +692,7 @@ def _init_site(site):
         os.makedirs(d, exist_ok=True)
     path = db_path(site)
     new = not os.path.exists(path)
-    con = sqlite3.connect(path)
+    con = sqlite3.connect(path, timeout=30)
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
     if new and site != MAIN_SITE:
