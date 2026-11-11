@@ -1607,4 +1607,12 @@ EN = {
     'Если свой бот и чат не заданы — берутся из YASNO «Базы».': "Without its own bot and chat it uses «Base» YASNO's.",
     'Diamant — NoDeny, пароль md5(ses + пароль)': 'Diamant — NoDeny, password md5(ses + password)',
     'Статический IP': 'Static IP',
+    'Списание': 'Charge',
+    'источник': 'source',
+    'останется': 'will remain',
+    'пополнить': 'top up',
+    'хватает': 'enough',
+    'Абонплата': 'Monthly fee',
+    'определение…': 'detecting…',
+    'посчитаю после первого списания': 'will calculate after the first charge',
 }

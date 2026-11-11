@@ -25,7 +25,12 @@
       <b>{% if s.time %}{{ s.time[8:10] }}.{{ s.time[5:7] }} {{ s.time[11:16] }}{% else %}—{% endif %}</b>
       <small class="{{ 'muted' if s.ok else 'warnt' }}">{% if s.time %}{{ '✓ ' ~ _("успешно") if s.ok else '✗ ' ~ s.error }}{% endif %}</small></div>
     {% if a.ip %}<div class="kpi"><small class="muted">{{ _("Статический IP") }}</small><b style="font-size:17px">{{ a.ip }}</b></div>{% endif %}
-    {% if s.due %}<div class="kpi"><small class="muted">{{ _("Рекомендовано к оплате") }}</small><b>{{ money(s.due) }} {{ _("грн") }}</b></div>{% endif %}
+    {% set fc = isp_forecast(s) %}{% if fc %}
+    <div class="kpi {{ 'kbad' if fc[3] }}"><small class="muted">{{ _("Списание") }} {{ fc[0].strftime('%d.%m') }}: {{ money(fc[1]) }} {{ _("грн") }} <span title="{{ _('источник') }}: {{ s.fee_src }}">ⓘ</span></small>
+      <b>{{ _("останется") }} {{ money(fc[2]) }} {{ _("грн") }}</b>
+      <small class="{{ 'warnt' if fc[3] else 'muted' }}">{{ (_("пополнить") ~ ' ' ~ money(fc[3]) ~ ' ' ~ _("грн")) if fc[3] else _("хватает") }}</small></div>
+    {% elif s.balance is defined and s.balance is not none %}<div class="kpi"><small class="muted">{{ _("Абонплата") }}</small><b>{{ _("определение…") }}</b>
+      <small class="muted">{{ _("посчитаю после первого списания") }}</small></div>{% endif %}
     <div class="kpi"><small class="muted">{{ _("Автопроверка") }}</small>
       <b>{% if a.enabled %}{{ _("ежедневно в") }} {{ '%02d'|format(c.hour) }}:00{% else %}{{ _("выключена") }}{% endif %}</b>
       <small class="muted">Telegram: {{ ('✓ ' ~ (_("свой бот") if c.own_tg else "YASNO")) if c.tg_token and c.tg_chat else _("не настроен") }}</small></div>

@@ -154,6 +154,7 @@ def interlan_check(c, hold=None):
                 break
     if hold is not None:
         hold["due"] = getattr(interlan_parse, "due", 0) or 0
+        hold["fee"] = getattr(interlan_parse, "fee", None)
     return bal, ctx, cab
 
 
@@ -177,6 +178,7 @@ def interlan_parse(html):
     if boxes.get("рекомендуємо до оплати"):
         parts.append(f"рекомендовано до оплати {yasno.money(boxes['рекомендуємо до оплати'])} грн")
     interlan_parse.due = boxes.get("рекомендуємо до оплати") or 0
+    interlan_parse.fee = boxes.get("за наступний місяць")
     return bal, " · ".join(parts)
 
 
@@ -210,6 +212,7 @@ def diamant_parse(html):
         parts.append(f"рекомендовано до оплати {yasno.money(due)} грн")
     if acc and acc.group(1).lower() != "дозволено":
         parts.append(f"доступ: {acc.group(1)}")
+    diamant_parse.fee = total
     return bal, " · ".join(parts), due
 
 
@@ -238,6 +241,7 @@ def diamant_check(c, hold=None):
         raise yasno.LoginError(_("вход есть, но баланс на странице не найден — скачайте страницы для диагностики"))
     if hold is not None:
         hold["due"] = due
+        hold["fee"] = getattr(diamant_parse, "fee", None)
     return bal, ctx, cab
 
 
@@ -285,6 +289,8 @@ def api_check(c, hold=None):
     parts = [(_("Задолженность") if bal < 0 else _("Баланс")) + f" {yasno.money(abs(bal))} грн"]
     if k(u.get("abonsum")):
         parts.append(_("абонплата") + f" {yasno.money(k(u['abonsum']))} грн")
+        if hold is not None:
+            hold["fee"] = k(u.get("abonsum"))
     if u.get("contractnum"):
         parts.append(_("договор") + f" {u['contractnum']}")
     return bal, " · ".join(parts), cab
@@ -405,6 +411,37 @@ def _dump(cab, a):
             f.write(v)
 
 
+def track(st, bal, cabinet_fee=None):
+    """Стежимо за рухом балансу між перевірками: падіння — списання (абонплата), зростання — поповнення.
+    Абонплата: з кабінету, якщо він її показує, інакше — останнє помітне списання. День списання — з історії."""
+    today = date.today().isoformat()
+    prev = st.get("balance")
+    charges, topups = st.get("charges", []), st.get("topups", [])
+    if prev is not None and bal is not None and abs(bal - prev) >= 0.01:
+        rec = [today, round(abs(bal - prev), 2)]
+        (charges if bal < prev else topups).append(rec)
+    st["charges"], st["topups"] = charges[-24:], topups[-24:]
+    seen = [c for c in charges if c[1] >= 10]                    # дрібні рухи (комісії) — не абонплата
+    fee = cabinet_fee if cabinet_fee else (seen[-1][1] if seen else st.get("fee"))
+    st["fee"] = round(fee, 2) if fee else None
+    st["fee_src"] = "кабінет" if cabinet_fee else ("списання" if seen else st.get("fee_src", ""))
+    st["charge_day"] = int(seen[-1][0][8:10]) if seen else (st.get("charge_day") or 1)
+
+
+def forecast(st):
+    """-> (дата наступного списання, сума, залишок після нього, треба поповнити) або None."""
+    fee, bal = st.get("fee"), st.get("balance")
+    if not fee or bal is None:
+        return None
+    d = date.today()
+    day = min(max(1, int(st.get("charge_day") or 1)), 28)
+    nxt = d.replace(day=day)
+    if nxt <= d:                                                  # цього місяця вже списали — наступного
+        nxt = (d.replace(day=1) + timedelta(days=32)).replace(day=day)
+    after = round(bal - fee, 2)
+    return nxt, fee, after, max(0.0, -after)
+
+
 _slot_locks = {n: threading.Lock() for n in SLOTS}
 
 
@@ -453,6 +490,7 @@ def check(slot, kind="manual"):
         _dump(cab, a)
         if bal is None:
             raise yasno.LoginError(_("вход есть, но баланс на странице не найден — скачайте страницы для диагностики"))
+        track(st, bal, hold.get("fee"))
         st.update(time=now, ok=True, error="", balance=bal, context=ctx, kind=kind, due=hold.get("due") or 0)
         if kind == "auto":
             st["last_auto"] = date.today().isoformat()
@@ -493,8 +531,14 @@ def report_text(c=None):
             line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — 0,00\u00a0грн"
         if a.get("ip"):
             line += f"\n   🌍 IP {yasno._esc(a['ip'])}"
-        if (s.get("due") or 0) > 0 and (bal is None or bal >= 0):
-            line += f"\n   🟡 до оплати {yasno.money(s['due'])}\u00a0грн"
+        fc = forecast(s)
+        if fc:
+            nxt, fee, after, need = fc
+            line += (f"\n   💳 абонплата — {yasno.money(fee)}\u00a0грн ({nxt:%d.%m})"
+                     f"\n   📅 після списання — {yasno.money(after)}\u00a0грн"
+                     + (f"\n   🟡 поповнити — {yasno.money(need)}\u00a0грн" if need else ""))
+        elif bal is not None:
+            line += "\n   💳 абонплата — визначення…"
         if s.get("time") and not s.get("ok"):
             line += f"\n   ⚠️ не вдалося перевірити: {yasno._esc(s.get('error', ''))[:150]}"
         lines.append(line)
@@ -656,6 +700,7 @@ PROVIDER_NAMES = {"interlan": "Interlan — вход user[login]/user[password] 
 
 def init_app(app):
     app.register_blueprint(bp)
+    app.jinja_env.globals["isp_forecast"] = forecast
     app.jinja_env.globals["isp_provider"] = lambda url: PROVIDER_NAMES[provider(url)]
     if os.environ.get("YASNO_SCHED", "1") != "0":
         threading.Thread(target=_scheduler, args=(app,), daemon=True).start()
