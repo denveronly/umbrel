@@ -144,7 +144,7 @@ def _date(s):
 # ───────────────────────── браузер ─────────────────────────
 
 def _launch(pw):
-    return pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage",
+    return pw.chromium.launch(headless=True, channel="chromium", args=["--no-sandbox", "--disable-dev-shm-usage",
                                                    "--disable-blink-features=AutomationControlled"])
 
 
@@ -157,12 +157,30 @@ def _context(browser):
     return ctx
 
 
-def login(page, c, pages):
-    """Звичайна форма банку: логін -> пароль -> «Увійти» (сайт сам кодує пароль і шле відбиток браузера)."""
-    page.goto(LOGIN_URL, wait_until="networkidle")
-    pages["01_login"] = page.content()
-    if not page.locator("#UserName").count():
-        raise BankError(_("страница входа банка не похожа на ожидаемую — скачайте страницы для диагностики"))
+PERSON = "img[src*='user-aunthenticated'], img[src*='user-authenticated']"
+
+
+def _password_mode(page):
+    """Іноді банк на вході просить ключ — тоді, як і людина, тиснемо іконку «людини» (вхід лише за паролем)."""
+    ico = page.locator(PERSON)
+    if ico.count():
+        try:
+            with page.expect_navigation(wait_until="networkidle", timeout=30000):
+                ico.first.click()
+            return True
+        except Exception:  # noqa — сторінка могла не перезавантажитись
+            page.wait_for_load_state("networkidle")
+            return True
+    return False
+
+
+def _asks_key(page):
+    if page.locator("#UserName").count() and page.locator("#SignatureAndPasswordModel_Password").is_visible():
+        return False
+    return bool(re.search(r"ключ|носі[йя]|сертифікат|токен", page.inner_text("body")[:20000], re.I))
+
+
+def _submit(page, c):
     page.wait_for_function("document.querySelector('#FpData') && document.querySelector('#FpData').value",
                            timeout=15000)                   # відбиток браузера, як у справжньому вході
     page.fill("#UserName", c["login"])
@@ -170,14 +188,30 @@ def login(page, c, pages):
     page.wait_for_timeout(600)
     with page.expect_navigation(wait_until="networkidle", timeout=60000):
         page.click("#SignedLogon")
+
+
+def login(page, c, pages):
+    """Звичайна форма банку: логін -> пароль -> «Увійти» (сайт сам кодує пароль і шле відбиток браузера)."""
+    page.goto(LOGIN_URL, wait_until="networkidle")
+    pages["01_login"] = page.content()
+    if _asks_key(page) or not page.locator("#UserName").count():
+        _password_mode(page)
+        pages["01b_login_password_mode"] = page.content()
+    if not page.locator("#UserName").count():
+        raise BankError(_("страница входа банка не похожа на ожидаемую — скачайте страницы для диагностики"))
+    _submit(page, c)
     pages["02_after_login"] = page.content()
+    if page.locator("#UserName").count() and _asks_key(page) and _password_mode(page):
+        pages["02b_password_mode"] = page.content()       # попросив ключ — переходимо на вхід за паролем
+        _submit(page, c)
+        pages["02c_after_login"] = page.content()
     if page.locator("#UserName").count():                  # форма входу на місці — не пустили
         err = page.locator(".validation-summary-errors, .field-validation-error, .error, .alert").all_inner_texts()
         msg = " ".join(t.strip() for t in err if t.strip())[:200]
         raise BankError(_("банк не пустил") + (": " + msg if msg else ""))
 
 
-def fetch(c):
+def fetch(c, months=2):
     """Зайти в банк однієї компанії -> {'accounts': [...], 'ops': [...]}; pages — для діагностики."""
     from playwright.sync_api import sync_playwright
     import pumb
@@ -188,7 +222,7 @@ def fetch(c):
             try:
                 page = _context(browser).new_page()
                 login(page, c, pages)
-                res = pumb.read(page, pages)
+                res = pumb.read(page, pages, months)
             finally:
                 browser.close()
         return res, pages
@@ -209,8 +243,13 @@ def refresh(slot, kind="manual"):
     pages = {}
     try:
         with _browser_lock():
-            res, pages = fetch(c)
-        data.update(res)
+            res, pages = fetch(c, 2 if data.get("ops") else 13)   # перший раз — рік історії
+        fresh = set(res.get("periods", []))             # місяці, які щойно перечитали, — замінюємо цілком
+        keep = [o for o in data.get("ops", []) if (o.get("date") or "")[:7] not in fresh]
+        cutoff = (date.today().replace(day=1) - timedelta(days=400)).isoformat()
+        data["ops"] = [o for o in keep if (o.get("date") or "") >= cutoff] + res.get("ops", [])
+        data["accounts"] = res.get("accounts", [])
+        data["periods"] = sorted(set(data.get("periods", [])) | fresh)
         data.update(time=now, ok=True, error="", kind=kind)
         _save(slot, data)
         bal = sum(a.get("balance") or 0 for a in res.get("accounts", []) if a.get("currency", "UAH") == "UAH")

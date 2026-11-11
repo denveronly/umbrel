@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 LABEL org.opencontainers.image.source="https://github.com/denveronly/umbrel" \
       org.opencontainers.image.description="Склады — аренда, коммунальные, акты"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DATA_DIR=/data TZ=Europe/Kyiv
@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-co
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Chromium для розділу «Банки» (клієнт-банк закритий захистом від ботів — заходимо справжнім браузером)
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 COPY app/ .
 COPY VERSION .
 # Leaflet кладём внутрь образа, чтобы карта работала без интернета
