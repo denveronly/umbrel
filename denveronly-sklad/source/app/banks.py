@@ -41,6 +41,10 @@ class BankError(Exception):
     pass
 
 
+class Busy(BankError):
+    """Браузер зайнятий іншою компанією — це не збій, просто спробуємо трохи пізніше."""
+
+
 # ───────────────────────── налаштування ─────────────────────────
 
 def config():
@@ -56,6 +60,7 @@ def config():
     every = int(s.get("banks_every") or 3)
     tok = s.get("banks_tg_token") or ""
     return {"companies": out, "every": every, "auto": s.get("banks_auto", "1") == "1",
+            "h_from": int(s.get("banks_from") or 9), "h_to": int(s.get("banks_to") or 19),
             "tg_token": vault.decrypt(tok) if tok else "", "has_tg_token": bool(tok),
             "tg_chat": (s.get("banks_tg_chat") or "").strip(), "report": s.get("banks_report", "1") == "1",
             "report_times": parse_times(s.get("banks_report_times") or DEFAULT_TIMES)}
@@ -127,7 +132,7 @@ def _browser_lock():
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
-            raise BankError(_("Обновление уже выполняется"))
+            raise Busy(_("Обновление уже выполняется"))
         yield
     finally:
         os.close(fd)
@@ -324,6 +329,9 @@ def refresh(slot, kind="manual"):
         bal = sum(a.get("balance") or 0 for a in res.get("accounts", []) if a.get("currency", "UAH") == "UAH")
         return True, f"{c['name']}: {_('остаток')} {bal:,.2f} {_('грн')}".replace(",", " ") + \
             f", {_('операций')}: {len(res.get('ops', []))}"
+    except Busy as e:
+        pages = None                                    # і діагностику попередньої спроби не чіпаємо
+        return False, f"{c['name']}: {e}"                 # нічого не записуємо: спробуємо за 30 с
     except Exception as e:  # noqa
         pages = pages or getattr(e, "pages", {})
         err = str(e).strip().splitlines()[0][:300] if str(e).strip() else e.__class__.__name__
@@ -331,7 +339,8 @@ def refresh(slot, kind="manual"):
         _save(slot, data)
         return False, f"{c['name']}: {err}"
     finally:
-        _dump_pages(slot, pages, (c.get("password"), c.get("login")))
+        if pages is not None:
+            _dump_pages(slot, pages, (c.get("password"), c.get("login")))
 
 
 def refresh_all(kind="manual"):
@@ -348,23 +357,48 @@ def run_async(slots, kind="manual"):
     threading.Thread(target=run, daemon=True).start()
 
 
+OFFSETS = {"1": 0, "2": 2, "3": 3}                    # хвилини: 1-й банк о 9:00, 2-й о 9:02, 3-й о 9:03
+
+
+def schedule(c, day=None):
+    """Розклад автооновлень на день: з h_from кожні every годин до h_to включно, зі зсувом для кожної компанії.
+    -> {slot: [datetime, ...]}"""
+    day = day or date.today()
+    out = {}
+    for x in active(c):
+        times, h = [], c["h_from"]
+        while h <= c["h_to"]:
+            times.append(datetime(day.year, day.month, day.day, h) + timedelta(minutes=OFFSETS.get(x["slot"], 0)))
+            h += c["every"]
+        out[x["slot"]] = times
+    return out
+
+
+def refresh_due(c):
+    """Компанії, чий час за розкладом настав (не пізніше години тому), а після нього ще не оновлювались."""
+    now = datetime.now()
+    for slot, times in schedule(c).items():
+        past = [t for t in times if t <= now < t + timedelta(hours=1)]
+        if not past:
+            continue
+        last = load(slot).get("time")
+        if not last or datetime.fromisoformat(last) < past[-1]:
+            refresh(slot, "auto")
+
+
 def _scheduler(app):
-    """Щохвилини: звіт у Telegram у задані години; кожні N годин з 7:00 до 22:00 — оновлення компаній."""
-    time.sleep(60)
+    """Щохвилини: звіт у Telegram у задані години; автооновлення компаній за розкладом (9:00, 9:02, 9:03 …)."""
+    time.sleep(30)
     while True:
         try:
             with app.app_context():
                 c = config()
                 report_due(c)
-                h = datetime.now().hour
-                if c["auto"] and 7 <= h <= 22:
-                    for x in active(c):
-                        t = load(x["slot"]).get("time")
-                        if not t or datetime.now() - datetime.fromisoformat(t) >= timedelta(hours=c["every"]):
-                            refresh(x["slot"], "auto")
+                if c["auto"]:
+                    refresh_due(c)
         except Exception:  # noqa
             pass
-        time.sleep(60)
+        time.sleep(30)
 
 
 # ───────────────────────── звіт у Telegram ─────────────────────────
@@ -554,7 +588,7 @@ def page():
     cur = next((x for x in c["companies"] if x["slot"] == slot), c["companies"][0])
     return render_template("banks.html", c=c, tabs=tabs, cur=cur, slot=slot, data=data, ops=ops, inc=inc, out=out,
                            period=period, prev=prev, nxt=nxt if nxt <= date.today().strftime("%Y-%m") else "",
-                           q=q, sort=sort, desc=desc, rep=report_status(), is_admin=g.user["role"] == "admin",
+                           q=q, sort=sort, desc=desc, rep=report_status(), sched=schedule(c), is_admin=g.user["role"] == "admin",
                            summary={x["slot"]: load(x["slot"]) for x in tabs})
 
 
@@ -592,6 +626,9 @@ def save_settings():
             set_setting("banks_tg_token", vault.encrypt(f.get("tg_token").strip()))
         try:
             set_setting("banks_every", str(min(24, max(1, int(f.get("every") or 3)))))
+            hf, ht = min(23, max(0, int(f.get("h_from") or 9))), min(23, max(0, int(f.get("h_to") or 19)))
+            set_setting("banks_from", str(min(hf, ht)))
+            set_setting("banks_to", str(max(hf, ht)))
         except ValueError:
             pass
         get_db().commit()

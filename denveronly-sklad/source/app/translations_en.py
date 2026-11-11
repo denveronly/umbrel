@@ -1549,4 +1549,8 @@ EN = {
     'Сохранить и отправить тест в Telegram': 'Save and send a Telegram test',
     'Пишет в Telegram, только когда баланс уходит в минус (раз в день, пока долг не погашен), и когда долг погашен. Если свой бот и чат не заданы — берутся из YASNO (этого объекта или «Базы»).': "Writes to Telegram only when the balance goes negative (once a day until paid) and when the debt is paid. Without its own bot and chat it uses YASNO's (this site or «Base»).",
     'свой бот': 'own bot',
+    'обновлять автоматически по расписанию': 'refresh automatically on schedule',
+    'С (час)': 'From (hour)',
+    'До (час)': 'To (hour)',
+    'Расписание': 'Schedule',
 }
