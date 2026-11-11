@@ -1587,4 +1587,10 @@ EN = {
     'Общее': 'General',
     'проверять автоматически каждый день': 'check automatically every day',
     'Пишет в Telegram, только когда баланс уходит в минус (раз в день, пока долг не погашен), и когда долг погашен. Если свой бот и чат не заданы — берутся из YASNO «Базы».': "Writes to Telegram only when the balance goes negative (once a day until paid) and when the debt is paid. Without its own bot and chat it uses «Base» YASNO's.",
+    'Сначала задайте пароль бэкапов — иначе не останется ни одной копии': 'Set a backup password first — otherwise no copy would remain',
+    'Удалено незашифрованных бэкапов': 'Unencrypted backups deleted',
+    'Для каждого объекта создан свежий зашифрованный бэкап.': 'A fresh encrypted backup was created for each site.',
+    'Сначала задайте пароль бэкапов': 'Set a backup password first',
+    'Удалить все НЕзашифрованные бэкапы всех объектов? Перед этим для каждого объекта будет создан свежий зашифрованный бэкап.': 'Delete ALL unencrypted backups of all sites? A fresh encrypted backup will be created for each site first.',
+    'Удалить незашифрованные': 'Delete unencrypted',
 }

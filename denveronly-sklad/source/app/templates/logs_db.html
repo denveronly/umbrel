@@ -84,6 +84,9 @@
   <div class="row">
     <h2 style="margin:0">{{ _("Резервные копии") }}</h2><span class="spacer"></span>
     <form method="post"><button name="action" value="backup">{{ _("Создать бэкап сейчас") }}</button></form>
+    {% if current_user.role == 'admin' and backups|rejectattr('enc')|list %}
+    <form method="post"><button class="danger" name="action" value="purge_plain" {{ 'disabled title=' ~ _("Сначала задайте пароль бэкапов")|tojson if not backup_pw }}
+      data-pin="{{ _("Удалить все НЕзашифрованные бэкапы всех объектов? Перед этим для каждого объекта будет создан свежий зашифрованный бэкап.") }}">🗑 {{ _("Удалить незашифрованные") }} ({{ backups|rejectattr('enc')|list|length }})</button></form>{% endif %}
   </div>
   <p class="muted">{{ _("Бэкап — ZIP с базой, фото объектов и планом территории. Лежат в папке") }} <code>data/backups</code> {{ _("на сервере. Советую периодически скачивать копию на другой диск") }}.</p>
   <div class="tablewrap"><table>

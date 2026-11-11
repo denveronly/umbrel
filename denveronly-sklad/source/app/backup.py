@@ -258,7 +258,7 @@ def database():
     db = get_db()
     if request.method == "POST":
         action = request.form.get("action")
-        if action in ("delete", "restore", "upload"):      # видалення бекапу і відкат — лише з PIN адміністратора
+        if action in ("delete", "restore", "upload", "purge_plain"):   # видалення бекапу і відкат — лише з PIN адміністратора
             err = auth.check_pin(request.form.get("pin"))
             if err:
                 flash(err)
@@ -314,6 +314,21 @@ def database():
             db.commit()
             log("Настройки бэкапа изменены")
             flash(_("Настройки бэкапа сохранены"))
+        elif action == "purge_plain":
+            if not backup_password():
+                flash(_("Сначала задайте пароль бэкапов — иначе не останется ни одной копии"))
+                return redirect(url_for("logs.database"))
+            removed, fresh = 0, []
+            for site in SITES:                          # спершу свіжий зашифрований бекап кожного об'єкта
+                with using_site(site):
+                    fresh.append(create_backup("manual"))
+                    for b in list_backups():
+                        if not b["enc"]:
+                            os.remove(os.path.join(backup_dir(), b["name"]))
+                            removed += 1
+            log("Удалены незашифрованные бэкапы", f"удалено {removed}; новые зашифрованные: {', '.join(fresh)}")
+            flash(_("Удалено незашифрованных бэкапов") + f": {removed}. " +
+                  _("Для каждого объекта создан свежий зашифрованный бэкап."))
         elif action == "delete":
             p = _safe_path(request.form.get("name"))
             os.remove(p)
