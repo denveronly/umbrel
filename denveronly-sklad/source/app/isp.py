@@ -108,12 +108,14 @@ def _csrf(cab):
     return ""
 
 
-def api_check(c):
+def api_check(c, hold=None):
     """Вхід через JSON API (POST /api/auth/login {login, password}) — так працює my.cyfra.ua.
     -> (баланс, контекст, cab) або None, якщо такого API на сайті немає (тоді — звичайна форма)."""
     p = urllib.parse.urlsplit(c["url"])
     host = "my.cyfra.ua" if p.netloc in ("cyfra.ua", "www.cyfra.ua") else p.netloc   # cyfra.ua/auth -> кабінет
     cab = Cabinet(f"{p.scheme}://{host}")
+    if hold is not None:
+        hold["cab"] = cab                             # щоб і при помилці зберегти сторінки для діагностики
     tok = _csrf(cab)
     h = {"Accept": "application/json, text/plain, */*", "Referer": f"{cab.base}/login", "Authorization": ""}
     if tok:
@@ -211,7 +213,11 @@ def check(kind="manual"):
     try:
         if not (c["login"] and c["password"]):
             raise yasno.LoginError(_("укажите логин и пароль"))
-        res = api_check(c)                            # спершу JSON API (SPA-кабінети, як my.cyfra.ua)
+        hold = {}
+        try:
+            res = api_check(c, hold)
+        finally:
+            cab = hold.get("cab")                            # спершу JSON API (SPA-кабінети, як my.cyfra.ua)
         if res:
             bal, ctx, cab = res
         else:
