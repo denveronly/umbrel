@@ -1535,4 +1535,5 @@ EN = {
     'банк не пустил': 'bank rejected the login',
     'страница входа банка не похожа на ожидаемую — скачайте страницы для диагностики': 'bank login page looks unexpected — download diagnostic pages',
     'вход есть, но таблица счетов не найдена — скачайте страницы для диагностики': 'logged in, but the accounts table was not found — download diagnostic pages',
+    'Комиссия': 'Fee',
 }
