@@ -455,6 +455,9 @@ def _group(ops, sign):
     return sorted(acc.items(), key=lambda kv: -kv[1])
 
 
+KEYCAPS = {"1": "1️⃣", "2": "2️⃣", "3": "3️⃣", "4": "4️⃣", "5": "5️⃣"}   # номер компанії (як вкладка)
+
+
 def report_text(days, label, errors=None, skip=None):
     """Одне повідомлення по всіх компаніях: баланс, надходження й списання за дні days.
     skip — множина вже надісланих операцій (звіт за розкладом їх не повторює). -> (текст, нові ключі)."""
@@ -464,7 +467,7 @@ def report_text(days, label, errors=None, skip=None):
         d = load(x["slot"])
         bal = sum(a.get("balance") or 0 for a in d.get("accounts", []) if a.get("currency", "UAH") == "UAH")
         lines.append("")
-        lines.append(f"🟩 <b>{_esc(x['name'])}</b> — " + (f"<b>{_fmt(bal)}{NB}грн</b>" if d.get("accounts") else "—"))
+        lines.append(f"{KEYCAPS.get(x['slot'], '▪️')} <b>{_esc(x['name'])}</b> — " + (f"<b>{_fmt(bal)}{NB}грн</b>" if d.get("accounts") else "—"))
         if x["slot"] in errors or (d.get("time") and not d.get("ok")):
             when = d.get("time", "")
             lines.append(f"⚠️ не вдалося оновити: {_esc(errors.get(x['slot']) or d.get('error', ''))[:150]}"
