@@ -1644,4 +1644,13 @@ EN = {
     'Поставлено в очередь для BAS': 'Queued for BAS',
     'агент на связи, загрузится в течение минуты': 'agent online, will load within a minute',
     'агент BAS не на связи: загрузится, когда включится ПК бухгалтерии': 'BAS agent offline: will load when the accounting PC is on',
+    'Блокнот': 'Notepad',
+    'Заметки, телефоны, что не забыть…': 'Notes, phone numbers, reminders…',
+    'Сохраняется само через секунду после ввода. У каждого объекта — свой блокнот.': 'Saves automatically a second after typing. Each site has its own notepad.',
+    'сохраняю…': 'saving…',
+    'не сохранено — проверьте связь': 'not saved — check the connection',
+    'Перетащите файлы сюда или выберите кнопкой (до 50 МБ). Файлы попадают в бэкапы.': 'Drag files here or pick them (up to 50 MB). Files are included in backups.',
+    'Удалить файл': 'Delete file',
+    'Файл больше 50 МБ': 'File larger than 50 MB',
+    'Добавлено файлов': 'Files added',
 }

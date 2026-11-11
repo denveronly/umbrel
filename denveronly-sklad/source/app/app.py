@@ -31,6 +31,7 @@ import homeel
 import homegas
 import naftogaz
 import isp
+import notes
 import banks
 from audit import log
 from i18n import _
@@ -57,6 +58,7 @@ homeel.init_app(app)
 homegas.init_app(app)
 naftogaz.init_app(app)
 isp.init_app(app)
+notes.init_app(app)
 banks.init_app(app)
 sheet.init_app(app)
 
@@ -109,7 +111,7 @@ def plain(x):
 
 
 # розділи, на які можна повернутись після перемикання об'єкта (картки конкретних записів — ні: в іншого об'єкта свої id)
-SITE_SECTIONS = ("/isp", "/banks", "/", "/home", "/gas", "/naftogaz", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
+SITE_SECTIONS = ("/isp", "/banks", "/notes", "/", "/home", "/gas", "/naftogaz", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
                  "/logs", "/settings", "/companies", "/users")
 
 
@@ -124,7 +126,7 @@ def switch_site(sid):
     sec = "/" + nxt.split("?")[0].strip("/").split("/")[0]
     sec = sec if sec in SITE_SECTIONS else "/"
     if SITES[sid].get("kind") == "home":             # «Дім» — лише електрика, HA і налаштування
-        sec = sec if sec in ("/home", "/gas", "/naftogaz", "/ha", "/settings", "/logs", "/users") else "/home"
+        sec = sec if sec in ("/home", "/gas", "/naftogaz", "/ha", "/notes", "/settings", "/logs", "/users") else "/home"
     elif sec in ("/home", "/gas", "/naftogaz"):
         sec = "/"
     resp = redirect(sec + ("?view=" + request.args["view"] if sec == "/tenants" and request.args.get("view") else ""))

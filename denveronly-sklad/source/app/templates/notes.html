@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Блокнот") }}{% endblock %}
+{% block content %}
+<div class="row"><h1>📝 {{ _("Блокнот") }} <span class="muted" style="font-weight:400">· {{ site_name }}</span></h1><span class="spacer"></span>
+  <small class="muted" id="nstat">{% if when %}{{ _("сохранено") }} {{ when[8:10] }}.{{ when[5:7] }} {{ when[11:16] }}{% if who %} · {{ who }}{% endif %}{% endif %}</small></div>
+<textarea id="ntext" spellcheck="true" placeholder="{{ _('Заметки, телефоны, что не забыть…') }}"
+  style="width:100%;min-height:65vh;font:15px/1.5 system-ui,sans-serif;padding:12px;border-radius:10px;resize:vertical">{{ text }}</textarea>
+<p class="muted" style="margin-top:6px">{{ _("Сохраняется само через секунду после ввода. У каждого объекта — свой блокнот.") }}</p>
+
+<div class="card" id="nfiles" style="margin-top:14px">
+  <div class="row" style="gap:8px;flex-wrap:wrap"><h2 style="margin:0">📎 {{ _("Файлы") }}</h2><span class="spacer"></span>
+    <form method="post" action="{{ url_for('notes.upload') }}" enctype="multipart/form-data" class="row" style="gap:6px">
+      <input type="file" name="files" multiple required style="max-width:260px" onchange="this.form.submit()">
+    </form></div>
+  <p class="muted" id="ndrop" style="margin:8px 0;border:1px dashed var(--line);border-radius:8px;padding:14px;text-align:center">{{ _("Перетащите файлы сюда или выберите кнопкой (до 50 МБ). Файлы попадают в бэкапы.") }}</p>
+  {% if files %}<div class="tablewrap"><table>
+    <tbody>{% for f in files %}<tr>
+      <td><a href="{{ url_for('notes.download', name=f.name) }}" target="_blank" rel="noopener">{{ f.name }}</a></td>
+      <td class="muted" style="white-space:nowrap">{{ f.time }}</td><td class="n muted" style="white-space:nowrap">{{ f.size|filesize }}</td>
+      <td class="n" style="white-space:nowrap"><a class="btn sm ghost" href="{{ url_for('notes.download', name=f.name, dl=1) }}">⤓</a>
+        <form method="post" action="{{ url_for('notes.delete', name=f.name) }}" style="display:inline;margin:0">
+          <button class="sm danger" onclick="return confirm({{ (_('Удалить файл') ~ ' «' ~ f.name ~ '»?')|tojson|forceescape }})">×</button></form></td>
+    </tr>{% endfor %}</tbody></table></div>{% endif %}
+</div>
+<script>
+(() => {
+  const z = document.getElementById('nfiles'), inp = z.querySelector('input[type=file]');
+  ['dragover', 'dragenter'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.style.outline = '2px dashed var(--accent)'; }));
+  ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.style.outline = ''; }));
+  z.addEventListener('drop', e => { if (e.dataTransfer.files.length) { inp.files = e.dataTransfer.files; inp.form.submit(); } });
+})();
+</script>
+<script>
+(() => {
+  const ta = document.getElementById('ntext'), st = document.getElementById('nstat');
+  let t = null, last = ta.value;
+  const save = () => {
+    if (ta.value === last) return;
+    const v = ta.value, fd = new FormData(); fd.append('text', v);
+    st.textContent = {{ _("сохраняю…")|tojson }};
+    fetch({{ url_for('notes.save')|tojson }}, {method: 'POST', body: fd})
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(j => { last = v; st.textContent = {{ _("сохранено")|tojson }} + ' ' + j.when.slice(8,10) + '.' + j.when.slice(5,7) + ' ' + j.when.slice(11,16) + ' · ' + j.who; })
+      .catch(() => { st.textContent = {{ _("не сохранено — проверьте связь")|tojson }}; });
+  };
+  ta.addEventListener('input', () => { clearTimeout(t); t = setTimeout(save, 1000); });
+  window.addEventListener('beforeunload', save);
+})();
+</script>
+{% endblock %}

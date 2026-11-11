@@ -98,6 +98,11 @@ def create_backup(kind="manual"):
             if os.path.isdir(uploads_dir()):
                 for f in os.listdir(uploads_dir()):
                     z.write(os.path.join(uploads_dir(), f), f"uploads/{f}")
+            nd = os.path.join(os.path.dirname(db_path()), "notes_files")      # файли блокнота
+            if os.path.isdir(nd):
+                for f in os.listdir(nd):
+                    if os.path.isfile(os.path.join(nd, f)):
+                        z.write(os.path.join(nd, f), f"notes/{f}")
             # фото об'єктів (вже стиснені JPEG — без повторного стиснення)
             for root, _dirs, files in os.walk(photos_dir()):
                 for f in files:
@@ -144,7 +149,7 @@ def restore_from_zip(path, password=None):
             if "sklad.db" not in names:
                 raise ValueError("В архиве нет sklad.db")
             z.extract("sklad.db", tmp)
-            ups = [n for n in names if n.startswith(("uploads/", "photos/")) and not n.endswith("/") and ".." not in n]
+            ups = [n for n in names if n.startswith(("uploads/", "photos/", "notes/")) and not n.endswith("/") and ".." not in n]
             for n in ups:
                 z.extract(n, tmp)
         snap = os.path.join(tmp, "sklad.db")
@@ -166,6 +171,12 @@ def restore_from_zip(path, password=None):
             os.makedirs(uploads_dir(), exist_ok=True)
             for f in os.listdir(src_up):
                 shutil.copy2(os.path.join(src_up, f), os.path.join(uploads_dir(), f))
+        src_nt = os.path.join(tmp, "notes")
+        if os.path.isdir(src_nt):                    # файли блокнота
+            nd = os.path.join(os.path.dirname(db_path()), "notes_files")
+            os.makedirs(nd, exist_ok=True)
+            for f in os.listdir(src_nt):
+                shutil.copy2(os.path.join(src_nt, f), os.path.join(nd, f))
         src_ph = os.path.join(tmp, "photos")
         if os.path.isdir(src_ph):                    # фото — точно як у бэкапі
             shutil.rmtree(photos_dir(), ignore_errors=True)
