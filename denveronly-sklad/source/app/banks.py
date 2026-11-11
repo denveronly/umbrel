@@ -167,6 +167,7 @@ def _settle(page, ms=8000):
     page.wait_for_timeout(800)
 
 
+SUBMIT = "#submitBtn, input[name='SignedLogon'], #SignedLogon"   # кнопка «Вхід»
 PERSON = "img[src*='user-aunthenticated'], img[src*='user-authenticated']"
 
 
@@ -197,7 +198,7 @@ def _submit(page, c):
     page.fill("#SignatureAndPasswordModel_Password", c["password"])
     page.wait_for_timeout(600)
     with page.expect_navigation(wait_until="domcontentloaded", timeout=90000):
-        page.click("#SignedLogon")
+        page.click(SUBMIT)
     _settle(page)
 
 
@@ -232,6 +233,11 @@ def _snapshot(page, pages):
         pages["99_error_page"] = page.content()
     except Exception as e:  # noqa
         pages["99_error_page"] = f"<!-- page.content() failed: {e} -->"
+    try:
+        import base64
+        page.evaluate("document.querySelectorAll('#UserName').forEach(e => e.value = '***')")   # логін не в скриншот
+    except Exception:  # noqa
+        pass
     try:
         import base64
         png = page.screenshot(full_page=True, timeout=15000)
