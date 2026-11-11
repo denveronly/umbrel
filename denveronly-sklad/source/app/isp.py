@@ -11,6 +11,7 @@ import os
 import re
 import threading
 import time
+import urllib.parse
 import zipfile
 from datetime import date, datetime, timedelta
 
@@ -65,6 +66,81 @@ def parse_balance(html):
         if m and _num(m.group(2)) is not None:
             return _num(m.group(2)), re.sub(r"\s+", " ", m.group(0)).strip()
     return None, ""
+
+
+def _csrf(cab):
+    """CSRF-токен для API-входу (SPA «Цифри»): meta/скрипт сторінки, cookie або окремий ендпоінт із JS-бандла."""
+    pat = r"""(?i)csrf[\w\-]*["']?\s*[:=]\s*["']([\w\-.:/+=]{16,})["']"""
+    try:
+        _f, html, _ct = cab.get("/login", keep_errors=True)
+    except Exception:  # noqa
+        html = ""
+    cab.pages["api_login_page"] = html
+    m = re.search(r'<meta[^>]+name=["\'](?:csrf-token|_csrf|csrf)["\'][^>]+content=["\']([^"\']+)', html, re.I) or \
+        re.search(pat, html)
+    if m:
+        return m.group(1)
+    for ck in cab.jar:
+        if re.search(r"csrf|xsrf", ck.name, re.I):
+            return urllib.parse.unquote(ck.value)
+    for src in re.findall(r'<script[^>]+src=["\']([^"\']+\.js)', html)[:4]:
+        try:
+            _f, js, _ct = cab.get(src, keep_errors=True)
+        except Exception:  # noqa
+            continue
+        for ep in dict.fromkeys(re.findall(r"""["'`](/api/[\w/\-]*csrf[\w/\-]*)["'`]""", js, re.I)):
+            try:
+                _f, body, _ct = cab.get(ep, keep_errors=True, headers={"Accept": "application/json"})
+            except Exception:  # noqa
+                continue
+            cab.pages["api_csrf"] = body
+            try:
+                j = json.loads(body)
+            except ValueError:
+                j = None
+            if isinstance(j, dict):
+                for k, v in j.items():
+                    if isinstance(v, str) and re.search(r"csrf|token", k, re.I) and len(v) >= 16:
+                        return v
+            for ck in cab.jar:
+                if re.search(r"csrf|xsrf", ck.name, re.I):
+                    return urllib.parse.unquote(ck.value)
+    return ""
+
+
+def api_check(c):
+    """Вхід через JSON API (POST /api/auth/login {login, password}) — так працює my.cyfra.ua.
+    -> (баланс, контекст, cab) або None, якщо такого API на сайті немає (тоді — звичайна форма)."""
+    p = urllib.parse.urlsplit(c["url"])
+    cab = Cabinet(f"{p.scheme}://{p.netloc}")
+    tok = _csrf(cab)
+    h = {"Accept": "application/json, text/plain, */*", "Referer": f"{cab.base}/login", "Authorization": ""}
+    if tok:
+        h["CSRF-Token"] = tok
+    _f, body, ctype = cab.get("/api/auth/login", data={"login": c["login"], "password": c["password"]},
+                              json_body=True, headers=h, keep_errors=True)
+    cab.pages["api_login"] = f"<!-- HTTP {cab.status} {ctype} csrf={'yes' if tok else 'no'} -->\n" + \
+        re.sub(r'("token"\s*:\s*")[^"]+', r"\1***", body)
+    if cab.status in (404, 405) or "json" not in ctype:
+        return None
+    try:
+        j = json.loads(body)
+    except ValueError:
+        return None
+    u = j.get("user") if isinstance(j, dict) else None
+    if not isinstance(u, dict) or u.get("balance") is None:
+        msg = (j.get("message") or j.get("error") or j.get("status")) if isinstance(j, dict) else ""
+        if cab.status == 403 and not tok:
+            msg = f"{msg or 'HTTP 403'} (CSRF)"
+        raise yasno.LoginError(_("кабинет") + ": " + str(msg or f"HTTP {cab.status}")[:200])
+    k = lambda v: (float(v) / 100) if v not in (None, "") else None   # сума в копійках: 50100 = 501,00 грн
+    bal = k(u.get("balance"))
+    parts = [(_("Задолженность") if bal < 0 else _("Баланс")) + f" {yasno.money(abs(bal))} грн"]
+    if k(u.get("abonsum")):
+        parts.append(_("абонплата") + f" {yasno.money(k(u['abonsum']))} грн")
+    if u.get("contractnum"):
+        parts.append(_("договор") + f" {u['contractnum']}")
+    return bal, " · ".join(parts), cab
 
 
 def config():
@@ -134,11 +210,15 @@ def check(kind="manual"):
     try:
         if not (c["login"] and c["password"]):
             raise yasno.LoginError(_("укажите логин и пароль"))
-        cab = Cabinet(c["url"])
-        final = cab.login(c["login"], c["password"])
-        _f, html, _ct = cab.get(final or "/", keep_errors=True)
-        cab.pages["home"] = html
-        bal, ctx = parse_balance(html)
+        res = api_check(c)                            # спершу JSON API (SPA-кабінети, як my.cyfra.ua)
+        if res:
+            bal, ctx, cab = res
+        else:
+            cab = Cabinet(c["url"])
+            final = cab.login(c["login"], c["password"])
+            _f, html, _ct = cab.get(final or "/", keep_errors=True)
+            cab.pages["home"] = html
+            bal, ctx = parse_balance(html)
         if bal is None:                               # баланс буває на окремій сторінці
             for path in ("/balance", "/finance", "/payments", "/account", "/profile", "/cabinet"):
                 try:
