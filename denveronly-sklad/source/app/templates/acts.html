@@ -32,9 +32,15 @@
 
 {% if groups %}
 {% set bas_cos = groups|selectattr('c')|list %}
-{% if bas_cos %}<div class="card archbar">
-  <b>📥 {{ _("Для BAS") }}</b><span class="muted">{{ _("файл актов за") }} {{ period_label(period) }} — {{ _("в BAS: обработка «Загрузить из файла»") }}</span><span class="spacer"></span>
-  {% for grp in bas_cos %}<a class="btn sm ghost" href="{{ url_for('bas.export_file', period=period, company_id=grp.c.id) }}">⤓ {{ grp.c.name }}</a>{% endfor %}
+{% if bas_cos %}{% set ag = bas_agent() %}{% set bst = bas_status() %}<div class="card archbar">
+  <b>📥 BAS</b>
+  <span class="muted">{% if ag.time %}{{ _("агент") }}: {{ '🟢' if ag.online else '⚪' }} {{ ag.time[8:10] }}.{{ ag.time[5:7] }} {{ ag.time[11:16] }}{% if ag.host %} · {{ ag.host }}{% endif %}{% else %}{{ _("агент не подключён — только файлом") }}{% endif %}</span>
+  <span class="spacer"></span>
+  {% for grp in bas_cos %}
+  <form method="post" action="{{ url_for('bas.push') }}" style="margin:0"><input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="{{ grp.c.id }}">
+    <button class="sm" {{ 'disabled title=' ~ _("Подключите агента: Настройки → Компании → BAS")|tojson if not ag.time }}>→ BAS · {{ grp.c.name }}</button></form>
+  <a class="btn sm ghost" href="{{ url_for('bas.export_file', period=period, company_id=grp.c.id) }}" title="{{ _("Файл для ручной загрузки в BAS") }}">⤓</a>
+  {% endfor %}
 </div>{% endif %}
 <form method="post" action="{{ url_for('acts_make_company') }}" class="card archbar">
   <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="company_id" value="all">
@@ -94,6 +100,10 @@
         {% if it.act %}<a href="{{ url_for('act_view', aid=it.act.id) }}" onclick="event.stopPropagation()">№ {{ it.act.number }}</a>
           {% if it.act.status == 'final' %}<span class="badge">{{ _("утверждён") }}</span>{% endif %}{% endif %}
         {% if it.warnings %}<span class="badge warnb">⚠ {{ it.warnings|length }}</span>{% endif %}
+        {% set bs = bst.get('T' ~ it.t.id ~ '-' ~ period) if bst is defined else none %}
+        {% if bs %}<span class="badge {{ 'warnb' if bs.status in ('error', 'posted_diff', 'nobase') else ('off' if bs.status == 'queued' else '') }}"
+          title="{{ bs.msg }}{{ (' · ' ~ bs.base) if bs.base }} · {{ bs.time[8:10] }}.{{ bs.time[5:7] }} {{ bs.time[11:16] }}">
+          {%- if bs.status == 'queued' %}⏳ BAS{% elif bs.status == 'ok' %}✓ BAS {{ bs.doc }}{% elif bs.status == 'posted' %}✓ BAS {{ bs.doc }} ({{ _("проведено") }}){% elif bs.status == 'posted_diff' %}⚠ BAS {{ bs.doc }}: {{ _("проведено, сумма другая") }}{% elif bs.status == 'nobase' %}⚠ BAS: {{ _("нет организации") }}{% else %}✗ BAS{% endif %}</span>{% endif %}
       </span>
       <span class="n"><b>{{ money(it.totals.total) }}</b>{% if it.totals.vat %}<br><span class="muted">{{ _("в т.ч. ПДВ") }} {{ money(it.totals.vat) }}</span>{% endif %}</span>
       <span class="btns">
@@ -103,6 +113,9 @@
           <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
           <button class="sm ghost icob" {{ 'disabled' if not it.wa }} title="{{ ('WhatsApp: ' ~ it.wa|join(', ')) if it.wa else _('Нет телефона с галочкой WhatsApp в контактных лицах') }}"
             onclick="return confirm({{ (_('Отправить акт в WhatsApp') ~ ': ' ~ (it.wa|join(', ')) ~ '?')|tojson|forceescape }})">{{ ico_wa(14) }}</button></form>{% endif %}
+        {% if it.t.company_id and bas_agent().time %}<form method="post" action="{{ url_for('bas.push') }}" onclick="event.stopPropagation()" style="margin:0">
+          <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}"><input type="hidden" name="company_id" value="{{ it.t.company_id }}">
+          <button class="sm ghost" title="{{ _("Загрузить этот акт в BAS (без проведения)") }}">→ BAS</button></form>{% endif %}
         <form method="post" action="{{ url_for('act_make') }}" onclick="event.stopPropagation()" class="dlgrid">
           <input type="hidden" name="period" value="{{ period }}"><input type="hidden" name="tenant_id" value="{{ it.t.id }}">
           <span class="muted">{{ _("Акт") }}</span>

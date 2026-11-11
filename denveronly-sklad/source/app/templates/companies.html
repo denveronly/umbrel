@@ -43,6 +43,12 @@
     <label>{{ _("Номенклатура для аренды") }}<input name="bas_nom_rent" value="{{ S.bas_nom_rent or 'Оренда приміщень' }}"></label>
     <label>{{ _("Номенклатура для коммунальных") }}<input name="bas_nom_util" value="{{ S.bas_nom_util or 'Компенсація комунальних послуг' }}"></label>
     <label class="check full"><input type="checkbox" name="bas_cash" value="1" {{ 'checked' if S.bas_cash == '1' }}> {{ _("передавать в BAS и наличных арендаторов") }}</label>
+    {% set ag = bas_agent() %}
+    <label class="full">{{ _("Токен агента (ПК бухгалтерии, кнопка «→ BAS»)") }}
+      <span class="row" style="gap:8px"><input readonly value="{{ bas_agent_token() }}" onclick="this.select()" style="flex:1;font-family:monospace">
+      <button class="sm ghost" name="action" value="agent_token" onclick="return !this.form.querySelectorAll('input[readonly]')[0].value || confirm({{ _('Создать новый токен агента? Старый перестанет работать.')|tojson|forceescape }})">{{ _("Создать токен агента") if not bas_agent_token() else _("Новый токен") }}</button></span>
+      <small class="muted">{{ _("Агент") }}: {% if ag.time %}{{ '🟢 ' ~ _("на связи") if ag.online else '⚪ ' ~ _("последний раз") }} {{ ag.time[8:10] }}.{{ ag.time[5:7] }} {{ ag.time[11:16] }}{% if ag.host %} · {{ ag.host }}{% endif %}{% else %}{{ _("ещё не подключался") }}{% endif %}
+        · {{ _("адрес для agent.json") }}: <code>{{ request.host_url.rstrip('/') }}</code></small></label>
     <div class="full row" style="gap:8px;flex-wrap:wrap">
       <button class="sm">{{ _("Сохранить") }}</button>
       <a class="btn sm ghost" href="{{ url_for('bas.kit') }}">⬇ {{ _("Обработка для BAS и инструкция (zip)") }}</a>

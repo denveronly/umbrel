@@ -88,7 +88,7 @@ def _iso_date(s):
     return ""
 
 
-def collect(site, period, edrpou="", company_id=None):
+def collect(site, period, edrpou="", company_id=None, tenant_id=None):
     """Акти місяця для BAS (чернетки перераховуються так само, як кнопкою в «Актах»; готівкові — лише якщо дозволено)."""
     with using_site(site):
         s = settings()
@@ -101,6 +101,8 @@ def collect(site, period, edrpou="", company_id=None):
         for co in cos:
             for t in db.execute("SELECT id, payment_type FROM tenants WHERE active=1 AND company_id=?", (co["id"],)).fetchall():
                 if t["payment_type"] == "cash" and not include_cash:
+                    continue
+                if tenant_id and t["id"] != tenant_id:
                     continue
                 aid, _w = calc.save_act(t["id"], period)
                 a = db.execute("SELECT * FROM acts WHERE id=?", (aid,)).fetchone()
@@ -152,6 +154,182 @@ def export_file():
                      download_name=f"BAS_akty_{period}_{name}.json")
 
 
+# ───────── Автозавантаження: кнопка в «Склади» -> черга -> агент на ПК бухгалтерії -> BAS (фоновий сеанс) ─────────
+
+import fcntl
+import time as _time
+from datetime import datetime as _dt
+
+from db import DATA_DIR, MAIN_SITE
+
+AG_DIR = os.path.join(DATA_DIR, "bas")
+
+
+def _jpath(name):
+    os.makedirs(AG_DIR, exist_ok=True)
+    return os.path.join(AG_DIR, name)
+
+
+def _jload(name, default):
+    try:
+        with open(_jpath(name), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def _jsave(name, data):
+    tmp = _jpath(name) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp, _jpath(name))
+
+
+class _Lock:
+    def __enter__(self):
+        self.fd = os.open(_jpath(".lock"), os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *a):
+        os.close(self.fd)
+
+
+def agent_token():
+    with using_site(MAIN_SITE):
+        return settings().get("bas_agent_token") or ""
+
+
+def agent_seen():
+    a = _jload("agent.json", {})
+    if a.get("time"):
+        a["online"] = (_dt.now() - _dt.fromisoformat(a["time"])).total_seconds() < 180
+    return a
+
+
+def statuses():
+    """{ключ акта T<орендар>-<місяць>: {status, doc, msg, time}} — що сталося з актом у BAS."""
+    return _jload("status.json", {})
+
+
+def queue():
+    return _jload("queue.json", [])
+
+
+def enqueue(site, period, company_id=None, tenant_id=None, who=""):
+    with _Lock():
+        q = queue()
+        q = [j for j in q if not (j["site"] == site and j["period"] == period and j.get("company_id") == company_id
+                                  and j.get("tenant_id") == tenant_id)]            # ту саму вивантаження — один раз
+        jid = f"{int(_time.time() * 1000)}"
+        q.append({"id": jid, "site": site, "period": period, "company_id": company_id, "tenant_id": tenant_id,
+                  "created": _dt.now().isoformat(timespec="seconds"), "who": who, "taken": ""})
+        _jsave("queue.json", q)
+        st = statuses()
+        for a in collect(site, period, company_id=company_id, tenant_id=tenant_id)[0]:
+            st[a["key"]] = {"status": "queued", "doc": st.get(a["key"], {}).get("doc", ""), "msg": "",
+                            "time": _dt.now().isoformat(timespec="seconds")}
+        _jsave("status.json", st)
+    return jid
+
+
+def _agent_auth():
+    tok = agent_token()
+    if not tok or not hmac.compare_digest(tok, request.args.get("token") or request.headers.get("X-Token") or ""):
+        abort(403)
+    _jsave("agent.json", {"time": _dt.now().isoformat(timespec="seconds"), "ip": request.remote_addr,
+                          "host": request.headers.get("X-Agent-Host", ""), "version": request.headers.get("X-Agent-Version", "")})
+
+
+@bp.route("/bas/agent/jobs")
+def agent_jobs():
+    """Агент питає раз на 30 с: є завдання? Взяте, але не підтверджене за 15 хв — віддаємо знову."""
+    _agent_auth()
+    now = _time.time()
+    with _Lock():
+        q = queue()
+        out = []
+        for j in q:
+            if j.get("taken") and now - float(j["taken"]) < 900:
+                continue
+            j["taken"] = str(now)
+            out.append({"id": j["id"], "period": j["period"]})
+        _jsave("queue.json", q)
+    return jsonify({"jobs": out})
+
+
+@bp.route("/bas/agent/job/<jid>.json")
+def agent_job_file(jid):
+    """Файл завдання для обробки BAS — той самий формат, що й «Для BAS» з «Актів»."""
+    _agent_auth()
+    j = next((x for x in queue() if x["id"] == jid), None)
+    if not j:
+        abort(404)
+    out, _c = collect(j["site"], j["period"], company_id=j.get("company_id"), tenant_id=j.get("tenant_id"))
+    body = json.dumps({"format": "sklady-bas-acts", "version": 1, "period": j["period"], "site": j["site"],
+                       "job": jid, "acts": out}, ensure_ascii=False)
+    return Response(body.encode("utf-8"), mimetype="application/json; charset=utf-8")
+
+
+@bp.route("/bas/agent/result", methods=["POST"])
+def agent_result():
+    """Результат однієї бази BAS: [{key, status, doc, sum, msg}]; last=1 — завдання виконано, прибираємо з черги."""
+    _agent_auth()
+    jid = request.args.get("job") or ""
+    base = (request.args.get("base") or "")[:80]
+    raw = request.get_data() or b"[]"
+    try:
+        res = json.loads(raw.decode("utf-8-sig"))
+    except ValueError:
+        res = []
+    if isinstance(res, dict):
+        res = res.get("results") or []
+    now = _dt.now().isoformat(timespec="seconds")
+    with _Lock():
+        st = statuses()
+        for r in res if isinstance(res, list) else []:
+            k = str(r.get("key") or "")
+            if not k:
+                continue
+            st[k] = {"status": str(r.get("status") or "ok")[:20], "doc": str(r.get("doc") or "")[:60],
+                     "msg": str(r.get("msg") or "")[:300], "time": now, "base": base}
+        if request.args.get("last") == "1":
+            q = queue()
+            done = [x for x in q if x["id"] == jid]
+            for x in done:                                  # акти завдання, яких не прийняла жодна база
+                for a in collect(x["site"], x["period"], company_id=x.get("company_id"), tenant_id=x.get("tenant_id"))[0]:
+                    if st.get(a["key"], {}).get("status") == "queued":
+                        st[a["key"]] = {"status": "nobase", "doc": "", "time": now,
+                                        "msg": f"у BAS немає організації з ЄДРПОУ {a['organization']['edrpou']}"}
+            _jsave("queue.json", [x for x in q if x["id"] != jid])
+        _jsave("status.json", st)
+    return jsonify({"ok": True})
+
+
+@bp.route("/bas/push", methods=["POST"])
+def push():
+    """Кнопка «→ BAS» в «Актах»: акти компанії (або одного орендаря) за місяць — у чергу агента."""
+    from flask import g as _g
+    from db import current_site
+    period = request.form.get("period") or ""
+    if not re.fullmatch(r"\d{4}-\d{2}", period):
+        abort(400)
+    cid = request.form.get("company_id", type=int)
+    tid = request.form.get("tenant_id", type=int)
+    enqueue(current_site(), period, cid, tid, who=_g.user["username"] if _g.get("user") else "")
+    log("Акты отправлены в BAS", f"{calc.period_label(period)}" + (f", компания {cid}" if cid else "") + (f", арендатор {tid}" if tid else ""))
+    get_db().commit()
+    seen = agent_seen().get("time")
+    online = seen and (_dt.now() - _dt.fromisoformat(seen)).total_seconds() < 180
+    flash(_("Поставлено в очередь для BAS") + (" — " + _("агент на связи, загрузится в течение минуты") if online
+                                              else " — ⚠ " + _("агент BAS не на связи: загрузится, когда включится ПК бухгалтерии")))
+    return redirect(url_for("acts", period=period) + (f"#t{tid}" if tid else ""))
+
+
+def agent_kit_files():
+    return [os.path.join(KIT_DIR, n) for n in sorted(os.listdir(KIT_DIR))]
+
+
 @bp.route("/bas/settings", methods=["POST"])
 @auth.perm_required("settings")
 def save_settings():
@@ -159,6 +337,11 @@ def save_settings():
     if f.get("action") == "token":
         set_setting("bas_token", secrets.token_urlsafe(24))
         flash(_("Новый токен BAS создан — обновите его в обработке BAS"))
+    elif f.get("action") == "agent_token":
+        with using_site(MAIN_SITE):
+            set_setting("bas_agent_token", secrets.token_urlsafe(24))
+            get_db().commit()
+        flash(_("Токен агента создан — впишите его в agent.json на ПК бухгалтерии"))
     else:
         set_setting("bas_nom_rent", (f.get("bas_nom_rent") or "Оренда приміщень").strip())
         set_setting("bas_nom_util", (f.get("bas_nom_util") or "Компенсація комунальних послуг").strip())
@@ -184,3 +367,9 @@ def kit():
 def init_app(app):
     app.register_blueprint(bp)
     auth.PUBLIC_ENDPOINTS.add("bas.api_acts")        # доступ — лише за токеном (перевірка в самому запиті)
+    for ep in ("bas.agent_jobs", "bas.agent_job_file", "bas.agent_result"):
+        auth.PUBLIC_ENDPOINTS.add(ep)
+
+    @app.context_processor
+    def _bas_ctx():
+        return {"bas_status": statuses, "bas_agent": agent_seen, "bas_agent_token": agent_token}
