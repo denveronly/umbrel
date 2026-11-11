@@ -25,7 +25,6 @@ from i18n import _
 
 bp = Blueprint("isp", __name__)
 DEFAULT_URL = "https://my.cyfra.ua"
-_locks = {s: threading.Lock() for s in SITES}
 
 
 class Cabinet(yasno.Cabinet):
@@ -146,51 +145,101 @@ def api_check(c, hold=None):
     return bal, " · ".join(parts), cab
 
 
+SLOTS = ("1", "2", "3", "4")                          # кабінети (спільні для всіх об'єктів: «База», «Офіс»…)
+
+
+def _migrate(s):
+    """Раніше кабінет був свій у кожного об'єкта (isp_* у «Базі» та «Офісі») — переносимо в спільні слоти."""
+    if s.get("isp_migrated") == "1":
+        return
+    n = 0
+    for site in SITES:
+        with using_site(site):
+            o = settings()
+        if not o.get("isp_login"):
+            continue
+        n += 1
+        slot = str(n)
+        name = o.get("isp_name") or "Цифра"
+        set_setting(f"isp{slot}_name", f"{name} · {SITES[site]['name']}")
+        for k in ("url", "login", "password", "status"):
+            if o.get(f"isp_{k}"):
+                set_setting(f"isp{slot}_{k}", o[f"isp_{k}"])
+        set_setting(f"isp{slot}_enabled", o.get("isp_enabled") or "0")
+        if n == 1 and o.get("isp_hour"):
+            set_setting("isp_hour", o["isp_hour"])
+        if o.get("isp_tg_token") and not s.get("isp_tg_token"):
+            set_setting("isp_tg_token", o["isp_tg_token"])
+            set_setting("isp_tg_chat", o.get("isp_tg_chat") or "")
+        if n >= len(SLOTS):
+            break
+    set_setting("isp_migrated", "1")
+    get_db().commit()
+
+
 def config():
-    s = settings()
-    pw = s.get("isp_password") or ""
+    """Спільні налаштування «Інтернету» (у базі «Бази»): кабінети, година перевірки, свій Telegram."""
+    with using_site(MAIN_SITE):
+        s = settings()
+        if s.get("isp_migrated") != "1":
+            _migrate(s)
+            s = settings()
     own_tok, own_chat = s.get("isp_tg_token") or "", (s.get("isp_tg_chat") or "").strip()
-    tok, chat = s.get("tg_token") or "", (s.get("tg_chat") or "").strip()
-    if own_tok and own_chat:                                         # свій бот/чат «Інтернету» має пріоритет
-        tok, chat = own_tok, own_chat
-    elif not (tok and chat) and current_site() != MAIN_SITE:          # Telegram — як у YASNO; інакше з «Бази»
-        with using_site(MAIN_SITE):
-            m = settings()
-            tok, chat = m.get("tg_token") or "", (m.get("tg_chat") or "").strip()
-    return {"enabled": s.get("isp_enabled") == "1", "name": s.get("isp_name") or "Цифра",
-            "url": (s.get("isp_url") or DEFAULT_URL).rstrip("/"), "login": s.get("isp_login") or "",
-            "password": vault.decrypt(pw) if pw else "", "has_password": bool(pw),
-            "hour": int(s.get("isp_hour") or 10), "tg_token": vault.decrypt(tok) if tok else "", "tg_chat": chat,
+    tok, chat = (own_tok, own_chat) if (own_tok and own_chat) else (s.get("tg_token") or "", (s.get("tg_chat") or "").strip())
+    acc = []
+    for n in SLOTS:
+        pw = s.get(f"isp{n}_password") or ""
+        acc.append({"slot": n, "name": s.get(f"isp{n}_name") or "", "url": (s.get(f"isp{n}_url") or DEFAULT_URL).rstrip("/"),
+                    "login": s.get(f"isp{n}_login") or "", "password": vault.decrypt(pw) if pw else "",
+                    "has_password": bool(pw), "enabled": s.get(f"isp{n}_enabled") == "1"})
+    return {"accounts": acc, "hour": int(s.get("isp_hour") or 10),
+            "tg_token": vault.decrypt(tok) if tok else "", "tg_chat": chat,
             "own_tg": bool(own_tok and own_chat), "has_own_token": bool(own_tok), "own_chat": own_chat}
 
 
-def status():
-    try:
-        return json.loads(settings().get("isp_status") or "{}")
-    except ValueError:
-        return {}
+def account(slot, c=None):
+    c = c or config()
+    return next((a for a in c["accounts"] if a["slot"] == slot), None)
 
 
-def _last_dir():
-    d = os.path.join(site_dir(), "isp_last")
+def used(c=None):
+    """Кабінети з логіном (показуються на сторінці)."""
+    return [a for a in (c or config())["accounts"] if a["login"]]
+
+
+def status(slot):
+    with using_site(MAIN_SITE):
+        try:
+            return json.loads(settings().get(f"isp{slot}_status") or "{}")
+        except ValueError:
+            return {}
+
+
+def _save_status(slot, st):
+    with using_site(MAIN_SITE):
+        set_setting(f"isp{slot}_status", json.dumps(st, ensure_ascii=False))
+        get_db().commit()
+
+
+def _last_dir(slot):
+    d = os.path.join(DATA_DIR, "isp", slot, "last")
     os.makedirs(d, exist_ok=True)
     return d
 
 
-def _tg(c, text):
+def _tg(c, a, text):
     if not (c["tg_token"] and c["tg_chat"]):
         return False
     yasno.tg_call(c["tg_token"], "sendMessage", {"chat_id": c["tg_chat"], "parse_mode": "HTML",
-                                                 "text": f"🌐 <b>{yasno._esc(_(SITES[current_site()]['name']))}</b> · "
-                                                         f"{yasno._esc(c['name'])}\n" + text})
+                                                 "text": f"🌐 <b>{yasno._esc(a['name'] or a['login'])}</b>\n" + text})
     return True
 
 
-def _dump(cab, c):
+def _dump(cab, a):
     """Зберегти отримані сторінки кабінету для діагностики (пароль і логін замасковано)."""
     if not cab or not getattr(cab, "pages", None):
         return
-    d = _last_dir()
+    d = _last_dir(a["slot"])
     for n in os.listdir(d):
         try:
             os.remove(os.path.join(d, n))
@@ -198,35 +247,39 @@ def _dump(cab, c):
             pass
     for k, v in cab.pages.items():
         v = v or ""
-        for secret in (c.get("password"), c.get("login")):
+        for secret in (a.get("password"), a.get("login")):
             if secret:
                 v = v.replace(secret, "***")
         with open(os.path.join(d, re.sub(r"\W+", "_", k) + ".html"), "w", encoding="utf-8") as f:
             f.write(v)
 
 
-def check(kind="manual"):
+_slot_locks = {n: threading.Lock() for n in SLOTS}
+
+
+def check(slot, kind="manual"):
     """Зайти в кабінет, узяти баланс; при мінусі — сповістити (раз на день). -> (ok, повідомлення)."""
-    lock = _locks.get(current_site()) or threading.Lock()
+    lock = _slot_locks.get(slot) or threading.Lock()
     if not lock.acquire(blocking=False):
         return False, _("Проверка уже выполняется")
     c = config()
+    a = account(slot, c)
     now = datetime.now().isoformat(timespec="seconds")
-    st = status()
+    st = status(slot)
     cab = None
     try:
-        if not (c["login"] and c["password"]):
+        if not a or not (a["login"] and a["password"]):
             raise yasno.LoginError(_("укажите логин и пароль"))
         hold = {}
         try:
-            res = api_check(c, hold)
+            res = api_check(a, hold)
         finally:
             cab = hold.get("cab")                            # спершу JSON API (SPA-кабінети, як my.cyfra.ua)
         if res:
             bal, ctx, cab = res
         else:
-            cab = Cabinet(c["url"])
-            final = cab.login(c["login"], c["password"])
+            cab = Cabinet(a["url"])
+            final = cab.login(a["login"], a["password"])
             _f, html, _ct = cab.get(final or "/", keep_errors=True)
             cab.pages["home"] = html
             bal, ctx = parse_balance(html)
@@ -240,33 +293,32 @@ def check(kind="manual"):
                 bal, ctx = parse_balance(h2)
                 if bal is not None:
                     break
-        _dump(cab, c)
+        _dump(cab, a)
         if bal is None:
             raise yasno.LoginError(_("вход есть, но баланс на странице не найден — скачайте страницы для диагностики"))
         sent = 0
         prev_debt = (st.get("balance") or 0) < 0
         if bal < 0 and st.get("notified") != date.today().isoformat():
-            if _tg(c, f"🔴 <b>Заборгованість за інтернет: {yasno.money(-bal)} грн</b>\n{yasno._esc(ctx)}"):
+            if _tg(c, a, f"🔴 <b>Заборгованість за інтернет: {yasno.money(-bal)} грн</b>\n{yasno._esc(ctx)}"):
                 sent = 1
                 st["notified"] = date.today().isoformat()
         elif bal >= 0 and prev_debt:
-            if _tg(c, f"✅ Інтернет: заборгованість погашено, баланс {yasno.money(bal)} грн"):
+            if _tg(c, a, f"✅ Інтернет: заборгованість погашено, баланс {yasno.money(bal)} грн"):
                 sent = 1
         st.update(time=now, ok=True, error="", balance=bal, context=ctx, kind=kind)
         if kind == "auto":
             st["last_auto"] = date.today().isoformat()
-        set_setting("isp_status", json.dumps(st, ensure_ascii=False))
-        get_db().commit()
-        return True, f"{_('баланс')} {yasno.money(bal)} {_('грн')}" + (", Telegram ✓" if sent else "")
+        _save_status(slot, st)
+        return True, f"{a['name'] or a['login']}: {_('баланс')} {yasno.money(bal)} {_('грн')}" + (", Telegram ✓" if sent else "")
     except Exception as e:  # noqa
         err = str(e)[:300]
-        _dump(cab, c)                                 # сторінку входу теж — щоб було видно, чому не зайшли
+        if a:
+            _dump(cab, a)                             # сторінку входу теж — щоб було видно, чому не зайшли
         st.update(time=now, ok=False, error=err, kind=kind)
         if kind == "auto":
             st["last_auto"] = date.today().isoformat()
-        set_setting("isp_status", json.dumps(st, ensure_ascii=False))
-        get_db().commit()
-        return False, err
+        _save_status(slot, st)
+        return False, f"{(a or {}).get('name') or slot}: {err}"
     finally:
         lock.release()
 
@@ -274,18 +326,22 @@ def check(kind="manual"):
 def _scheduler(app):
     while True:
         time.sleep(300)
-        for site in SITES:
-            try:
-                with app.app_context(), using_site(site):
-                    c = config()
-                    st = status()
-                    if not c["enabled"] or datetime.now().hour < c["hour"] or st.get("last_auto") == date.today().isoformat():
+        try:
+            with app.app_context():
+                c = config()
+                if datetime.now().hour < c["hour"]:
+                    continue
+                for a in c["accounts"]:
+                    if not (a["enabled"] and a["login"] and a["has_password"]):
+                        continue
+                    st = status(a["slot"])
+                    if st.get("last_auto") == date.today().isoformat():
                         continue
                     if st.get("time") and datetime.now() - datetime.fromisoformat(st["time"]) < timedelta(hours=1):
                         continue
-                    check("auto")
-            except Exception:  # noqa
-                pass
+                    check(a["slot"], "auto")
+        except Exception:  # noqa
+            pass
 
 
 def _require():
@@ -296,14 +352,18 @@ def _require():
 @bp.route("/isp")
 def page():
     _require()
-    return render_template("isp.html", c=config(), st=status(), is_admin=g.user["role"] == "admin")
+    c = config()
+    return render_template("isp.html", c=c, accounts=used(c), st={a["slot"]: status(a["slot"]) for a in c["accounts"]},
+                           is_admin=g.user["role"] == "admin")
 
 
 @bp.route("/isp/run", methods=["POST"])
 def run_now():
     _require()
-    ok, msg = check("manual")
-    flash(("✓ " if ok else "✗ ") + msg)
+    slots = [a["slot"] for a in used()] if request.form.get("slot") == "all" else [request.form.get("slot") or "1"]
+    for sl in slots:
+        ok, msg = check(sl, "manual")
+        flash(("✓ " if ok else "✗ ") + msg)
     return redirect(url_for("isp.page"))
 
 
@@ -312,57 +372,62 @@ def save_settings():
     if g.user["role"] != "admin":
         abort(403)
     f = request.form
-    url = (f.get("url") or DEFAULT_URL).strip().rstrip("/")
-    if not re.fullmatch(r"https://[A-Za-z0-9.\-]+(:\d+)?(/[\w\-./]*)?", url):
-        flash(_("Адрес кабинета должен начинаться с https://"))
-        return redirect(url_for("isp.page"))
-    set_setting("isp_url", url)
-    set_setting("isp_name", (f.get("name") or "Цифра").strip())
-    set_setting("isp_login", (f.get("login") or "").strip())
-    if (f.get("password") or "").strip():
-        set_setting("isp_password", vault.encrypt(f.get("password").strip()))
-    set_setting("isp_enabled", "1" if f.get("enabled") else "0")
-    set_setting("isp_tg_chat", (f.get("tg_chat") or "").strip())
-    if (f.get("tg_token") or "").strip():
-        set_setting("isp_tg_token", vault.encrypt(f.get("tg_token").strip()))
-    try:
-        set_setting("isp_hour", str(min(23, max(0, int(f.get("hour") or 10)))))
-    except ValueError:
-        pass
-    get_db().commit()
-    try:
-        from audit import log
-        log("Настройки интернет-провайдера изменены", url)
+    with using_site(MAIN_SITE):
+        for n in SLOTS:
+            url = (f.get(f"url{n}") or DEFAULT_URL).strip().rstrip("/")
+            if not re.fullmatch(r"https://[A-Za-z0-9.\-]+(:\d+)?(/[\w\-./]*)?", url):
+                flash(_("Адрес кабинета должен начинаться с https://"))
+                return redirect(url_for("isp.page"))
+            set_setting(f"isp{n}_url", url)
+            set_setting(f"isp{n}_name", (f.get(f"name{n}") or "").strip()[:60])
+            set_setting(f"isp{n}_login", (f.get(f"login{n}") or "").strip())
+            if (f.get(f"password{n}") or "").strip():
+                set_setting(f"isp{n}_password", vault.encrypt(f.get(f"password{n}").strip()))
+            set_setting(f"isp{n}_enabled", "1" if f.get(f"enabled{n}") else "0")
+        try:
+            set_setting("isp_hour", str(min(23, max(0, int(f.get("hour") or 10)))))
+        except ValueError:
+            pass
+        set_setting("isp_tg_chat", (f.get("tg_chat") or "").strip())
+        if (f.get("tg_token") or "").strip():
+            set_setting("isp_tg_token", vault.encrypt(f.get("tg_token").strip()))
         get_db().commit()
-    except Exception:  # noqa
-        pass
-    if f.get("action") == "tgtest":
+        try:
+            from audit import log
+            log("Настройки интернет-провайдера изменены", ", ".join(x for x in (f.get(f"name{n}") for n in SLOTS) if x))
+            get_db().commit()
+        except Exception:  # noqa
+            pass
+    act = f.get("action")
+    if act == "tgtest":
         c = config()
         try:
-            ok = _tg(c, "✅ Тест: повідомлення з програми «Склади» (модуль «Інтернет»)")
-            flash(("✓ Telegram" if ok else "✗ " + _("Telegram не настроен")))
+            ok = _tg(c, {"name": "Тест"}, "✅ Повідомлення з програми «Склади» (модуль «Інтернет»)")
+            flash("✓ Telegram" if ok else "✗ " + _("Telegram не настроен"))
         except Exception as e:  # noqa
             flash("✗ Telegram: " + str(e)[:200])
-    elif f.get("action") == "test":
-        ok, msg = check("manual")
-        flash(("✓ " if ok else "✗ ") + msg)
+    elif act == "test":
+        for a in used():
+            if a["has_password"]:
+                ok, msg = check(a["slot"], "manual")
+                flash(("✓ " if ok else "✗ ") + msg)
     else:
         flash(_("Настройки сохранены"))
     return redirect(url_for("isp.page"))
 
 
-@bp.route("/isp/debug.zip")
-def debug_zip():
-    if g.user["role"] != "admin":
+@bp.route("/isp/<slot>/debug.zip")
+def debug_zip(slot):
+    if g.user["role"] != "admin" or slot not in SLOTS:
         abort(403)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for n in sorted(os.listdir(_last_dir())):
-            z.write(os.path.join(_last_dir(), n), n)
-        z.writestr("status.json", json.dumps(status(), ensure_ascii=False, indent=1))
+        for n in sorted(os.listdir(_last_dir(slot))):
+            z.write(os.path.join(_last_dir(slot), n), n)
+        z.writestr("status.json", json.dumps(status(slot), ensure_ascii=False, indent=1))
     buf.seek(0)
     return send_file(buf, mimetype="application/zip", as_attachment=True,
-                     download_name=f"isp_debug_{datetime.now():%Y%m%d_%H%M}.zip")
+                     download_name=f"isp{slot}_debug_{datetime.now():%Y%m%d_%H%M}.zip")
 
 
 def init_app(app):

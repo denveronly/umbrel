@@ -1578,4 +1578,13 @@ EN = {
     'Пароль сохранён — новые бэкапы шифруются (AES-256)': 'Password saved — new backups are encrypted (AES-256)',
     'Архив зашифрован — укажите пароль бэкапов': 'The archive is encrypted — enter the backup password',
     'Неверный пароль бэкапа': 'Wrong backup password',
+    'Проверить все кабинеты': 'Check all accounts',
+    'Каждый день программа заходит в личные кабинеты интернет-провайдеров и берёт баланс. Если баланс в минусе (задолженность) — присылает уведомление в Telegram (раз в день, пока долг не погашен).': 'Every day the app logs into the ISP accounts and reads the balance. If it is negative (debt), it notifies Telegram once a day until paid.',
+    'Кабинеты общие — видны из «Базы», «Офиса» и других объектов.': 'Accounts are shared — visible from «Base», «Office» and other sites.',
+    'Проверить': 'Check',
+    'Кабинетов пока нет — добавьте их в настройках ниже.': 'No accounts yet — add them in the settings below.',
+    'Кабинет': 'Account',
+    'Общее': 'General',
+    'проверять автоматически каждый день': 'check automatically every day',
+    'Пишет в Telegram, только когда баланс уходит в минус (раз в день, пока долг не погашен), и когда долг погашен. Если свой бот и чат не заданы — берутся из YASNO «Базы».': "Writes to Telegram only when the balance goes negative (once a day until paid) and when the debt is paid. Without its own bot and chat it uses «Base» YASNO's.",
 }

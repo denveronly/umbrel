@@ -4,7 +4,7 @@ name: Склады
 tagline: Аренда складов, показания счётчиков и ежемесячные акты
 icon: https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/icon.png
 category: finance
-version: "1.62.0"
+version: "1.63.0"
 port: 60085
 description: >-
   Учёт складской базы: план территории со складами, арендаторы и договоры,
@@ -31,7 +31,7 @@ gallery:
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/2.jpg
   - https://raw.githubusercontent.com/denveronly/umbrel/main/denveronly-sklad/assets/3.jpg
 releaseNotes: >-
-  🔒 Бекапи шифруються паролем (AES-256, відкриваються 7-Zip/WinRAR). 👤 Права: доступ до об'єктів (База/Офіс/Дім…), окремо «Інтернет», «Банки», YASNO. 🏦 Іконка ПУМБ.
+  🌐 Інтернет спільний для всіх об'єктів: кілька кабінетів (до 4), видно і з «Бази», і з «Офісу». 🔒 Бекапи шифруються паролем. 👤 Права на об'єкти, «Інтернет», «Банки», YASNO.
 dependencies: []
 path: ""
 defaultUsername: ""
