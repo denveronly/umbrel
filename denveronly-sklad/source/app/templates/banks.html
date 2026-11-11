@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Банки") }}{% endblock %}
+{% block content %}
+<div class="row"><h1>🏦 {{ _("Банки") }} <span class="muted" style="font-weight:400">· ПУМБ</span></h1><span class="spacer"></span>
+  {% if tabs %}<form method="post" action="{{ url_for('banks.refresh_now') }}"><input type="hidden" name="c" value="all">
+    <button class="ghost sm">↻ {{ _("Обновить все") }}</button></form>{% endif %}</div>
+
+{% if not tabs %}
+<p class="muted">{{ _("Добавьте компании ниже: название вкладки, гостевой логин и пароль клиент-банка (пользователь только с просмотром, без ключа).") }}</p>
+{% else %}
+<div class="tabs">
+  {% for t in tabs %}{% set s = summary[t.slot] %}
+  <a href="{{ url_for('banks.page', c=t.slot, m=period) }}" class="{{ 'on' if t.slot == slot }}">{{ t.name }}
+    {% if s.accounts %}<small class="muted">· {{ money(s.accounts|selectattr('currency', 'equalto', 'UAH')|sum(attribute='balance')) }}</small>{% endif %}
+    {% if s.time and not s.ok %}<span class="warnt" title="{{ s.error }}">⚠</span>{% endif %}</a>
+  {% endfor %}
+</div>
+
+<div class="kpis">
+  {% for a in data.accounts or [] %}
+  <div class="kpi {{ 'kbad' if (a.balance or 0) < 0 }}"><small class="muted">{{ a.name or _("Счёт") }}{% if a.currency and a.currency != 'UAH' %} · {{ a.currency }}{% endif %}</small>
+    <b>{{ money(a.balance) if a.balance is not none else '—' }} {{ _("грн") if (a.currency or 'UAH') == 'UAH' else a.currency }}</b>
+    <small class="muted" style="font-family:monospace">{{ a.iban }}</small></div>
+  {% else %}
+  <div class="kpi"><small class="muted">{{ _("Остаток") }}</small><b>—</b></div>
+  {% endfor %}
+  <div class="kpi kgood"><small>{{ _("Поступления за месяц") }}</small><b>+{{ money(inc) }}</b></div>
+  <div class="kpi"><small class="muted">{{ _("Списания за месяц") }}</small><b>−{{ money(out) }}</b></div>
+  <div class="kpi"><small class="muted">{{ _("Обновлено") }}</small>
+    <b>{% if data.time %}{{ data.time[8:10] }}.{{ data.time[5:7] }} {{ data.time[11:16] }}{% else %}—{% endif %}</b>
+    <small class="{{ 'muted' if data.ok else 'warnt' }}">{% if data.time %}{{ '✓' if data.ok else '✗ ' ~ data.error }}{% endif %}</small>
+    <form method="post" action="{{ url_for('banks.refresh_now') }}" style="margin-top:6px"><input type="hidden" name="c" value="{{ slot }}"><input type="hidden" name="m" value="{{ period }}">
+      <button class="sm ghost" {{ 'disabled' if not (cur.login and cur.has_password) }}>↻ {{ _("Обновить") }}</button></form></div>
+</div>
+
+<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0">
+  <a class="btn sm ghost" href="{{ url_for('banks.page', c=slot, m=prev) }}">←</a>
+  <b>{{ period_label(period) }}</b>
+  {% if nxt %}<a class="btn sm ghost" href="{{ url_for('banks.page', c=slot, m=nxt) }}">→</a>{% endif %}
+  <span class="spacer"></span>
+  <form method="get" class="row" style="gap:6px"><input type="hidden" name="c" value="{{ slot }}"><input type="hidden" name="m" value="{{ period }}">
+    <input name="q" value="{{ q }}" placeholder="{{ _('Контрагент, ЕДРПОУ, назначение') }}"><button class="sm">{{ _("Найти") }}</button></form>
+</div>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>{{ _("Дата") }}</th><th>{{ _("Контрагент") }}</th><th>{{ _("Назначение платежа") }}</th>
+    <th style="text-align:right">{{ _("Приход") }}</th><th style="text-align:right">{{ _("Расход") }}</th></tr></thead>
+  <tbody>
+  {% for o in ops %}
+  <tr><td style="white-space:nowrap">{{ o.date[8:10] }}.{{ o.date[5:7] }}{% if o.time %} <small class="muted">{{ o.time }}</small>{% endif %}</td>
+    <td>{{ o.party or '—' }}{% if o.edrpou %}<br><small class="muted">{{ o.edrpou }}</small>{% endif %}</td>
+    <td><small>{{ o.purpose }}</small></td>
+    <td style="text-align:right;white-space:nowrap" >{{ money(o.amount) if o.amount > 0 else '' }}</td>
+    <td style="text-align:right;white-space:nowrap">{{ money(-o.amount) if o.amount < 0 else '' }}</td></tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">{{ _("Нет операций за этот месяц") if data.time else _("Ещё не обновлялось") }}</td></tr>
+  {% endfor %}
+  </tbody>
+  {% if ops %}<tfoot><tr><th colspan="3">{{ _("Итого") }}</th><th style="text-align:right">{{ money(inc) }}</th><th style="text-align:right">{{ money(out) }}</th></tr></tfoot>{% endif %}
+</table></div>
+{% endif %}
+
+{% if is_admin %}
+<div class="card" style="margin-top:18px">
+  <h2 style="margin-top:0">{{ _("Настройки") }}</h2>
+  <form method="post" action="{{ url_for('banks.save_settings') }}" autocomplete="off">
+    {% for x in c.companies %}
+    <div class="grid" style="margin-bottom:10px">
+      <label>{{ _("Компания (вкладка)") }} {{ x.slot }}<input name="name{{ x.slot }}" value="{{ x.name }}" placeholder="ТОВ «…»"></label>
+      <label>{{ _("Логин") }}<input name="login{{ x.slot }}" value="{{ x.login }}" autocomplete="off"></label>
+      <label>{{ _("Пароль") }}<input type="password" name="password{{ x.slot }}" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if x.has_password else '' }}"></label>
+      <label class="check"><input type="checkbox" name="enabled{{ x.slot }}" value="1" {{ 'checked' if x.enabled }}> {{ _("включено") }}
+        {% if x.has_password %}· <a href="{{ url_for('banks.debug_zip', slot=x.slot) }}">{{ _("страницы для диагностики") }}</a>{% endif %}</label>
+    </div>
+    {% endfor %}
+    <div class="grid">
+      <label class="check"><input type="checkbox" name="auto" value="1" {{ 'checked' if c.auto }}> {{ _("обновлять автоматически (7:00–22:00)") }}</label>
+      <label>{{ _("Каждые (часов)") }}<input name="every" type="number" min="1" max="24" value="{{ c.every }}"></label>
+    </div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
+      <button class="sm ghost" name="action" value="test">{{ _("Сохранить и проверить вход") }}</button>
+    </div>
+    <p class="muted" style="margin:8px 0 0">🔒 {{ _("Используйте гостевого пользователя банка только с правом просмотра, без ключа подписи — тогда программа физически не может делать платежи. Пароли хранятся зашифрованными, ключ не попадает в бэкапы.") }}</p>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

@@ -31,6 +31,7 @@ import homeel
 import homegas
 import naftogaz
 import isp
+import banks
 from audit import log
 from i18n import _
 
@@ -56,6 +57,7 @@ homeel.init_app(app)
 homegas.init_app(app)
 naftogaz.init_app(app)
 isp.init_app(app)
+banks.init_app(app)
 sheet.init_app(app)
 
 
@@ -107,7 +109,7 @@ def plain(x):
 
 
 # розділи, на які можна повернутись після перемикання об'єкта (картки конкретних записів — ні: в іншого об'єкта свої id)
-SITE_SECTIONS = ("/isp", "/", "/home", "/gas", "/naftogaz", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
+SITE_SECTIONS = ("/isp", "/banks", "/", "/home", "/gas", "/naftogaz", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
                  "/logs", "/settings", "/companies", "/users")
 
 
