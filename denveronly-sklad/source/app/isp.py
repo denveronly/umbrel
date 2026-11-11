@@ -103,6 +103,25 @@ def _tg(c, text):
     return True
 
 
+def _dump(cab, c):
+    """Зберегти отримані сторінки кабінету для діагностики (пароль і логін замасковано)."""
+    if not cab or not getattr(cab, "pages", None):
+        return
+    d = _last_dir()
+    for n in os.listdir(d):
+        try:
+            os.remove(os.path.join(d, n))
+        except OSError:
+            pass
+    for k, v in cab.pages.items():
+        v = v or ""
+        for secret in (c.get("password"), c.get("login")):
+            if secret:
+                v = v.replace(secret, "***")
+        with open(os.path.join(d, re.sub(r"\W+", "_", k) + ".html"), "w", encoding="utf-8") as f:
+            f.write(v)
+
+
 def check(kind="manual"):
     """Зайти в кабінет, узяти баланс; при мінусі — сповістити (раз на день). -> (ok, повідомлення)."""
     lock = _locks.get(current_site()) or threading.Lock()
@@ -111,6 +130,7 @@ def check(kind="manual"):
     c = config()
     now = datetime.now().isoformat(timespec="seconds")
     st = status()
+    cab = None
     try:
         if not (c["login"] and c["password"]):
             raise yasno.LoginError(_("укажите логин и пароль"))
@@ -129,9 +149,7 @@ def check(kind="manual"):
                 bal, ctx = parse_balance(h2)
                 if bal is not None:
                     break
-        for k, v in cab.pages.items():                # для діагностики (без пароля)
-            with open(os.path.join(_last_dir(), re.sub(r"\W+", "_", k) + ".html"), "w", encoding="utf-8") as f:
-                f.write(v.replace(c["password"], "***"))
+        _dump(cab, c)
         if bal is None:
             raise yasno.LoginError(_("вход есть, но баланс на странице не найден — скачайте страницы для диагностики"))
         sent = 0
@@ -151,6 +169,7 @@ def check(kind="manual"):
         return True, f"{_('баланс')} {yasno.money(bal)} {_('грн')}" + (", Telegram ✓" if sent else "")
     except Exception as e:  # noqa
         err = str(e)[:300]
+        _dump(cab, c)                                 # сторінку входу теж — щоб було видно, чому не зайшли
         st.update(time=now, ok=False, error=err, kind=kind)
         if kind == "auto":
             st["last_auto"] = date.today().isoformat()
