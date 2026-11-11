@@ -1553,4 +1553,5 @@ EN = {
     'С (час)': 'From (hour)',
     'До (час)': 'To (hour)',
     'Расписание': 'Schedule',
+    'Время обновления (1-я компания; 2-я на 2 мин позже, 3-я на 3 мин)': 'Refresh times (company 1; company 2 two minutes later, company 3 three minutes)',
 }

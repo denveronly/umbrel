@@ -60,13 +60,14 @@ def config():
     every = int(s.get("banks_every") or 3)
     tok = s.get("banks_tg_token") or ""
     return {"companies": out, "every": every, "auto": s.get("banks_auto", "1") == "1",
-            "h_from": int(s.get("banks_from") or 9), "h_to": int(s.get("banks_to") or 19),
+            "refresh_times": parse_times(s.get("banks_refresh_times") or DEFAULT_REFRESH),
             "tg_token": vault.decrypt(tok) if tok else "", "has_tg_token": bool(tok),
             "tg_chat": (s.get("banks_tg_chat") or "").strip(), "report": s.get("banks_report", "1") == "1",
             "report_times": parse_times(s.get("banks_report_times") or DEFAULT_TIMES)}
 
 
 DEFAULT_TIMES = "09:10, 17:50"
+DEFAULT_REFRESH = "09:00, 13:00, 17:00, 18:00"
 
 
 def parse_times(txt):
@@ -361,16 +362,13 @@ OFFSETS = {"1": 0, "2": 2, "3": 3}                    # хвилини: 1-й б�
 
 
 def schedule(c, day=None):
-    """Розклад автооновлень на день: з h_from кожні every годин до h_to включно, зі зсувом для кожної компанії.
+    """Розклад автооновлень на день: задані години, зі зсувом для кожної компанії (+0, +2, +3 хв).
     -> {slot: [datetime, ...]}"""
     day = day or date.today()
     out = {}
     for x in active(c):
-        times, h = [], c["h_from"]
-        while h <= c["h_to"]:
-            times.append(datetime(day.year, day.month, day.day, h) + timedelta(minutes=OFFSETS.get(x["slot"], 0)))
-            h += c["every"]
-        out[x["slot"]] = times
+        out[x["slot"]] = [datetime(day.year, day.month, day.day, int(t[:2]), int(t[3:]))
+                          + timedelta(minutes=OFFSETS.get(x["slot"], 0)) for t in c["refresh_times"]]
     return out
 
 
@@ -625,10 +623,7 @@ def save_settings():
         if (f.get("tg_token") or "").strip():
             set_setting("banks_tg_token", vault.encrypt(f.get("tg_token").strip()))
         try:
-            set_setting("banks_every", str(min(24, max(1, int(f.get("every") or 3)))))
-            hf, ht = min(23, max(0, int(f.get("h_from") or 9))), min(23, max(0, int(f.get("h_to") or 19)))
-            set_setting("banks_from", str(min(hf, ht)))
-            set_setting("banks_to", str(max(hf, ht)))
+            set_setting("banks_refresh_times", ", ".join(parse_times(f.get("refresh_times"))) or DEFAULT_REFRESH)
         except ValueError:
             pass
         get_db().commit()

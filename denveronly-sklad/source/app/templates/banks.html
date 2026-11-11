@@ -97,9 +97,7 @@
     {% endfor %}
     <div class="grid">
       <label class="check full"><input type="checkbox" name="auto" value="1" {{ 'checked' if c.auto }}> {{ _("обновлять автоматически по расписанию") }}</label>
-      <label>{{ _("С (час)") }}<input name="h_from" type="number" min="0" max="23" value="{{ c.h_from }}"></label>
-      <label>{{ _("До (час)") }}<input name="h_to" type="number" min="0" max="23" value="{{ c.h_to }}"></label>
-      <label>{{ _("Каждые (часов)") }}<input name="every" type="number" min="1" max="24" value="{{ c.every }}"></label>
+      <label class="full">{{ _("Время обновления (1-я компания; 2-я на 2 мин позже, 3-я на 3 мин)") }}<input name="refresh_times" value="{{ c.refresh_times|join(', ') }}" placeholder="09:00, 13:00, 17:00, 18:00"></label>
       {% if sched %}<p class="full muted" style="margin:0">{{ _("Расписание") }}:
         {% for x in c.companies if x.slot in sched %}<br>{{ x.name }} — {% for t in sched[x.slot] %}{{ t.strftime('%H:%M') }}{{ ', ' if not loop.last }}{% endfor %}{% endfor %}</p>{% endif %}
     </div>
