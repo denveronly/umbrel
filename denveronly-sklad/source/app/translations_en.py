@@ -1615,4 +1615,8 @@ EN = {
     'Абонплата': 'Monthly fee',
     'определение…': 'detecting…',
     'посчитаю после первого списания': 'will calculate after the first charge',
+    'Весь период': 'Whole period',
+    'к месяцу': 'back to month',
+    'за весь период': 'whole period',
+    'Ничего не найдено': 'Nothing found',
 }

@@ -318,13 +318,17 @@ def refresh(slot, kind="manual"):
     pages = {}
     try:
         with _browser_lock():
-            res, pages = fetch(c, 2 if data.get("ops") else 13)   # перший раз — рік історії
+            months = 2
+            if not data.get("history_loaded"):               # перший раз (і один раз після оновлення) — 3 роки
+                months = 36
+            res, pages = fetch(c, months)
         fresh = set(res.get("periods", []))             # місяці, які щойно перечитали, — замінюємо цілком
         keep = [o for o in data.get("ops", []) if (o.get("date") or "")[:7] not in fresh]
-        cutoff = (date.today().replace(day=1) - timedelta(days=400)).isoformat()
-        data["ops"] = [o for o in keep if (o.get("date") or "") >= cutoff] + res.get("ops", [])
+        data["ops"] = keep + res.get("ops", [])           # історію зберігаємо всю, без обмеження (займає мало місця)
         data["accounts"] = res.get("accounts", [])
         data["periods"] = sorted(set(data.get("periods", [])) | fresh)
+        if months > 2:
+            data["history_loaded"] = True
         data.update(time=now, ok=True, error="", kind=kind)
         _save(slot, data)
         bal = sum(a.get("balance") or 0 for a in res.get("accounts", []) if a.get("currency", "UAH") == "UAH")
@@ -631,9 +635,15 @@ def page():
     prev = f"{y - (m == 1)}-{12 if m == 1 else m - 1:02d}"
     nxt = f"{y + (m == 12)}-{1 if m == 12 else m + 1:02d}"
     q = (request.args.get("q") or "").strip().lower()
+    allp = bool(q) and request.args.get("all") == "1"      # пошук за весь збережений період
+    if allp:
+        ops = sorted(data.get("ops", []), key=lambda o: (o.get("date") or "", o.get("time") or ""), reverse=True)
     if q:
         ops = [o for o in ops if q in (o.get("party", "") + " " + o.get("purpose", "") + " " +
                                        o.get("edrpou", "")).lower()]
+    s_inc = sum(o["amount"] for o in ops if o.get("amount", 0) > 0)       # підсумок того, що в таблиці
+    s_out = -sum(o["amount"] for o in ops if o.get("amount", 0) < 0)
+    since = min((o.get("date") for o in data.get("ops", []) if o.get("date")), default="")
     sort = request.args.get("s") if request.args.get("s") in ("date", "name", "in", "out") else "date"
     desc = request.args.get("d", "1" if sort != "name" else "0") == "1"
     if sort == "name":
@@ -649,7 +659,8 @@ def page():
     cur = next((x for x in c["companies"] if x["slot"] == slot), c["companies"][0])
     return render_template("banks.html", c=c, tabs=tabs, cur=cur, slot=slot, data=data, ops=ops, inc=inc, out=out,
                            period=period, prev=prev, nxt=nxt if nxt <= date.today().strftime("%Y-%m") else "",
-                           q=q, sort=sort, desc=desc, rep=report_status(), sched=schedule(c), is_admin=g.user["role"] == "admin",
+                           q=q, allp=allp, s_inc=s_inc, s_out=s_out, since=since,
+                           sort=sort, desc=desc, rep=report_status(), sched=schedule(c), is_admin=g.user["role"] == "admin",
                            summary={x["slot"]: load(x["slot"]) for x in tabs})
 
 

@@ -71,12 +71,19 @@
 </div>
 
 <div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0">
+  {% if allp %}
+  <b>{{ _("Весь период") }}{% if since %} · {{ _("с") }} {{ since[8:10] }}.{{ since[5:7] }}.{{ since[:4] }}{% endif %}</b>
+  <a class="btn sm ghost" href="{{ url_for('banks.page', c=slot, m=period) }}">✕ {{ _("к месяцу") }}</a>
+  {% else %}
   <a class="btn sm ghost" href="{{ url_for('banks.page', c=slot, m=prev) }}">←</a>
   <b>{{ period_label(period) }}</b>
   {% if nxt %}<a class="btn sm ghost" href="{{ url_for('banks.page', c=slot, m=nxt) }}">→</a>{% endif %}
+  {% endif %}
   <span class="spacer"></span>
   <form method="get" class="row" style="gap:6px"><input type="hidden" name="c" value="{{ slot }}"><input type="hidden" name="m" value="{{ period }}"><input type="hidden" name="s" value="{{ sort }}"><input type="hidden" name="d" value="{{ 1 if desc else 0 }}">
-    <input name="q" value="{{ q }}" placeholder="{{ _('Контрагент, ЕДРПОУ, назначение') }}"><button class="sm">{{ _("Найти") }}</button></form>
+    <input name="q" value="{{ q }}" placeholder="{{ _('Контрагент, ЕДРПОУ, назначение') }}">
+    <label class="check" style="white-space:nowrap"><input type="checkbox" name="all" value="1" {{ 'checked' if allp or (not q and request.args.get('all') == '1') }}> {{ _("за весь период") }}</label>
+    <button class="sm">{{ _("Найти") }}</button></form>
 </div>
 
 <div class="tablewrap"><table class="bops">
@@ -87,17 +94,17 @@
   {% for o in ops %}
   {% set fee = o.amount < 0 and -o.amount < 10 and 'ПУМБ' in (o.party or '') %}
   <tr class="bop {{ 'bin' if o.amount > 0 else 'bout' }}{{ ' bfee' if fee }}">
-    <td style="white-space:nowrap">{{ o.date[8:10] }}.{{ o.date[5:7] }}{% if o.time %} <small class="muted">{{ o.time }}</small>{% endif %}</td>
+    <td style="white-space:nowrap">{{ o.date[8:10] }}.{{ o.date[5:7] }}{% if allp %}<small class="muted">.{{ o.date[2:4] }}</small>{% endif %}{% if o.time %} <small class="muted">{{ o.time }}</small>{% endif %}</td>
     <td class="bparty">{{ (o.party|short_party) or '—' }}{% if o.edrpou and not fee %}<br><small class="muted">{{ o.edrpou }}</small>{% endif %}</td>
     <td class="bamt">{{ money(o.amount) if o.amount > 0 else '' }}</td>
     <td class="bamt">{{ money(-o.amount) if o.amount < 0 else '' }}</td>
     {% if fee %}<td class="bpur" title="{{ o.purpose }}">{{ _("Комиссия") }}</td>
     {% else %}<td class="bpur"><small>{{ o.purpose }}</small></td>{% endif %}</tr>
   {% else %}
-  <tr><td colspan="5" class="muted">{{ _("Нет операций за этот месяц") if data.time else _("Ещё не обновлялось") }}</td></tr>
+  <tr><td colspan="5" class="muted">{% if q %}{{ _("Ничего не найдено") }}{% else %}{{ _("Нет операций за этот месяц") if data.time else _("Ещё не обновлялось") }}{% endif %}</td></tr>
   {% endfor %}
   </tbody>
-  {% if ops %}<tfoot><tr><th colspan="2">{{ _("Итого") }}</th><th class="bamt">{{ money(inc) }}</th><th class="bamt">{{ money(out) }}</th><th class="bpur"></th></tr></tfoot>{% endif %}
+  {% if ops %}<tfoot><tr><th colspan="2">{{ _("Итого") }}</th><th class="bamt">{{ money(s_inc) }}</th><th class="bamt">{{ money(s_out) }}</th><th class="bpur">{% if q %}<small class="muted">{{ ops|length }} {{ _("операций") }}</small>{% endif %}</th></tr></tfoot>{% endif %}
 </table></div>
 {% endif %}
 
