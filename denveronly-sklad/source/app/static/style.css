@@ -519,3 +519,9 @@ details.actrow .btns form.dlgrid { display: grid; }
 .kpi.kbad { background: color-mix(in srgb, #e5484d 13%, var(--card)); border-color: color-mix(in srgb, #e5484d 60%, var(--line)); }
 .kpi.kbad b, .kpi.kbad small { color: #e5484d; }
 .mergebar { gap: 8px; margin: 4px 0 8px; font-size: 13px; }
+
+/* мобільна шапка: розділи переносяться в другий рядок замість горизонтальної прокрутки */
+@media (max-width: 760px) {
+  .top nav { flex-wrap: wrap; overflow: visible; flex: 1 1 100%; order: 2; gap: 2px 0; margin: 0 -6px; }
+  .top nav a { padding: 5px 6px; font-size: 14.5px; }
+}
