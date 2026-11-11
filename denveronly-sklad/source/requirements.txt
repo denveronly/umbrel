@@ -7,3 +7,4 @@ pillow-heif>=0.16
 openpyxl>=3.1
 smbprotocol>=1.13
 playwright==1.65.*
+pyzipper>=0.3.6

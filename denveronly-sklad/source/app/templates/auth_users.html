@@ -34,6 +34,10 @@
         <form method="post" class="perms">
           <input type="hidden" name="uid" value="{{ u.id }}"><input type="hidden" name="action" value="perms">
           {% for k, v in PERMS.items() %}<label class="check"><input type="checkbox" name="perm_{{ k }}" value="1" {{ 'checked' if k in up }} onchange="this.form.submit()"> {{ _(v) }}</label>{% endfor %}
+          <div class="psites"><span class="muted">{{ _("Объекты") }}:</span>
+          {% for sid, st in SITES.items() %}{% set k = SITE_PREFIX ~ sid %}<label class="check"><input type="checkbox" name="perm_{{ k }}" value="1" {{ 'checked' if k in up }} onchange="this.form.submit()"> {{ _(st.name) }}</label>{% endfor %}
+          {% set ns = namespace(any=false) %}{% for p in up %}{% if p.startswith(SITE_PREFIX) %}{% set ns.any = true %}{% endif %}{% endfor %}
+          {% if not ns.any %}<small class="muted">{{ _("(ничего не отмечено — видит все)") }}</small>{% endif %}</div>
         </form>{% endif %}</td>
       <td class="muted">{{ u.last_login or '—' }}</td>
       <td>
@@ -64,7 +68,8 @@
   <label>{{ _("Имя") }}<input name="full_name"></label>
   <label>{{ _("Роль") }}<select name="role" onchange="document.getElementById('newperms').hidden = this.value === 'admin'">{% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'user' }}>{{ _(v) }}</option>{% endfor %}</select></label>
   <div class="full" id="newperms"><span class="muted">{{ _("Права оператора (кроме складов, арендаторов, показаний и актов)") }}:</span>
-    <div class="perms">{% for k, v in PERMS.items() %}<label class="check"><input type="checkbox" name="perm_{{ k }}" value="1"> {{ _(v) }}</label>{% endfor %}</div></div>
+    <div class="perms">{% for k, v in PERMS.items() %}<label class="check"><input type="checkbox" name="perm_{{ k }}" value="1"> {{ _(v) }}</label>{% endfor %}</div>
+    <div class="perms psites"><span class="muted">{{ _("Объекты (ничего не отмечено — все)") }}:</span>{% for sid, st in SITES.items() %}<label class="check"><input type="checkbox" name="perm_{{ SITE_PREFIX ~ sid }}" value="1"> {{ _(st.name) }}</label>{% endfor %}</div></div>
   <label>{{ _("Пароль") }}<input type="password" name="password" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
   <label>{{ _("Пароль ещё раз") }}<input type="password" name="password2" required minlength="{{ MIN_PASSWORD }}" autocomplete="new-password"></label>
   <div class="full"><button>{{ _("Создать") }}</button></div>

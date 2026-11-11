@@ -11,7 +11,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from audit import log
 from i18n import _
-from db import DATA_DIR, get_main_db
+from db import DATA_DIR, SITES, get_main_db
 
 bp = Blueprint("auth", __name__)
 
@@ -19,7 +19,8 @@ ROLES = {"admin": "Администратор", "user": "Оператор"}
 # додаткові права оператора (адміністратор має всі). Користувачами керує лише адміністратор.
 PERMS = {"economics": "Экономика", "logs": "Логи и бэкапы", "settings": "Настройки и компании", "ai": "ИИ-помощник",
          "yasno": "YASNO (счета за электричество)", "naftogaz": "Нафтогаз (счета за газ)",
-         "banks": "Банки (остатки и выписки)"}
+         "banks": "Банки (остатки и выписки)", "isp": "Интернет (баланс провайдера)"}
+SITE_PREFIX = "site:"                                # доступ до об'єктів: site:base, site:office … (нічого не відмічено — усі)
 MIN_PASSWORD = 8
 PUBLIC_ENDPOINTS = {"static", "auth.login", "auth.setup", "favicon"}
 
@@ -64,6 +65,11 @@ def init_app(app):
                 g.user = u
             else:
                 session.clear()
+        if g.user is not None and g.user["role"] != "admin":     # чужий об'єкт — тихо на перший дозволений
+            from db import current_site
+            ok = allowed_sites()
+            if current_site() not in ok:
+                g.site = ok[0]
         if request.endpoint in PUBLIC_ENDPOINTS:
             return
         if not users_exist():
@@ -82,7 +88,7 @@ def init_app(app):
     @app.context_processor
     def user_ctx():
         return {"current_user": g.get("user"), "ROLES": ROLES, "PERMS": PERMS, "can": can, "csrf_token": csrf_token,
-                "pin_configured": pin_configured}
+                "pin_configured": pin_configured, "site_ok": site_ok, "SITE_PREFIX": SITE_PREFIX}
 
 
 def csrf_token():
@@ -140,7 +146,28 @@ def perm_required(perm):
 
 
 def _form_perms():
-    return ",".join(p for p in PERMS if request.form.get("perm_" + p))
+    keys = list(PERMS) + [SITE_PREFIX + sid for sid in SITES]
+    return ",".join(p for p in keys if request.form.get("perm_" + p))
+
+
+def allowed_sites(user=None):
+    """Об'єкти, які бачить користувач. Адміністратор — усі; оператор без жодної позначки об'єкта — теж усі
+    (як було раніше); інакше — лише відмічені."""
+    u = user if user is not None else g.get("user")
+    if not u:
+        return []
+    if u["role"] == "admin":
+        return list(SITES)
+    try:
+        perms = {p.strip() for p in (u["perms"] or "").split(",")}
+    except (IndexError, KeyError):
+        perms = set()
+    mine = [sid for sid in SITES if SITE_PREFIX + sid in perms]
+    return mine or list(SITES)
+
+
+def site_ok(sid, user=None):
+    return sid in allowed_sites(user)
 
 
 # ---------- PIN адміністратора (видалення лічильників, складів) ----------

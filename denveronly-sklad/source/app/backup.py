@@ -12,6 +12,7 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request, 
 
 import auth
 import nas
+import vault
 from audit import log
 from i18n import _
 from db import (DATA_DIR, MAIN_SITE, SITES, backup_dir, current_site, db_path, get_db, init_db, photos_dir, set_setting,
@@ -29,6 +30,58 @@ TABLES = [("warehouses", "Склады"), ("tenants", "Контакты"), ("ten
 
 # ---------------- резервные копии ----------------
 
+def backup_password():
+    """Пароль шифрування бекапів: змінна середовища BACKUP_PASSWORD або налаштування «Бази» (зашифроване vault)."""
+    if os.environ.get("BACKUP_PASSWORD"):
+        return os.environ["BACKUP_PASSWORD"]
+    with using_site(MAIN_SITE):
+        tok = settings().get("backup_password") or ""
+    return (vault.decrypt(tok) or "") if tok else ""
+
+
+def _hint():
+    with using_site(MAIN_SITE):
+        return settings().get("backup_hint") or ""
+
+
+def _open_zip_write(path):
+    """ZIP для запису: з паролем — AES-256 (відкривається 7-Zip / WinRAR), без пароля — звичайний."""
+    pw = backup_password()
+    if pw:
+        import pyzipper
+        z = pyzipper.AESZipFile(path, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES)
+        z.setpassword(pw.encode())
+        z.setencryption(pyzipper.WZ_AES, nbits=256)
+        return z
+    return zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED)
+
+
+def is_encrypted(path):
+    try:
+        with zipfile.ZipFile(path) as z:
+            return any(i.flag_bits & 0x1 for i in z.infolist())
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def _open_zip_read(path, password=None):
+    """ZIP для читання: зашифрований — пароль із форми, інакше поточний пароль бекапів."""
+    import pyzipper
+    z = pyzipper.AESZipFile(path)
+    if is_encrypted(path):
+        pw = password or backup_password()
+        if not pw:
+            z.close()
+            raise ValueError("Архив зашифрован — укажите пароль бэкапов")
+        z.setpassword(pw.encode())
+        try:
+            z.testzip()
+        except RuntimeError:
+            z.close()
+            raise ValueError("Неверный пароль бэкапа")
+    return z
+
+
 def create_backup(kind="manual"):
     """ZIP с консистентной копией базы (sqlite backup API) и загруженными файлами (план)."""
     os.makedirs(backup_dir(), exist_ok=True)
@@ -40,7 +93,7 @@ def create_backup(kind="manual"):
         src.backup(dst)
         src.close()
         dst.close()
-        with zipfile.ZipFile(path + ".part", "w", zipfile.ZIP_DEFLATED) as z:
+        with _open_zip_write(path + ".part") as z:
             z.write(snap, "sklad.db")
             if os.path.isdir(uploads_dir()):
                 for f in os.listdir(uploads_dir()):
@@ -63,7 +116,7 @@ def list_backups():
                 p = os.path.join(backup_dir(), f)
                 kind = NAME_RE.match(f).group(1)
                 out.append({"name": f, "size": os.path.getsize(p), "kind": KINDS[kind], "kind_code": kind,
-                            "time": datetime.strptime(f[6:23], "%Y-%m-%d_%H%M%S")})
+                            "time": datetime.strptime(f[6:23], "%Y-%m-%d_%H%M%S"), "enc": is_encrypted(p)})
     return out
 
 
@@ -83,10 +136,10 @@ def _safe_path(name):
     return p
 
 
-def restore_from_zip(path):
+def restore_from_zip(path, password=None):
     """Проверяет архив и заливает базу поверх текущей (через sqlite backup API — безопасно при работе)."""
     with tempfile.TemporaryDirectory() as tmp:
-        with zipfile.ZipFile(path) as z:
+        with _open_zip_read(path, password) as z:
             names = z.namelist()
             if "sklad.db" not in names:
                 raise ValueError("В архиве нет sklad.db")
@@ -239,6 +292,22 @@ def database():
                 flash(_("Последние бэкапы отправляются на сетевую папку — обновите страницу через минуту"))
             else:
                 flash(_("Сначала включите и заполните настройки сетевой папки"))
+        elif action == "backup_password":
+            if not auth.can("settings") or auth.g.user["role"] != "admin":
+                abort(403)
+            pw = (request.form.get("backup_password") or "").strip()
+            with using_site(MAIN_SITE):
+                if request.form.get("clear"):
+                    set_setting("backup_password", "")
+                    log("Шифрование бэкапов выключено")
+                    flash(_("Пароль бэкапов удалён — новые бэкапы будут без шифрования"))
+                elif pw or "backup_hint" in request.form:
+                    if pw:
+                        set_setting("backup_password", vault.encrypt(pw))
+                    set_setting("backup_hint", (request.form.get("backup_hint") or "").strip()[:40])
+                    log("Пароль бэкапов изменён")
+                    flash(_("Пароль сохранён — новые бэкапы шифруются (AES-256)"))
+                get_db().commit()
         elif action == "settings":
             set_setting("auto_backup", "1" if request.form.get("auto_backup") else "0")
             set_setting("backup_keep", str(max(1, request.form.get("backup_keep", 30, type=int))))
@@ -270,7 +339,7 @@ def database():
                 db.close()
                 from flask import g
                 g.pop("db", None)
-                restore_from_zip(path)
+                restore_from_zip(path, request.form.get("zip_password") or None)
             except Exception as e:
                 flash(_("Восстановление не выполнено") + f": {_(str(e))}")
                 return redirect(url_for("logs.database"))
@@ -297,6 +366,8 @@ def database():
         return redirect(url_for("logs.database"))
     nc = nas.config()
     return render_template("logs_db.html", st=db_stats(), backups=list_backups(), tab="db",
+                           backup_pw=bool(backup_password()), backup_pw_env=bool(os.environ.get("BACKUP_PASSWORD")),
+                           backup_hint=_hint(),
                            last_auto=settings().get("last_auto_backup"), nas=nc, nas_status=nas.read_status())
 
 

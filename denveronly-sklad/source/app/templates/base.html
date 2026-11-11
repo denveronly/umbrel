@@ -41,7 +41,7 @@
   <details class="sitesw" id="sitesw">
     <summary class="brand" title="{{ _("Объект") }}">{{ site_icon(SITES[cur_site].icon) }}<span>{{ site_name }}</span><span class="caret">▾</span></summary>
     <div class="sitemenu">
-      {% for sid, s in SITES.items() %}
+      {% for sid, s in SITES.items() if site_ok(sid) %}
       <a href="{{ url_for('switch_site', sid=sid, next=request.path, view=request.args.get('view')) }}" class="{{ 'on' if sid == cur_site }}">{{ site_icon(s.icon) }}<span>{{ _(s.name) }}</span>{% if sid == cur_site %}<span class="check">✓</span>{% endif %}</a>
       {% endfor %}
     </div>
@@ -61,7 +61,7 @@
     {% if can('economics') %}<a href="{{ url_for('economics.economics') }}" class="{{ 'on' if ep.startswith('economics') }}">{{ _("Экономика") }}</a>{% endif %}
     <a href="{{ url_for('warehouses') }}" class="{{ 'on' if ep.startswith('warehouse') }}">{{ _("Склады") }}</a>
     {% if can('yasno') %}<a href="{{ url_for('yasno.page') }}" class="{{ 'on' if ep.startswith('yasno.') }}">⚡ YASNO</a>{% endif %}
-    {% if can('yasno') %}<a href="{{ url_for('isp.page') }}" class="{{ 'on' if ep.startswith('isp.') }}" title="{{ _("Интернет-провайдер") }}">🌐</a>{% endif %}
+    {% if can('isp') %}<a href="{{ url_for('isp.page') }}" class="{{ 'on' if ep.startswith('isp.') }}" title="{{ _("Интернет-провайдер") }}">🌐</a>{% endif %}
     {% if can('banks') %}<a href="{{ url_for('banks.page') }}" class="{{ 'on' if ep.startswith('banks.') }}" title="{{ _("Банки") }}"><img src="{{ url_for('static', filename='bank-pumb.png') }}" alt="{{ _("Банки") }}" width="18" height="18" style="vertical-align:-3px;border-radius:50%"></a>{% endif %}
     {% if can('ai') %}<a href="{{ url_for('ai.chat') }}" class="{{ 'on' if ep.startswith('ai.') }}">✦ {{ _("ИИ") }}</a>{% endif %}
     {% endif %}

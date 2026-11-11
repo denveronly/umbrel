@@ -36,6 +36,18 @@
       <p class="muted">{{ _("Последний автобэкап") }}: {{ last_auto.replace('T', ' ') if last_auto else _("ещё не было") }}. {{ _("Ручные копии не удаляются автоматически") }}.</p>
       <button class="sm">{{ _("Сохранить") }}</button>
     </form>
+    <h2>🔒 {{ _("Шифрование бэкапов") }}</h2>
+    {% if backup_pw_env %}<p class="muted">{{ _("Пароль задан в настройках контейнера (BACKUP_PASSWORD) — бэкапы шифруются.") }}</p>
+    {% elif current_user.role == 'admin' %}
+    <form method="post" class="grid" autocomplete="off">
+      <input type="hidden" name="action" value="backup_password">
+      <label>{{ _("Пароль бэкапов") }}<input type="password" name="backup_password" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if backup_pw else '' }}"></label>
+      <label>{{ _("Подсказка к паролю") }}<input name="backup_hint" value="{{ backup_hint }}" maxlength="40"></label>
+      <div class="full row" style="gap:8px"><button class="sm">{{ _("Сохранить") }}</button>
+        {% if backup_pw %}<button class="sm ghost" name="clear" value="1" onclick="return confirm({{ _("Выключить шифрование новых бэкапов?")|tojson|forceescape }})">{{ _("Выключить шифрование") }}</button>{% endif %}</div>
+    </form>{% endif %}
+    <p class="muted">{{ _("С паролем бэкапы (и копии на NAS) — ZIP с шифрованием AES-256: открываются 7-Zip / WinRAR этим паролем. Без пароля восстановить их нельзя.") }}
+      {% if backup_pw %}<br><b>✓ {{ _("шифрование включено") }}</b>{% else %}<br>{{ _("шифрование выключено") }}{% endif %}{% if backup_hint %} · {{ _("подсказка") }}: <b>{{ backup_hint }}</b>{% endif %}</p>
     <h2>{{ _("Очистка журнала") }}</h2>
     <form method="post" class="row">
       <input type="hidden" name="action" value="clear_log">
@@ -79,7 +91,7 @@
     <tbody>
     {% for b in backups %}
       <tr><td>{{ b.time.strftime('%d.%m.%Y %H:%M:%S') }}</td><td><span class="badge {{ 'off' if b.kind_code != 'manual' }}">{{ _(b.kind) }}</span></td>
-        <td class="n">{{ b.size|filesize }}</td>
+        <td class="n">{% if b.enc %}<span title="{{ _("зашифрован") }}">🔒</span> {% endif %}{{ b.size|filesize }}</td>
         <td class="n"><form method="post" class="row" style="justify-content:flex-end;gap:6px">
           <input type="hidden" name="name" value="{{ b.name }}">
           <a class="btn sm ghost" href="{{ url_for('logs.download', name=b.name) }}">{{ _("Скачать") }}</a>
@@ -93,6 +105,7 @@
   <form method="post" enctype="multipart/form-data" class="row">
     <input type="hidden" name="action" value="upload">
     <input type="file" name="file" accept=".zip" required style="max-width:340px">
+    <input type="password" name="zip_password" autocomplete="new-password" placeholder="{{ _('пароль архива (если другой)') }}{{ ' · ' ~ _('подсказка') ~ ': ' ~ backup_hint if backup_hint }}" style="max-width:260px">
     <button class="sm danger" data-pin="{{ _("Заменить текущую базу данными из файла? Текущее состояние предварительно сохранится.") }}">{{ _("Загрузить и восстановить") }}</button>
   </form>
 </div>

@@ -118,6 +118,8 @@ def switch_site(sid):
     from db import SITE_COOKIE, SITES
     if sid not in SITES:
         abort(404)
+    if not auth.site_ok(sid):
+        abort(403)
     nxt = request.args.get("next") or "/"
     sec = "/" + nxt.split("?")[0].strip("/").split("/")[0]
     sec = sec if sec in SITE_SECTIONS else "/"

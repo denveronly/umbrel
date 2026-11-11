@@ -289,7 +289,7 @@ def _scheduler(app):
 
 
 def _require():
-    if not auth.can("yasno"):
+    if not auth.can("isp"):
         abort(403)
 
 
