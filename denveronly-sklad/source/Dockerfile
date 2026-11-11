@@ -2,7 +2,7 @@ FROM python:3.12-slim-bookworm
 LABEL org.opencontainers.image.source="https://github.com/denveronly/umbrel" \
       org.opencontainers.image.description="Склады — аренда, коммунальные, акты"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DATA_DIR=/data TZ=Europe/Kyiv
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core tzdata iputils-ping \
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core tzdata iputils-ping libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .
