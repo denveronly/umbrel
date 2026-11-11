@@ -36,7 +36,7 @@
     .kpi small.biban { font-size: clamp(8px, 2.12vw, 11.5px); letter-spacing: -.45px; }
   }
 </style>
-<div class="row"><h1>🏦 {{ _("Банки") }} <span class="muted" style="font-weight:400">· ПУМБ</span></h1><span class="spacer"></span>
+<div class="row"><h1><img src="{{ url_for('static', filename='bank-pumb.png') }}" alt="" width="30" height="30" style="vertical-align:-4px;border-radius:50%"> {{ _("Банки") }} <span class="muted" style="font-weight:400">· ПУМБ</span></h1><span class="spacer"></span>
   {% if tabs %}<div class="row" style="gap:8px">
     <form method="post" action="{{ url_for('banks.send_now') }}"><input type="hidden" name="c" value="{{ slot }}"><input type="hidden" name="m" value="{{ period }}">
       <button class="ghost sm" {{ 'disabled title=' ~ _("Укажите токен бота и Chat ID в настройках ниже")|tojson if not (c.has_tg_token and c.tg_chat) }}>✈ {{ _("Отправить в Telegram") }}</button></form>
