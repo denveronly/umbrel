@@ -17,8 +17,11 @@
   .bops tr.bfee .bamt { color: var(--muted); font-weight: 400; }
 </style>
 <div class="row"><h1>🏦 {{ _("Банки") }} <span class="muted" style="font-weight:400">· ПУМБ</span></h1><span class="spacer"></span>
-  {% if tabs %}<form method="post" action="{{ url_for('banks.refresh_now') }}"><input type="hidden" name="c" value="all">
-    <button class="ghost sm">↻ {{ _("Обновить все") }}</button></form>{% endif %}</div>
+  {% if tabs %}<div class="row" style="gap:8px">
+    <form method="post" action="{{ url_for('banks.send_now') }}"><input type="hidden" name="c" value="{{ slot }}"><input type="hidden" name="m" value="{{ period }}">
+      <button class="ghost sm" {{ 'disabled title=' ~ _("Укажите токен бота и Chat ID в настройках ниже")|tojson if not (c.has_tg_token and c.tg_chat) }}>✈ {{ _("Отправить в Telegram") }}</button></form>
+    <form method="post" action="{{ url_for('banks.refresh_now') }}"><input type="hidden" name="c" value="all">
+      <button class="ghost sm">↻ {{ _("Обновить все") }}</button></form></div>{% endif %}</div>
 
 {% if not tabs %}
 <p class="muted">{{ _("Добавьте компании ниже: название вкладки, гостевой логин и пароль клиент-банка (пользователь только с просмотром, без ключа).") }}</p>

@@ -604,6 +604,18 @@ def refresh_now():
     return redirect(url_for("banks.page", c=slot if slot != "all" else None, m=request.form.get("m") or None))
 
 
+@bp.route("/banks/send", methods=["POST"])
+def send_now():
+    """Кнопка вгорі: надіслати в Telegram те, що зараз на сторінці (без повторного входу в банк)."""
+    _require()
+    try:
+        ok, msg = send_report(refresh_first=False)
+    except Exception as e:  # noqa
+        ok, msg = False, "Telegram: " + str(e)[:200]
+    flash(("✓ " if ok else "✗ ") + msg)
+    return redirect(url_for("banks.page", c=request.form.get("c") or None, m=request.form.get("m") or None))
+
+
 @bp.route("/banks/settings", methods=["POST"])
 def save_settings():
     if g.user["role"] != "admin":
