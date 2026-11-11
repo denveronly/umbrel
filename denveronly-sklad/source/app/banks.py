@@ -352,13 +352,34 @@ def refresh_all(kind="manual"):
     return [refresh(c["slot"], kind) for c in active()]
 
 
+def browser_busy():
+    """Чи зайнятий зараз браузер (інша компанія оновлюється — за розкладом чи кнопкою)."""
+    os.makedirs(DIR, exist_ok=True)
+    fd = os.open(os.path.join(DIR, ".lock"), os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
+
+
 def run_async(slots, kind="manual"):
+    """Компанії — строго по черзі: вхід у банк, читання, вихід, і лише тоді наступна. Якщо браузер зайнятий
+    (саме йде оновлення за розкладом) — чекаємо до 10 хв, а не пропускаємо компанію."""
     def run():
         for s in slots:
+            for _w in range(40):
+                if not browser_busy():
+                    break
+                time.sleep(15)
             try:
                 refresh(s, kind)
             except Exception:  # noqa
                 pass
+            time.sleep(3)                               # коротка пауза між входами в банк
     threading.Thread(target=run, daemon=True).start()
 
 
