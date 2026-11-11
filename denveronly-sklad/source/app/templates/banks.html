@@ -15,6 +15,26 @@
   .bops tr.bfee td { padding-top: 2px; padding-bottom: 2px; font-size: 12px; color: var(--muted); background: transparent; }
   .bops tr.bfee td:first-child { border-left-width: 1px; }
   .bops tr.bfee .bamt { color: var(--muted); font-weight: 400; }
+  .tabs a.btab { display: flex; flex-direction: column; line-height: 1.25; }
+  .tabs a.btab .bbal { color: var(--muted); white-space: nowrap; font-size: 12.5px; }
+  .tabs a.btab.on .bbal { color: inherit; }
+  .kpi small.biban { font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -.3px; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .bops .bshort { display: none; }
+  .bops .bpur { min-width: 260px; }
+  .bops .bparty { min-width: 140px; }
+  @media (max-width: 760px) {
+    .tabs { flex-wrap: wrap; }
+    .tabs a.btab { flex: 1 1 30%; padding: 6px 6px; font-size: 14px; }
+    .bops { font-size: 13px; }
+    .bops th, .bops td { padding: 6px 5px; }
+    .bops .bparty { min-width: 0; width: 34%; }
+    .bops .bpur { min-width: 220px; }
+    .bops th a.bsort { white-space: nowrap; }
+    .bops .bamt { font-size: 13px; }
+    .bops th { font-size: 11px; }
+    .bops .blong { display: none; } .bops .bshort { display: inline; }
+    .kpi small.biban { font-size: clamp(8px, 2.12vw, 11.5px); letter-spacing: -.45px; }
+  }
 </style>
 <div class="row"><h1>🏦 {{ _("Банки") }} <span class="muted" style="font-weight:400">· ПУМБ</span></h1><span class="spacer"></span>
   {% if tabs %}<div class="row" style="gap:8px">
@@ -28,9 +48,8 @@
 {% else %}
 <div class="tabs">
   {% for t in tabs %}{% set s = summary[t.slot] %}
-  <a href="{{ url_for('banks.page', c=t.slot, m=period) }}" class="{{ 'on' if t.slot == slot }}">{{ t.name }}
-    {% if s.accounts %}<small class="muted">· {{ money(s.accounts|selectattr('currency', 'equalto', 'UAH')|sum(attribute='balance')) }}</small>{% endif %}
-    {% if s.time and not s.ok %}<span class="warnt" title="{{ s.error }}">⚠</span>{% endif %}</a>
+  <a href="{{ url_for('banks.page', c=t.slot, m=period) }}" class="btab {{ 'on' if t.slot == slot }}"><span class="bname">{{ t.name }}{% if s.time and not s.ok %} <span class="warnt" title="{{ s.error }}">⚠</span>{% endif %}</span>
+    {% if s.accounts %}<small class="bbal">{{ money(s.accounts|selectattr('currency', 'equalto', 'UAH')|sum(attribute='balance')) }} {{ _("грн") }}</small>{% endif %}</a>
   {% endfor %}
 </div>
 
@@ -38,7 +57,7 @@
   {% for a in data.accounts or [] %}
   <div class="kpi {{ 'kbad' if (a.balance or 0) < 0 }}"><small class="muted">{{ a.name or _("Счёт") }}{% if a.currency and a.currency != 'UAH' %} · {{ a.currency }}{% endif %}</small>
     <b>{{ money(a.balance) if a.balance is not none else '—' }} {{ _("грн") if (a.currency or 'UAH') == 'UAH' else a.currency }}</b>
-    <small class="muted" style="font-family:monospace">{{ a.iban }}</small></div>
+    <small class="muted biban">{{ a.iban }}</small></div>
   {% else %}
   <div class="kpi"><small class="muted">{{ _("Остаток") }}</small><b>—</b></div>
   {% endfor %}
@@ -61,27 +80,24 @@
 </div>
 
 <div class="tablewrap"><table class="bops">
-  {% macro sh(key, label, right=False) %}{% set on = sort == key %}<th{% if right %} style="text-align:right"{% endif %}><a class="bsort{{ ' on' if on }}" href="{{ url_for('banks.page', c=slot, m=period, q=q or None, s=key, d=('0' if desc else '1') if on else ('0' if key == 'name' else '1')) }}">{{ label }}{% if on %} {{ '↓' if desc else '↑' }}{% endif %}</a></th>{% endmacro %}
-  <thead><tr>{{ sh('date', _("Дата")) }}{{ sh('name', _("Контрагент")) }}<th>{{ _("Назначение платежа") }}</th>
-    {{ sh('in', _("Приход"), True) }}{{ sh('out', _("Расход"), True) }}</tr></thead>
+  {% macro sh(key, label, right=False, short='') %}{% set on = sort == key %}<th{% if right %} style="text-align:right"{% endif %}><a class="bsort{{ ' on' if on }}" href="{{ url_for('banks.page', c=slot, m=period, q=q or None, s=key, d=('0' if desc else '1') if on else ('0' if key == 'name' else '1')) }}">{% if short %}<span class="blong">{{ label }}</span><span class="bshort">{{ short }}</span>{% else %}{{ label }}{% endif %}{% if on %} {{ '↓' if desc else '↑' }}{% endif %}</a></th>{% endmacro %}
+  <thead><tr>{{ sh('date', _("Дата")) }}{{ sh('name', _("Контрагент")) }}{{ sh('in', _("Приход"), True, _("Прих.")) }}{{ sh('out', _("Расход"), True, _("Расх.")) }}
+    <th class="bpur">{{ _("Назначение платежа") }}</th></tr></thead>
   <tbody>
   {% for o in ops %}
   {% set fee = o.amount < 0 and -o.amount < 10 and 'ПУМБ' in (o.party or '') %}
   <tr class="bop {{ 'bin' if o.amount > 0 else 'bout' }}{{ ' bfee' if fee }}">
     <td style="white-space:nowrap">{{ o.date[8:10] }}.{{ o.date[5:7] }}{% if o.time %} <small class="muted">{{ o.time }}</small>{% endif %}</td>
-    {% if fee %}
-    <td>{{ o.party }}</td><td title="{{ o.purpose }}">{{ _("Комиссия") }}</td>
-    {% else %}
-    <td>{{ o.party or '—' }}{% if o.edrpou %}<br><small class="muted">{{ o.edrpou }}</small>{% endif %}</td>
-    <td><small>{{ o.purpose }}</small></td>
-    {% endif %}
+    <td class="bparty">{{ (o.party|short_party) or '—' }}{% if o.edrpou and not fee %}<br><small class="muted">{{ o.edrpou }}</small>{% endif %}</td>
     <td class="bamt">{{ money(o.amount) if o.amount > 0 else '' }}</td>
-    <td class="bamt">{{ money(-o.amount) if o.amount < 0 else '' }}</td></tr>
+    <td class="bamt">{{ money(-o.amount) if o.amount < 0 else '' }}</td>
+    {% if fee %}<td class="bpur" title="{{ o.purpose }}">{{ _("Комиссия") }}</td>
+    {% else %}<td class="bpur"><small>{{ o.purpose }}</small></td>{% endif %}</tr>
   {% else %}
   <tr><td colspan="5" class="muted">{{ _("Нет операций за этот месяц") if data.time else _("Ещё не обновлялось") }}</td></tr>
   {% endfor %}
   </tbody>
-  {% if ops %}<tfoot><tr><th colspan="3">{{ _("Итого") }}</th><th style="text-align:right">{{ money(inc) }}</th><th style="text-align:right">{{ money(out) }}</th></tr></tfoot>{% endif %}
+  {% if ops %}<tfoot><tr><th colspan="2">{{ _("Итого") }}</th><th class="bamt">{{ money(inc) }}</th><th class="bamt">{{ money(out) }}</th><th class="bpur"></th></tr></tfoot>{% endif %}
 </table></div>
 {% endif %}
 

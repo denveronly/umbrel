@@ -415,7 +415,7 @@ def _group(ops, sign):
     for o in ops:
         a = o.get("amount", 0) * sign
         if a > 0:
-            k = (o.get("party") or "—").strip()
+            k = short_party(o.get("party")) or "—"
             acc[k] = acc.get(k, 0) + a
     return sorted(acc.items(), key=lambda kv: -kv[1])
 
@@ -536,6 +536,21 @@ def _require():
 FORMS = re.compile(r"^(?:товариство з обмеженою відповідальністю|приватне акціонерне товариство|акціонерне товариство|"
                    r"комунальне підприємство|приватне підприємство|фізична особа[- ]підприємець|тов|прат|пат|ат|кп|пп|"
                    r"фоп|фо-п|дп|сп)\b[\s.]*", re.I)
+
+
+SHORT_FORMS = [(re.compile(p, re.I), r) for p, r in (
+    (r"^товариство з обмеженою відповідальністю\b", "ТОВ"), (r"^приватне акціонерне товариство\b", "ПрАТ"),
+    (r"^публічне акціонерне товариство\b", "ПАТ"), (r"^акціонерне товариство\b", "АТ"),
+    (r"^комунальне підприємство\b", "КП"), (r"^приватне підприємство\b", "ПП"),
+    (r"^фізична особа[- ]підприємець\b", "ФОП"))]
+
+
+def short_party(name):
+    """«ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "ДЕЛІВЕРІ"» -> «ТОВ "ДЕЛІВЕРІ"» (для таблиці й Telegram)."""
+    s = (name or "").strip()
+    for rx, rep in SHORT_FORMS:
+        s = rx.sub(rep, s)
+    return s
 
 
 def party_key(name):
@@ -680,5 +695,6 @@ def debug_zip(slot):
 
 def init_app(app):
     app.register_blueprint(bp)
+    app.jinja_env.filters["short_party"] = short_party
     if os.environ.get("YASNO_SCHED", "1") != "0":
         threading.Thread(target=_scheduler, args=(app,), daemon=True).start()
