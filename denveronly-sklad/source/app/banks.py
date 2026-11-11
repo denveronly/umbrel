@@ -157,6 +157,16 @@ def _context(browser):
     return ctx
 
 
+def _settle(page, ms=8000):
+    """Дочекатися, поки сторінка домалюється. «Тиші в мережі» на сайті банку не буває (Akamai, аналітика
+    шлють запити постійно), тому чекаємо подію load, але не довше ms, і далі працюємо з DOM."""
+    try:
+        page.wait_for_load_state("load", timeout=ms)
+    except Exception:  # noqa
+        pass
+    page.wait_for_timeout(800)
+
+
 PERSON = "img[src*='user-aunthenticated'], img[src*='user-authenticated']"
 
 
@@ -165,11 +175,11 @@ def _password_mode(page):
     ico = page.locator(PERSON)
     if ico.count():
         try:
-            with page.expect_navigation(wait_until="networkidle", timeout=30000):
+            with page.expect_navigation(wait_until="domcontentloaded", timeout=45000):
                 ico.first.click()
             return True
         except Exception:  # noqa — сторінка могла не перезавантажитись
-            page.wait_for_load_state("networkidle")
+            page.wait_for_load_state("domcontentloaded")
             return True
     return False
 
@@ -186,13 +196,15 @@ def _submit(page, c):
     page.fill("#UserName", c["login"])
     page.fill("#SignatureAndPasswordModel_Password", c["password"])
     page.wait_for_timeout(600)
-    with page.expect_navigation(wait_until="networkidle", timeout=60000):
+    with page.expect_navigation(wait_until="domcontentloaded", timeout=90000):
         page.click("#SignedLogon")
+    _settle(page)
 
 
 def login(page, c, pages):
     """Звичайна форма банку: логін -> пароль -> «Увійти» (сайт сам кодує пароль і шле відбиток браузера)."""
-    page.goto(LOGIN_URL, wait_until="networkidle")
+    page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=90000)
+    _settle(page)
     pages["01_login"] = page.content()
     if _asks_key(page) or not page.locator("#UserName").count():
         _password_mode(page)
@@ -211,6 +223,23 @@ def login(page, c, pages):
         raise BankError(_("банк не пустил") + (": " + msg if msg else ""))
 
 
+def _snapshot(page, pages):
+    """При збої — що було на екрані: URL, HTML і скриншот (для «сторінок для діагностики»)."""
+    if page is None:
+        return
+    try:
+        pages["99_error_url"] = page.url
+        pages["99_error_page"] = page.content()
+    except Exception as e:  # noqa
+        pages["99_error_page"] = f"<!-- page.content() failed: {e} -->"
+    try:
+        import base64
+        png = page.screenshot(full_page=True, timeout=15000)
+        pages["99_error_screenshot"] = '<img src="data:image/png;base64,' + base64.b64encode(png).decode() + '">'
+    except Exception:  # noqa
+        pass
+
+
 def fetch(c, months=2):
     """Зайти в банк однієї компанії -> {'accounts': [...], 'ops': [...]}; pages — для діагностики."""
     from playwright.sync_api import sync_playwright
@@ -219,16 +248,34 @@ def fetch(c, months=2):
     try:
         with sync_playwright() as pw:
             browser = _launch(pw)
+            page = None
             try:
                 page = _context(browser).new_page()
                 login(page, c, pages)
                 res = pumb.read(page, pages, months)
+            except Exception:
+                _snapshot(page, pages)
+                raise
             finally:
                 browser.close()
         return res, pages
     except Exception as e:  # noqa
+        pages["98_network_probe"] = _probe()
         e.pages = pages
         raise
+
+
+def _probe():
+    """Чи доходить контейнер до банку взагалі (без браузера) — щоб відрізнити мережу від блокування браузера."""
+    import urllib.request
+    t0 = time.time()
+    try:
+        req = urllib.request.Request(LOGIN_URL, headers={"User-Agent": "Mozilla/5.0", "Accept": "text/html"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = r.read(400).decode("utf-8", "replace")
+            return f"<!-- HTTP {r.status} за {time.time() - t0:.1f} с -->\n" + body
+    except Exception as e:  # noqa
+        return f"<!-- без браузера: {e.__class__.__name__}: {e} за {time.time() - t0:.1f} с -->"
 
 
 def refresh(slot, kind="manual"):
