@@ -1496,4 +1496,11 @@ EN = {
     'Отдельный бланк: счётчики подлиний (напр. «Офис») и общие счётчики воды': 'Separate form: sub-line meters (e.g. “Office”) and common water meters',
     'Бланк: подлинии и вода': 'Form: sub-lines & water',
     'Записывайте только целые цифры счётчика — цифры после запятой (обычно красные или в рамке) НЕ пишите. Пишите разборчиво, одну цифру под другой.': 'Write only the whole digits of the meter — do NOT write digits after the decimal point (usually red or boxed). Write clearly.',
+    'Интернет': 'Internet',
+    'Интернет-провайдер': 'Internet provider',
+    'Провайдер': 'Provider',
+    'Каждый день программа заходит в личный кабинет интернет-провайдера и берёт баланс. Если баланс в минусе (задолженность) — присылает уведомление в Telegram (раз в день, пока долг не погашен).': 'Every day the program logs into the internet provider’s cabinet and reads the balance. If it is negative (debt), it sends a Telegram notification (once a day until paid).',
+    'Пароль хранится зашифрованным; ключ лежит отдельно от базы и не попадает в бэкапы. Программа только читает кабинет — оплат не делает.': 'The password is stored encrypted; the key is kept apart from the database and not in backups. The program only reads the cabinet — no payments.',
+    'вход есть, но баланс на странице не найден — скачайте страницы для диагностики': 'logged in, but the balance was not found — download the pages for diagnostics',
+    'Баланс': 'Balance',
 }

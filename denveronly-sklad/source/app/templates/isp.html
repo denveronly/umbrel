@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Интернет") }}{% endblock %}
+{% block content %}
+<div class="row"><h1>🌐 {{ _("Интернет") }} · {{ c.name }} <span class="muted" style="font-weight:400">· {{ site_name }}</span></h1><span class="spacer"></span>
+  <form method="post" action="{{ url_for('isp.run_now') }}"><button {{ 'disabled' if not (c.login and c.has_password) }}>{{ _("Проверить кабинет сейчас") }}</button></form></div>
+<p class="muted">{{ _("Каждый день программа заходит в личный кабинет интернет-провайдера и берёт баланс. Если баланс в минусе (задолженность) — присылает уведомление в Telegram (раз в день, пока долг не погашен).") }}
+  <a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.url|replace('https://', '') }}</a></p>
+
+<div class="kpis">
+  <div class="kpi"><small class="muted">{{ _("Последняя проверка") }}</small>
+    <b>{% if st.time %}{{ st.time[8:10] }}.{{ st.time[5:7] }} {{ st.time[11:16] }}{% else %}—{% endif %}</b>
+    <small class="{{ 'muted' if st.ok else 'warnt' }}">{% if st.time %}{{ '✓ ' ~ _("успешно") if st.ok else '✗ ' ~ st.error }}{% endif %}</small></div>
+  {% if st.balance is defined and st.balance is not none %}
+  <div class="kpi {{ 'kbad' if st.balance < 0 else 'kgood' }}"><small>{{ _("Задолженность") if st.balance < 0 else _("Баланс") }}</small>
+    <b>{{ money(-st.balance if st.balance < 0 else st.balance) }} {{ _("грн") }}</b><small>{{ st.context }}</small></div>
+  {% else %}<div class="kpi"><small class="muted">{{ _("Баланс") }}</small><b>—</b></div>{% endif %}
+  <div class="kpi"><small class="muted">{{ _("Автопроверка") }}</small>
+    <b>{% if c.enabled %}{{ _("ежедневно с") }} {{ '%02d'|format(c.hour) }}:00{% else %}{{ _("выключена") }}{% endif %}</b>
+    <small class="muted">Telegram: {{ '✓' if c.tg_token and c.tg_chat else _("не настроен") }}</small></div>
+</div>
+
+{% if is_admin %}
+<div class="card">
+  <h2 style="margin-top:0">{{ _("Настройки") }}</h2>
+  <form method="post" action="{{ url_for('isp.save_settings') }}" class="grid" autocomplete="off">
+    <label class="check full"><input type="checkbox" name="enabled" value="1" {{ 'checked' if c.enabled }}> {{ _("проверять кабинет автоматически каждый день") }}</label>
+    <label>{{ _("Провайдер") }}<input name="name" value="{{ c.name }}"></label>
+    <label>{{ _("Адрес кабинета") }}<input name="url" value="{{ c.url }}"></label>
+    <label>{{ _("Логин") }}<input name="login" value="{{ c.login }}" autocomplete="off"></label>
+    <label>{{ _("Пароль") }}<input type="password" name="password" autocomplete="new-password" placeholder="{{ '•••••••• ' ~ _('сохранён — оставьте пустым') if c.has_password else '' }}"></label>
+    <label>{{ _("Проверять с (час)") }}<input name="hour" type="number" min="0" max="23" value="{{ c.hour }}"></label>
+    <div class="full row" style="gap:8px;flex-wrap:wrap">
+      <button class="sm" name="action" value="save">{{ _("Сохранить") }}</button>
+      <button class="sm ghost" name="action" value="test">{{ _("Сохранить и проверить вход") }}</button>
+      <a class="btn sm ghost" href="{{ url_for('isp.debug_zip') }}">{{ _("Скачать страницы для диагностики") }}</a>
+    </div>
+    <p class="full muted" style="margin:0">🔒 {{ _("Пароль хранится зашифрованным; ключ лежит отдельно от базы и не попадает в бэкапы. Программа только читает кабинет — оплат не делает.") }}
+      {{ _("Telegram — токен и chat_id из YASNO (этого объекта или «Базы»).") }}</p>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

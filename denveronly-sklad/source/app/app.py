@@ -30,6 +30,7 @@ import whatsapp
 import homeel
 import homegas
 import naftogaz
+import isp
 from audit import log
 from i18n import _
 
@@ -54,6 +55,7 @@ whatsapp.init_app(app)
 homeel.init_app(app)
 homegas.init_app(app)
 naftogaz.init_app(app)
+isp.init_app(app)
 sheet.init_app(app)
 
 
@@ -105,7 +107,7 @@ def plain(x):
 
 
 # розділи, на які можна повернутись після перемикання об'єкта (картки конкретних записів — ні: в іншого об'єкта свої id)
-SITE_SECTIONS = ("/", "/home", "/gas", "/naftogaz", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
+SITE_SECTIONS = ("/isp", "/", "/home", "/gas", "/naftogaz", "/ha", "/tenants", "/readings", "/services", "/lines", "/acts", "/economics", "/warehouses", "/ai",
                  "/logs", "/settings", "/companies", "/users")
 
 
