@@ -487,8 +487,10 @@ def report_text(c=None):
             line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — —"
         elif bal < 0:
             line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — 🔴 <b>борг {yasno.money(-bal)}\u00a0грн</b>"
+        elif bal > 0:
+            line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — 🟢 переплата {yasno.money(bal)}\u00a0грн"
         else:
-            line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — {yasno.money(bal)}\u00a0грн"
+            line = f"{KEYCAPS.get(a['slot'], '▪️')} <b>{name}</b> — 0,00\u00a0грн"
         if a.get("ip"):
             line += f"\n   🌍 IP {yasno._esc(a['ip'])}"
         if (s.get("due") or 0) > 0 and (bal is None or bal >= 0):
