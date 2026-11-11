@@ -525,3 +525,11 @@ details.actrow .btns form.dlgrid { display: grid; }
   .top nav { flex-wrap: wrap; overflow: visible; flex: 1 1 100%; order: 2; gap: 2px 0; margin: 0 -6px; }
   .top nav a { padding: 5px 6px; font-size: 14.5px; }
 }
+
+/* згортувані «Налаштування» (Банки, Інтернет) */
+details.bset > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.bset > summary::-webkit-details-marker { display: none; }
+details.bset > summary h2 { margin: 0; font-size: 18px; }
+details.bset > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; }
+details.bset[open] > summary::after { transform: rotate(180deg); }
+details.bset[open] > summary { margin-bottom: 12px; }

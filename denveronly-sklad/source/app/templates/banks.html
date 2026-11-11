@@ -102,8 +102,8 @@
 {% endif %}
 
 {% if is_admin %}
-<div class="card" style="margin-top:18px">
-  <h2 style="margin-top:0">{{ _("Настройки") }}</h2>
+<details class="card bset" style="margin-top:18px" {{ "open" if not tabs }}>
+  <summary><h2>⚙ {{ _("Настройки") }}</h2></summary>
   <form method="post" action="{{ url_for('banks.save_settings') }}" autocomplete="off">
     {% for x in c.companies %}
     <div class="grid" style="margin-bottom:10px">
@@ -136,6 +136,6 @@
     </div>
     <p class="muted" style="margin:8px 0 0">🔒 {{ _("Используйте гостевого пользователя банка только с правом просмотра, без ключа подписи — тогда программа физически не может делать платежи. Пароли хранятся зашифрованными, ключ не попадает в бэкапы.") }}</p>
   </form>
-</div>
+</details>
 {% endif %}
 {% endblock %}

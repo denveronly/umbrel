@@ -20,8 +20,8 @@
 </div>
 
 {% if is_admin %}
-<div class="card">
-  <h2 style="margin-top:0">{{ _("Настройки") }}</h2>
+<details class="card bset" {{ "open" if not (c.login and c.has_password) }}>
+  <summary><h2>⚙ {{ _("Настройки") }}</h2></summary>
   <form method="post" action="{{ url_for('isp.save_settings') }}" class="grid" autocomplete="off">
     <label class="check full"><input type="checkbox" name="enabled" value="1" {{ 'checked' if c.enabled }}> {{ _("проверять кабинет автоматически каждый день") }}</label>
     <label>{{ _("Провайдер") }}<input name="name" value="{{ c.name }}"></label>
@@ -40,6 +40,6 @@
     <p class="full muted" style="margin:0">🔒 {{ _("Пароль хранится зашифрованным; ключ лежит отдельно от базы и не попадает в бэкапы. Программа только читает кабинет — оплат не делает.") }}
       {{ _("Пишет в Telegram, только когда баланс уходит в минус (раз в день, пока долг не погашен), и когда долг погашен. Если свой бот и чат не заданы — берутся из YASNO (этого объекта или «Базы»).") }}</p>
   </form>
-</div>
+</details>
 {% endif %}
 {% endblock %}

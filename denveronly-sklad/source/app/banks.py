@@ -401,12 +401,47 @@ def _scheduler(app):
 
 # ───────────────────────── звіт у Telegram ─────────────────────────
 
+NB = "\u00a0"                                         # нерозривний пробіл: «20 000,00» не рветься в Telegram
+
+
 def _fmt(x):
-    return f"{x:,.2f}".replace(",", " ").replace(".", ",")
+    return f"{x:,.2f}".replace(",", NB).replace(".", ",")
 
 
 def _esc(t):
     return (t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def op_key(o):
+    """Відбиток операції: щоб у звітах за розкладом кожен платіж був лише один раз."""
+    return "|".join(str(o.get(k) or "") for k in ("iban", "date", "doc", "amount", "edrpou"))
+
+
+def _reported_path():
+    return os.path.join(DIR, "reported.json")
+
+
+def _reported():
+    try:
+        with open(_reported_path(), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _mark_reported(keys):
+    """Запам'ятати надіслані операції (зберігаємо 45 днів)."""
+    data = _reported()
+    today = date.today().isoformat()
+    for k in keys:
+        data.setdefault(k, today)
+    cutoff = (date.today() - timedelta(days=45)).isoformat()
+    data = {k: v for k, v in data.items() if v >= cutoff}
+    os.makedirs(DIR, exist_ok=True)
+    tmp = _reported_path() + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    os.replace(tmp, _reported_path())
 
 
 def _group(ops, sign):
@@ -420,40 +455,44 @@ def _group(ops, sign):
     return sorted(acc.items(), key=lambda kv: -kv[1])
 
 
-def report_text(day, label, errors=None):
-    """Одне повідомлення по всіх компаніях: баланс, надходження й списання за день day ('YYYY-MM-DD')."""
-    errors = errors or {}
-    lines = [f"🏦 <b>Стан рахунків</b> · {label}"]
+def report_text(days, label, errors=None, skip=None):
+    """Одне повідомлення по всіх компаніях: баланс, надходження й списання за дні days.
+    skip — множина вже надісланих операцій (звіт за розкладом їх не повторює). -> (текст, нові ключі)."""
+    errors, skip = errors or {}, skip or set()
+    lines, keys = [f"🏦 <b>Стан рахунків</b> · {label}"], []
     for x in [x for x in config()["companies"] if x["name"] and x["enabled"]]:
         d = load(x["slot"])
         bal = sum(a.get("balance") or 0 for a in d.get("accounts", []) if a.get("currency", "UAH") == "UAH")
         lines.append("")
-        lines.append(f"<b>{_esc(x['name'])}</b> — " + (f"<b>{_fmt(bal)} грн</b>" if d.get("accounts") else "—"))
+        lines.append(f"🟩 <b>{_esc(x['name'])}</b> — " + (f"<b>{_fmt(bal)}{NB}грн</b>" if d.get("accounts") else "—"))
         if x["slot"] in errors or (d.get("time") and not d.get("ok")):
             when = d.get("time", "")
             lines.append(f"⚠️ не вдалося оновити: {_esc(errors.get(x['slot']) or d.get('error', ''))[:150]}"
                          + (f" (дані на {when[8:10]}.{when[5:7]} {when[11:16]})" if when else ""))
-        ops = [o for o in d.get("ops", []) if o.get("date") == day]
-        for sign, icon, title in ((1, "➕", "Надходження"), (-1, "➖", "Списання")):
+        ops = [o for o in d.get("ops", []) if o.get("date") in days and op_key(o) not in skip]
+        keys += [op_key(o) for o in ops]
+        for sign, head in ((1, "🟢 <b>+</b> Надходження"), (-1, "🔴 <b>−</b> Списання")):
             g_ = _group(ops, sign)
             if g_:
-                lines.append(f"{icon} {title} {_fmt(sum(v for _k, v in g_))}:")
-                lines += [f"   • {_esc(k)} — {_fmt(v)}" for k, v in g_]
+                lines.append(f"{head} {_fmt(sum(v for _k, v in g_))}:")
+                lines += [f"   • {_esc(k)}{NB}— {_fmt(v)}" for k, v in g_]
         if not ops and d.get("accounts"):
-            lines.append("   руху коштів не було")
-    return "\n".join(lines)
+            lines.append("   нового руху коштів не було" if skip else "   руху коштів не було")
+    return "\n".join(lines), keys
 
 
 def _report_period(now, t):
-    """Ранковий звіт (до 12:00) — за вчора (виписка за день уже повна), решта — за сьогодні."""
+    """Вручну: до 12:00 — рух за вчора (виписка за день уже повна), після — за сьогодні."""
     if int(t[:2]) < 12:
         y = now.date() - timedelta(days=1)
-        return y.isoformat(), f"{now:%d.%m} {t} · рух за вчора, {y:%d.%m}"
-    return now.date().isoformat(), f"{now:%d.%m} {t} · рух за сьогодні"
+        return [y.isoformat()], f"{now:%d.%m} {t} · рух за вчора, {y:%d.%m}"
+    return [now.date().isoformat()], f"{now:%d.%m} {t} · рух за сьогодні"
 
 
-def send_report(t=None, refresh_first=True):
-    """Оновити всі компанії й надіслати звіт. -> (ok, повідомлення)."""
+def send_report(t=None, refresh_first=True, scheduled=False):
+    """Оновити компанії й надіслати звіт. -> (ok, повідомлення).
+    За розкладом — лише нові операції за вчора й сьогодні (кожен платіж один раз), баланс — завжди.
+    Вручну (кнопка) — усе за день, без позначок «надіслано»."""
     c = config()
     if not (c["tg_token"] and c["tg_chat"]):
         return False, _("Telegram не настроен")
@@ -469,12 +508,18 @@ def send_report(t=None, refresh_first=True):
                 time.sleep(15)
             if not ok:
                 errors[x["slot"]] = msg.split(": ", 1)[-1]
-    day, label = _report_period(now, t)
-    text = report_text(day, label, errors)
+    if scheduled:
+        days = [(now.date() - timedelta(days=1)).isoformat(), now.date().isoformat()]
+        text, keys = report_text(days, f"{now:%d.%m} {t} · нові операції", errors, set(_reported()))
+    else:
+        days, label = _report_period(now, t)
+        text, keys = report_text(days, label, errors)
     import yasno
     for i in range(0, len(text), 3900):                    # ліміт Telegram — 4096 символів
         yasno.tg_call(c["tg_token"], "sendMessage", {"chat_id": c["tg_chat"], "parse_mode": "HTML",
                                                      "text": text[i:i + 3900], "disable_web_page_preview": True})
+    if scheduled:
+        _mark_reported(keys)
     return True, _("Отчёт отправлен в Telegram")
 
 
@@ -502,7 +547,7 @@ def report_due(c):
             ok, msg = False, ""
             for _try in range(3):                           # браузер міг бути зайнятий автооновленням
                 try:
-                    ok, msg = send_report(t)
+                    ok, msg = send_report(t, scheduled=True)
                     break
                 except BankError:
                     time.sleep(60)
