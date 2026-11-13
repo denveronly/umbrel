@@ -19,6 +19,9 @@ mqtt:
 auth:
   enabled: False
 
+proxy:
+  default_role: admin
+
 tls:
   enabled: False
 YAML

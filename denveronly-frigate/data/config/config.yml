@@ -6,6 +6,10 @@ mqtt:
 auth:
   enabled: False
 
+# With auth off, everyone who opens the UI is an admin (can edit config)
+proxy:
+  default_role: admin
+
 # Umbrel's proxy talks plain HTTP to port 8971
 tls:
   enabled: False

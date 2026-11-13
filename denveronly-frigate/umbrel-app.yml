@@ -2,7 +2,7 @@ manifestVersion: 1.1
 id: denveronly-frigate
 category: automation
 name: Frigate (no auth)
-version: "0.18.2-1"
+version: "0.18.2-2"
 tagline: Frigate NVR without forced login, with 1 GB shared memory
 icon: https://getumbrel.github.io/umbrel-apps-gallery/frigate/icon.svg
 description: >-
