@@ -1,0 +1,30 @@
+services:
+  app_proxy:
+    environment:
+      # Format: <app-id>_<service-name>_1
+      APP_HOST: denveronly-frigate_web_1
+      APP_PORT: 8971
+      # No Umbrel login in front, so Home Assistant can reach Frigate (LAN only!)
+      PROXY_AUTH_ADD: "false"
+
+  web:
+    image: ghcr.io/blakeblackshear/frigate:0.18.2@sha256:fd60f99ffd4eb6c42360ed4e14953e270586f239309ab3983e55b2e97ffac09a
+    privileged: true
+    restart: on-failure
+    shm_size: 1g
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${APP_DATA_DIR}/data/config:/config
+      - ${APP_DATA_DIR}/data/storage:/media/frigate
+      # Optional: keep the recording cache in RAM to reduce SSD wear
+      # - type: tmpfs
+      #   target: /tmp/cache
+      #   tmpfs:
+      #     size: 1000000000
+    ports:
+      - "8554:8554"     # RTSP restream
+      - "8555:8555/tcp" # WebRTC over TCP
+      - "8555:8555/udp" # WebRTC over UDP
+    environment:
+      TZ: Europe/Kyiv
+      FRIGATE_RTSP_PASSWORD: ${APP_PASSWORD}

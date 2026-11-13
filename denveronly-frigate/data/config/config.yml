@@ -1,0 +1,23 @@
+mqtt:
+  enabled: False
+
+# Frigate's own login is off. This app never turns it back on;
+# set "enabled: True" here yourself if you ever want it.
+auth:
+  enabled: False
+
+# Umbrel's proxy talks plain HTTP to port 8971
+tls:
+  enabled: False
+
+cameras:
+  name_of_your_camera:
+    ffmpeg:
+      inputs:
+        - path: rtsp://10.0.10.10:554/rtsp
+          roles:
+            - detect
+    detect:
+      enabled: False
+      width: 1280
+      height: 720

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Only makes sure the folders and config file exist with the right owner.
+# Unlike the official app, it never rewrites config.yml (no forced auth).
+
+APP_ROOT="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")/..")"
+CONFIG_DIR="${APP_ROOT}/data/config"
+STORAGE_DIR="${APP_ROOT}/data/storage"
+CONFIG_FILE="${CONFIG_DIR}/config.yml"
+
+mkdir -p "${CONFIG_DIR}" "${STORAGE_DIR}"
+
+if [ ! -s "${CONFIG_FILE}" ]; then
+  cat > "${CONFIG_FILE}" <<'YAML'
+mqtt:
+  enabled: False
+
+auth:
+  enabled: False
+
+tls:
+  enabled: False
+YAML
+fi
+
+chown 1000:1000 "${CONFIG_DIR}" "${CONFIG_FILE}"
