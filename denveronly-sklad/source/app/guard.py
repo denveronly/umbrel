@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS guard_scans (
 );
 """
 
+SVC_LETTERS = "АБВГДЕЖИКЛМНПРСТ"   # загальні лічильники послуг (вода) — літерами, щоб не плутати з лічильниками складів
 PER_PAGE = 10          # колонок лічильників на одному аркуші (А4 альбомний)
 MAX_PHOTOS = 6
 
@@ -136,11 +137,10 @@ def build_sections(periods, kind="main", seen=None):
             sections.append(sec)
     if kind == "sub":                       # вода та інші загальні лічильники послуг «частка» (свої показники)
         cols = []
-        for sv in db.execute("SELECT * FROM services WHERE mode='share' AND has_main=1 AND active=1 "
-                             "AND (main_src IS NULL OR main_src='') ORDER BY sort, name").fetchall():
-            n += 1
+        for i, sv in enumerate(db.execute("SELECT * FROM services WHERE mode='share' AND has_main=1 AND active=1 "
+                                          "AND (main_src IS NULL OR main_src='') ORDER BY sort, name").fetchall()):
             last, lastp = _last_value("svc", sv["id"], "value", periods[0])
-            cols.append({"n": n, "kind": "svc", "id": sv["id"], "field": "value", "title": sv["name"],
+            cols.append({"n": SVC_LETTERS[i] if i < len(SVC_LETTERS) else f"Я{i}", "kind": "svc", "id": sv["id"], "field": "value", "title": sv["name"],
                          "sub": " · ".join(x for x in (sv["unit"], f"№{sv['main_serial']}" if sv["main_serial"] else "") if x),
                          "serial": sv["main_serial"] or "", "line": _("Услуги"), "last": last, "lastp": lastp})
         if cols:
@@ -260,8 +260,8 @@ def _prep_image(f):
 
 
 PROMPT = """На фото — паперовий бланк показників лічильників, заповнений від руки охоронцем.
-Бланк надрукований програмою (у шапці «Бланк № {sheet_id}»), рядки — місяці (скорочено: «лис 26», «січ 27»), колонки — лічильники з номерами 1, 2, 3…
-(номер колонки надрукований великими цифрами над колонкою, під ним — назва лічильника).
+Бланк надрукований програмою (у шапці «Бланк № {sheet_id}»), рядки — місяці (скорочено: «лис 26», «січ 27»), колонки — лічильники з номерами 1, 2, 3… (електрика), а загальні лічильники послуг (вода тощо) — літерами А, Б, В…
+(номер або літера колонки надрукована великим шрифтом над колонкою, під ним — назва лічильника).
 Можливо кілька фото (кілька аркушів) — колонки на них різні, номери колонок наскрізні.
 
 Колонки бланка:
@@ -275,7 +275,7 @@ PROMPT = """На фото — паперовий бланк показників
 Якщо в рядку вписана дата зйому — теж перепиши її (ДД.ММ).
 Відповідай ЛИШЕ JSON без пояснень:
 {{"sheet_no": <номер бланка з фото або null>, "rows": [{{"period": "YYYY-MM", "date": "ДД.ММ або null",
-  "cells": {{"<номер колонки>": "<число як написано>"}}}}], "notes": "<коротко: що не вдалося прочитати, закреслення тощо>"}}"""
+  "cells": {{"<номер або літера колонки>": "<число як написано>"}}}}], "notes": "<коротко: що не вдалося прочитати, закреслення тощо>"}}"""
 
 
 def call_vision(key, model, images, text):
@@ -456,7 +456,9 @@ def check(sheet_row, res):
             continue
         cells = {}
         for n_s, raw in (r.get("cells") or {}).items():
-            c = byn.get(str(n_s).strip())
+            # ШІ інколи пише латинську «A/B» або малу літеру — зводимо до кирилиці
+            key = str(n_s).strip().upper().translate(str.maketrans("ABEKMHOPCTX", "АВЕКМНОРСТХ"))
+            c = byn.get(key) or byn.get(str(n_s).strip())
             if not c or raw in (None, ""):
                 continue
             n = c["n"]
