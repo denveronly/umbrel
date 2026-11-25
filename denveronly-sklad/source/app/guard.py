@@ -137,10 +137,17 @@ def build_sections(periods, kind="main", seen=None):
             sections.append(sec)
     if kind == "sub":                       # вода та інші загальні лічильники послуг «частка» (свої показники)
         cols = []
-        for i, sv in enumerate(db.execute("SELECT * FROM services WHERE mode='share' AND has_main=1 AND active=1 "
-                                          "AND (main_src IS NULL OR main_src='') ORDER BY sort, name").fetchall()):
+        # свої показники послуги: лічильник (вода, мотогодини генератора) або кількість за місяць (пелети, дрова);
+        # послуги, що беруть показник з лічильника складу/лінії (main_src m:/l:), уже є на бланку як лічильники
+        svcs = db.execute("SELECT * FROM services WHERE mode='share' AND has_main IN (1, 2) AND active=1 "
+                          "AND (main_src IS NULL OR main_src='' OR main_src NOT GLOB '[lm]:[0-9]*') "
+                          "ORDER BY has_main, sort, name").fetchall()
+        for i, sv in enumerate(svcs):
             last, lastp = _last_value("svc", sv["id"], "value", periods[0])
-            cols.append({"n": SVC_LETTERS[i] if i < len(SVC_LETTERS) else f"Я{i}", "kind": "svc", "id": sv["id"], "field": "value", "title": sv["name"],
+            qty = sv["has_main"] == 2
+            cols.append({"n": SVC_LETTERS[i] if i < len(SVC_LETTERS) else f"Я{i}", "kind": "svc", "id": sv["id"],
+                         "field": "value", "qty": qty,
+                         "title": sv["name"] + (f" ({sv['unit']} {_('за месяц')})" if qty and sv["unit"] else ""),
                          "sub": " · ".join(x for x in (sv["unit"], f"№{sv['main_serial']}" if sv["main_serial"] else "") if x),
                          "serial": sv["main_serial"] or "", "line": _("Услуги"), "last": last, "lastp": lastp})
         if cols:
@@ -183,7 +190,7 @@ def _pages(sections):
 def save_sheet(periods, sections):
     """Зберегти розкладку; той самий набір колонок і місяців — той самий № бланка."""
     db = get_db()
-    cols = [{k: c[k] for k in ("n", "kind", "id", "field", "title", "sub", "serial", "line")}
+    cols = [{k: c.get(k) for k in ("n", "kind", "id", "field", "title", "sub", "serial", "line", "qty")}
             for s in sections for gr in s["groups"] for c in gr["cols"]]
     pj, cj = json.dumps(periods), json.dumps(cols, ensure_ascii=False)
     r = db.execute("SELECT id FROM guard_sheets WHERE periods=? AND cols=? ORDER BY id DESC LIMIT 1", (pj, cj)).fetchone()
@@ -260,7 +267,7 @@ def _prep_image(f):
 
 
 PROMPT = """На фото — паперовий бланк показників лічильників, заповнений від руки охоронцем.
-Бланк надрукований програмою (у шапці «Бланк № {sheet_id}»), рядки — місяці (скорочено: «лис 26», «січ 27»), колонки — лічильники з номерами 1, 2, 3… (електрика), а загальні лічильники послуг (вода тощо) — літерами А, Б, В…
+Бланк надрукований програмою (у шапці «Бланк № {sheet_id}»), рядки — місяці (скорочено: «лис 26», «січ 27»), колонки — лічильники з номерами 1, 2, 3… (електрика), а загальні лічильники й кількості послуг (вода, генератор, пелети, дрова) — літерами А, Б, В…
 (номер або літера колонки надрукована великим шрифтом над колонкою, під ним — назва лічильника).
 Перший сірий рядок «останні» — надруковані програмою попередні показники, їх НЕ переписуй.
 Прочерк «—» або «-» у клітинці означає «немає показника» — таку клітинку пропусти.
@@ -472,6 +479,12 @@ def check(sheet_row, res):
             cell = {"raw": str(raw), "value": "", "level": "ok", "msg": "", "prev": prev, "existing": existing}
             if v is None:
                 cell.update(level="bad", msg=_("не удалось прочитать"))
+            elif c.get("qty"):                         # кількість за місяць (пелети, дрова) — не накопичувальна
+                cell.update(value=_plain(v))
+                if existing is not None and abs(existing - v) < 1e-9:
+                    cell.update(level="same", msg=_("уже есть в базе"))
+                elif existing is not None:
+                    cell.update(level="warn", msg=_("в базе сейчас {v}").format(v=calc.fmt_num(existing)))
             else:
                 med = typical(h, p)
                 lv, msg = judge(v, prev, prevp, p, med)

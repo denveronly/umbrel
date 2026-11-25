@@ -1660,4 +1660,5 @@ EN = {
     'Серая строка — последние показания в программе, для сверки.': 'The grey row is the last readings in the app, for reference.',
     'последние': 'last',
     'Пишите разборчиво. Нет показания — ставьте «—».': 'Write legibly. No reading — put «—».',
+    'за месяц': 'per month',
 }
