@@ -1655,4 +1655,9 @@ EN = {
     'Добавлено файлов': 'Files added',
     'Поделиться': 'Share',
     'Не удалось поделиться': 'Could not share',
+    'Записывайте только целые цифры счётчика — цифры после запятой (обычно красные или в рамке) НЕ пишите.': 'Write only the whole digits of the meter — do NOT write the digits after the decimal point (usually red or boxed).',
+    'Нет показания — ставьте «—».': 'No reading — put «—».',
+    'Серая строка — последние показания в программе, для сверки.': 'The grey row is the last readings in the app, for reference.',
+    'последние': 'last',
+    'Пишите разборчиво. Нет показания — ставьте «—».': 'Write legibly. No reading — put «—».',
 }
