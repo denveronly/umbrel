@@ -147,7 +147,7 @@ def build_sections(periods, kind="main", seen=None):
             qty = sv["has_main"] == 2
             cols.append({"n": SVC_LETTERS[i] if i < len(SVC_LETTERS) else f"Я{i}", "kind": "svc", "id": sv["id"],
                          "field": "value", "qty": qty,
-                         "title": sv["name"] + (f" ({sv['unit']} {_('за месяц')})" if qty and sv["unit"] else ""),
+                         "title": sv["name"] + (f" ({sv['unit']})" if qty and sv["unit"] else ""),
                          "sub": " · ".join(x for x in (sv["unit"], f"№{sv['main_serial']}" if sv["main_serial"] else "") if x),
                          "serial": sv["main_serial"] or "", "line": _("Услуги"), "last": last, "lastp": lastp})
         if cols:
