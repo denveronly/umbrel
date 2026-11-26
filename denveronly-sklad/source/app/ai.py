@@ -687,7 +687,7 @@ def cc_config():
                 on, staff = m.get("ai_backend") == "cc", m.get("ai_cc_staff") == "1"
     if tok:
         import vault
-        tok = vault.decrypt(tok)
+        tok = re.sub(r"\s+", "", vault.decrypt(tok))   # токен з консолі часто переноситься на 2 рядки
     return on and bool(tok), tok, staff
 
 
@@ -1085,7 +1085,7 @@ def ai_settings_page():
         backend = "cc" if request.form.get("ai_backend") == "cc" else "api"
         for k_, v_ in (("ai_backend", backend), ("ai_cc_staff", "1" if request.form.get("ai_cc_staff") else "0")):
             db.execute("INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k_, v_))
-        tok = request.form.get("ai_cc_token", "").strip()
+        tok = re.sub(r"\s+", "", request.form.get("ai_cc_token", ""))   # без пробілів і переносів рядка
         if request.form.get("clear_cc"):
             db.execute("DELETE FROM settings WHERE key='ai_cc_token'")
             log("ШІ: токен Claude Code видалено")
