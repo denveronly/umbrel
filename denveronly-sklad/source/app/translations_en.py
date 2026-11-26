@@ -1679,4 +1679,7 @@ EN = {
     'Сотрудники тоже (распознавание бланков, помощник) — их запросы тоже пойдут через вашу подписку': 'Staff too (sheet recognition, assistant) — their requests will also use your subscription',
     'Без этой галочки через подписку работает только администратор, а сотрудникам — API-ключ (если указан). Запросы программы расходуют лимиты вашей подписки; ответы через Claude Code медленнее (10–30 с).': "Without this, only the administrator uses the subscription; staff use the API key (if set). The app's requests use your subscription limits; Claude Code replies are slower (10–30 s).",
     'Удалить токен Claude Code?': 'Delete the Claude Code token?',
+    'в {x} раз больше обычного (~{e})': '{x} times more than usual (~{e})',
+    'скачок: {d} при обычном ~{e}': 'jump: {d} vs usual ~{e}',
+    'резкое падение: {d} при обычном ~{e}': 'sharp drop: {d} vs usual ~{e}',
 }

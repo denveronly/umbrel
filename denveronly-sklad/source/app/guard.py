@@ -433,6 +433,21 @@ def judge(v, prev, prevp, period, med):
     return "ok", ""
 
 
+def judge_qty(v, hist, period):
+    """Кількість за місяць (пелети, дрова, мотогодини): порівняння з типовими останніми місяцями (медіана до 3)."""
+    vals = [x for p, x in hist if p < period and x > 0][-3:]
+    if not vals:
+        return "ok", ""
+    med = statistics.median(vals)
+    if v > med * 6 + 1:
+        return "bad", _("в {x} раз больше обычного (~{e})").format(x=calc.fmt_num(round(v / med, 1)), e=calc.fmt_num(round(med, 2)))
+    if v > med * 2.5 + 0.5:
+        return "warn", _("скачок: {d} при обычном ~{e}").format(d=calc.fmt_num(v), e=calc.fmt_num(round(med, 2)))
+    if med >= 1 and v < med * 0.3:
+        return "warn", _("резкое падение: {d} при обычном ~{e}").format(d=calc.fmt_num(v), e=calc.fmt_num(round(med, 2)))
+    return "ok", ""
+
+
 def suggest(v, prev, prevp, period, med):
     """Підозра на зсув коми (охоронці дописують десяті частки або гублять кому): кандидат з найправдоподібнішою витратою."""
     if prev is None:
@@ -480,11 +495,17 @@ def check(sheet_row, res):
             if v is None:
                 cell.update(level="bad", msg=_("не удалось прочитать"))
             elif c.get("qty"):                         # кількість за місяць (пелети, дрова) — не накопичувальна
-                cell.update(value=_plain(v))
+                lv, msg = judge_qty(v, h, p)
+                cell.update(value=_plain(v), level=lv, msg=msg)
                 if existing is not None and abs(existing - v) < 1e-9:
                     cell.update(level="same", msg=_("уже есть в базе"))
                 elif existing is not None:
-                    cell.update(level="warn", msg=_("в базе сейчас {v}").format(v=calc.fmt_num(existing)))
+                    cell["msg"] = (cell["msg"] + "; " if cell["msg"] else "") + _("в базе сейчас {v}").format(
+                        v=calc.fmt_num(existing))
+                    if cell["level"] == "ok":
+                        cell["level"] = "warn"
+                if cell["level"] in ("ok", "warn", "same"):
+                    accepted[n].append((p, v))
             else:
                 med = typical(h, p)
                 lv, msg = judge(v, prev, prevp, p, med)
