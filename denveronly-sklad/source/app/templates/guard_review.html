@@ -102,7 +102,9 @@ if (sb) sb.onclick = async () => {
     body: JSON.stringify({cells, table: 1, line_name: {{ (_("бланк охраны") ~ ' № ' ~ (sc.sheet_id or ''))|tojson }}})}) : {ok: true};
   if (!r.ok) { sb.disabled = false; document.getElementById('msg').textContent = {{ _("Ошибка сохранения")|tojson }} + ': ' + (await r.text()).slice(0, 300); return; }
   await fetch({{ url_for('guard.mark_saved', scan_id=sc.id)|tojson }}, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({n})});
-  location.href = {{ url_for('lines.table')|tojson }};
+  // лише послуги (вода, генератор, пелети) — показуємо вкладку «Послуги показники», інакше — таблицю електрики
+  const onlySvc = Object.keys(svc).length && !Object.keys(cells).some(k => !k.startsWith('d|'));
+  location.href = onlySvc ? {{ url_for('service_readings_page')|tojson }} : {{ url_for('lines.table')|tojson }};
 };
 </script>
 {% endblock %}
