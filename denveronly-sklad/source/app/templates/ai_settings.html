@@ -4,7 +4,19 @@
 <h1>{{ _("Настройки") }}</h1>
 {% include "_settings_tabs.html" %}
 <form method="post" class="card grid" autocomplete="off">
-  <h2 class="full" style="margin:0">Claude (Anthropic API)</h2>
+  <h2 class="full" style="margin:0">{{ _("Через что работает ИИ") }}</h2>
+  <label class="check full"><input type="radio" name="ai_backend" value="api" {{ 'checked' if backend != 'cc' }}> {{ _("API-ключ Anthropic — оплата по использованию") }}</label>
+  <label class="check full"><input type="radio" name="ai_backend" value="cc" {{ 'checked' if backend == 'cc' }}> {{ _("Claude Code — моя подписка Claude (Pro/Max)") }}
+    {% if not cc_installed %}<span class="warnt">· {{ _("Claude Code не найден в образе — обновите программу") }}</span>{% endif %}</label>
+  <label class="full">{{ _("Токен Claude Code") }}
+    <input name="ai_cc_token" type="password" value="{{ cc_masked }}" placeholder="sk-ant-oat…" autocomplete="new-password">
+    <span class="muted">{{ _("На своём компьютере, где установлен Claude Code, выполните в терминале") }} <code>claude setup-token</code>
+      {{ _("— войдите в свой аккаунт Claude и вставьте сюда выданный токен (действует год). Хранится зашифрованным.") }}</span></label>
+  <label class="check full"><input type="checkbox" name="ai_cc_staff" value="1" {{ 'checked' if cc_staff }}>
+    {{ _("Сотрудники тоже (распознавание бланков, помощник) — их запросы тоже пойдут через вашу подписку") }}</label>
+  <p class="full muted" style="margin:0">{{ _("Без этой галочки через подписку работает только администратор, а сотрудникам — API-ключ (если указан). Запросы программы расходуют лимиты вашей подписки; ответы через Claude Code медленнее (10–30 с).") }}
+    {% if cc_masked %}<button class="sm ghost danger" name="clear_cc" value="1" onclick="return confirm({{ _("Удалить токен Claude Code?")|tojson|forceescape }})">{{ _("Удалить токен") }}</button>{% endif %}</p>
+  <h2 class="full" style="margin:8px 0 0">Claude (Anthropic API)</h2>
   <p class="full muted" style="margin:0">{{ _("ИИ-помощник читает ваши таблицы (Google Таблицы, CSV, Excel) и сам вносит данные в программу: склады, арендаторов, счётчики, показания, цены. Ключ создаётся в консоли Anthropic и оплачивается по использованию.") }}
     <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a></p>
   <label class="full">{{ _("API-ключ") }}

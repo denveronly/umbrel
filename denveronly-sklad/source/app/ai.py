@@ -7,8 +7,12 @@
 import csv
 import io
 import json
+import os
 import re
+import shutil
+import subprocess
 import threading
+import uuid
 import time
 import traceback
 import urllib.error
@@ -20,7 +24,7 @@ from flask import (Blueprint, abort, current_app, flash, g, jsonify, redirect, r
 import auth
 import calc
 from audit import log
-from db import PAYMENT_TYPES, SERVICE_MODES, current_site, get_db, price_for, settings
+from db import MAIN_SITE, PAYMENT_TYPES, SERVICE_MODES, current_site, get_db, price_for, settings, using_site
 from i18n import _
 
 bp = Blueprint("ai", __name__)
@@ -663,6 +667,180 @@ def call_api(key, model, system, messages, tools=TOOLS):
             raise RuntimeError(f"Anthropic API {e.code}: {detail}")
 
 
+# ---------------- Claude Code (вхід за підпискою власника) ----------------
+# Офіційний CLI `claude` у режимі -p з довгим токеном `claude setup-token`. CLI не змінюється; інструменти
+# Claude Code вимкнені — модель лише відповідає, а дії «Складів» (tools) описані текстом і повертаються JSON.
+
+CC_TIMEOUT = 300
+
+
+def cc_config():
+    """-> (увімкнено, токен, чи можна співробітникам). Токен — з цього об'єкта або з «Бази»."""
+    s = settings()
+    tok = s.get("ai_cc_token") or ""
+    on, staff = s.get("ai_backend") == "cc", s.get("ai_cc_staff") == "1"
+    if not tok and current_site() != MAIN_SITE:
+        with using_site(MAIN_SITE):
+            m = settings()
+            tok = m.get("ai_cc_token") or ""
+            if s.get("ai_backend") is None:
+                on, staff = m.get("ai_backend") == "cc", m.get("ai_cc_staff") == "1"
+    if tok:
+        import vault
+        tok = vault.decrypt(tok)
+    return on and bool(tok), tok, staff
+
+
+def cc_installed():
+    return bool(shutil.which("claude"))
+
+
+def _is_admin(user):
+    try:
+        return bool(user) and user["role"] == "admin"
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
+def ai_ready(user=None):
+    """Чи є чим відповідати цьому користувачу: API-ключ або підписка (для адміна, або для всіх, якщо дозволено)."""
+    on, tok, staff = cc_config()
+    if on and cc_installed() and (staff or _is_admin(user if user is not None else getattr(g, "user", None))):
+        return True
+    return bool(settings().get("ai_api_key"))
+
+
+def call_model(model, system, messages, tools=TOOLS, user=None):
+    """Єдина точка виклику моделі: підписка (Claude Code) або API-ключ — за налаштуваннями."""
+    user = user if user is not None else getattr(g, "user", None)
+    on, tok, staff = cc_config()
+    if on and cc_installed() and (staff or _is_admin(user)):
+        return call_cc(tok, model, system, messages, tools)
+    key = settings().get("ai_api_key")
+    if not key:
+        if on:
+            raise RuntimeError(_("Через подписку ИИ работает только для администратора; добавьте API-ключ или разрешите сотрудникам в настройках ИИ"))
+        raise RuntimeError(_("Не указан API-ключ Anthropic"))
+    return call_api(key, model, system, messages, tools)
+
+
+_TOOL_PROTOCOL = """
+
+# Формат відповіді (обов'язково)
+Ти працюєш без власних інструментів. Дії програми «Склади», які тобі доступні, описані нижче (JSON Schema).
+Щоб викликати дію — поверни її в JSON-відповіді, програма виконає і надішле результат наступним повідомленням.
+Відповідай ЛИШЕ одним JSON-об'єктом, без тексту довкола і без ```:
+{"content": [{"type": "text", "text": "..."}, {"type": "tool_use", "name": "<назва дії>", "input": {...}}]}
+Можна кілька tool_use в одній відповіді. Коли все зроблено — лише блок text з підсумком.
+
+# Доступні дії
+"""
+
+
+def _cc_content(system, messages, tools):
+    """Історію в форматі Messages API -> один user-вміст для CLI (текст + зображення)."""
+    out = []
+
+    def add_text(t):
+        if out and out[-1]["type"] == "text":
+            out[-1]["text"] += t
+        else:
+            out.append({"type": "text", "text": t})
+
+    for m in messages:
+        role = "КОРИСТУВАЧ" if m["role"] == "user" else "АСИСТЕНТ"
+        add_text(f"\n\n=== {role} ===\n")
+        c = m["content"]
+        if isinstance(c, str):
+            add_text(c)
+            continue
+        for b in c:
+            t = b.get("type")
+            if t == "text":
+                add_text(b.get("text", ""))
+            elif t == "image":
+                out.append({"type": "image", "source": b["source"]})
+            elif t == "tool_use":
+                add_text("\n[tool_use] " + json.dumps({"name": b["name"], "input": b.get("input")}, ensure_ascii=False))
+            elif t == "tool_result":
+                rc = b.get("content")
+                if isinstance(rc, list):
+                    rc = "".join(x.get("text", "") for x in rc if isinstance(x, dict))
+                add_text(("\n[tool_result, помилка] " if b.get("is_error") else "\n[tool_result] ") + str(rc))
+            elif t == "document" and b.get("source", {}).get("type") == "text":
+                add_text("\n" + b["source"].get("data", ""))
+    if tools:
+        add_text("\n\n=== Твоя наступна відповідь — лише JSON-об'єкт {\"content\": [...]} ===")
+    return out
+
+
+def call_cc(token, model, system, messages, tools=TOOLS):
+    if not token:
+        raise RuntimeError(_("Не указан токен Claude Code"))
+    sysp = system + (_TOOL_PROTOCOL + json.dumps([{"name": t["name"], "description": t.get("description", ""),
+                                                   "input_schema": t.get("input_schema")} for t in tools],
+                                                 ensure_ascii=False) if tools else "")
+    home = os.path.join("/tmp", "claude-cc")
+    os.makedirs(home, exist_ok=True)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ANTHROPIC_")}
+    env.update(CLAUDE_CODE_OAUTH_TOKEN=token, HOME=home, CLAUDE_CONFIG_DIR=os.path.join(home, ".claude"),
+               DISABLE_AUTOUPDATER="1", DISABLE_TELEMETRY="1", DISABLE_ERROR_REPORTING="1")
+    cmd = ["claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+           "--model", model, "--system-prompt", sysp, "--disallowedTools", "*", "--strict-mcp-config",
+           "--no-session-persistence", "--max-turns", "2"]
+    line = json.dumps({"type": "user", "message": {"role": "user", "content": _cc_content(system, messages, tools)}},
+                      ensure_ascii=False)
+    try:
+        p = subprocess.run(cmd, input=line + "\n", capture_output=True, text=True, timeout=CC_TIMEOUT, env=env, cwd=home)
+    except FileNotFoundError:
+        raise RuntimeError(_("Claude Code не установлен в образе программы"))
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(_("Claude Code не ответил за {n} с").format(n=CC_TIMEOUT))
+    res = None
+    for ln in p.stdout.splitlines():
+        try:
+            j = json.loads(ln)
+        except ValueError:
+            continue
+        if j.get("type") == "result":
+            res = j
+    if not res:
+        err = (p.stderr or p.stdout or "").strip()[-500:]
+        if re.search(r"401|invalid.*token|authenticat|login", err, re.I):
+            raise RuntimeError(_("Токен Claude Code недействителен — создайте новый: claude setup-token") + f" ({err[:200]})")
+        raise RuntimeError("Claude Code: " + (err or f"код {p.returncode}"))
+    text = res.get("result") or ""
+    if res.get("is_error"):
+        err = text or "; ".join(str(x) for x in (res.get("errors") or [])) or res.get("subtype") or "помилка"
+        if re.search(r"401|invalid.*(token|key)|authenticat|/login|organization", err, re.I):
+            raise RuntimeError(_("Токен Claude Code недействителен — создайте новый: claude setup-token") + f" ({err[:200]})")
+        raise RuntimeError("Claude Code: " + err[:500])
+    if not tools:
+        return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "model": model}
+    blocks = None
+    for mm in [re.search(r"\{.*\}", text, re.S)]:
+        if mm:
+            try:
+                blocks = json.loads(mm.group(0)).get("content")
+            except (ValueError, AttributeError):
+                blocks = None
+    if not isinstance(blocks, list):
+        blocks = [{"type": "text", "text": text}]
+    clean = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "tool_use" and b.get("name"):
+            clean.append({"type": "tool_use", "id": "toolu_cc_" + uuid.uuid4().hex[:16], "name": b["name"],
+                          "input": b.get("input") or {}})
+        elif b.get("type") == "text" and b.get("text"):
+            clean.append({"type": "text", "text": b["text"]})
+    if not clean:
+        clean = [{"type": "text", "text": text or "—"}]
+    stop = "tool_use" if any(b["type"] == "tool_use" for b in clean) else "end_turn"
+    return {"content": clean, "stop_reason": stop, "model": model}
+
+
 def _add_msg(sid, role, content, job_id=None):
     db = get_db()
     db.execute("INSERT INTO ai_messages(session_id, role, content, job_id) VALUES (?,?,?,?)",
@@ -708,11 +886,11 @@ def run_job(app, job_id, sid, user_row, site):
         g.site = site                       # фоновий потік працює з об'єктом, з якого надіслано запит
         db = get_db()
         s = settings()
-        key, model = s.get("ai_api_key"), s.get("ai_model") or DEFAULT_MODEL
+        model = s.get("ai_model") or DEFAULT_MODEL
         backup_made = False
         try:
             for _step in range(MAX_STEPS):
-                resp = call_api(key, model, SYSTEM_PROMPT, history(sid))
+                resp = call_model(model, SYSTEM_PROMPT, history(sid), user=user_row)
                 content = resp.get("content", [])
                 _add_msg(sid, "assistant", content, job_id)
                 uses = [c for c in content if c.get("type") == "tool_use"]
@@ -777,7 +955,7 @@ def chat(sid=None):
     running = next((j for j in jobs.values() if j["status"] == "running"), None)
     s = settings()
     return render_template("ai.html", sessions=sessions, sid=sid, msgs=msgs, jobs=jobs, running=running,
-                           has_key=bool(s.get("ai_api_key")), model=s.get("ai_model") or DEFAULT_MODEL)
+                           has_key=ai_ready(), model=s.get("ai_model") or DEFAULT_MODEL)
 
 
 def view_messages(sid):
@@ -802,8 +980,8 @@ def send():
     ensure_schema()
     db = get_db()
     s = settings()
-    if not s.get("ai_api_key"):
-        flash(_("Сначала укажите API-ключ Anthropic в настройках"))
+    if not ai_ready():
+        flash(_("Сначала укажите API-ключ Anthropic или токен Claude Code в настройках ИИ"))
         return redirect(url_for("ai_settings_page"))
     sid = request.form.get("sid", type=int)
     text = request.form.get("text", "").strip()
@@ -903,6 +1081,18 @@ def ai_settings_page():
     if request.method == "POST":
         key = request.form.get("ai_api_key", "").strip()
         model = request.form.get("ai_model_custom", "").strip() or request.form.get("ai_model") or DEFAULT_MODEL
+        import vault
+        backend = "cc" if request.form.get("ai_backend") == "cc" else "api"
+        for k_, v_ in (("ai_backend", backend), ("ai_cc_staff", "1" if request.form.get("ai_cc_staff") else "0")):
+            db.execute("INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k_, v_))
+        tok = request.form.get("ai_cc_token", "").strip()
+        if request.form.get("clear_cc"):
+            db.execute("DELETE FROM settings WHERE key='ai_cc_token'")
+            log("ШІ: токен Claude Code видалено")
+        elif tok and not tok.startswith("•"):
+            db.execute("INSERT INTO settings(key, value) VALUES ('ai_cc_token', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                       (vault.encrypt(tok),))
+            log("ШІ: токен Claude Code змінено")
         if request.form.get("clear_key"):
             db.execute("DELETE FROM settings WHERE key='ai_api_key'")
             log("ШІ: ключ API видалено")
@@ -913,16 +1103,21 @@ def ai_settings_page():
         db.commit()
         if request.form.get("test"):
             try:
-                r = call_api(settings().get("ai_api_key"), model, "Відповідай одним словом.", [{"role": "user", "content": "Привіт"}])
-                flash(_("Проверка связи: работает") + f" ({r.get('model', model)})")
+                r = call_model(model, "Відповідай одним словом.", [{"role": "user", "content": "Привіт"}], tools=None)
+                via = "Claude Code" if cc_config()[0] and cc_installed() else "API"
+                flash(_("Проверка связи: работает") + f" ({via}, {r.get('model', model)})")
             except Exception as e:  # noqa
                 flash(_("Проверка связи не прошла") + f": {e}")
         else:
             flash(_("Настройки сохранены"))
         return redirect(url_for("ai_settings_page"))
-    k = settings().get("ai_api_key") or ""
+    st = settings()
+    k = st.get("ai_api_key") or ""
     masked = ("•" * 8 + k[-4:]) if k else ""
-    return render_template("ai_settings.html", masked=masked, model=settings().get("ai_model") or DEFAULT_MODEL, MODELS=MODELS)
+    return render_template("ai_settings.html", masked=masked, model=st.get("ai_model") or DEFAULT_MODEL, MODELS=MODELS,
+                           backend=st.get("ai_backend") or "api", cc_staff=st.get("ai_cc_staff") == "1",
+                           cc_masked=("•" * 8 + " " + _("сохранён")) if st.get("ai_cc_token") else "",
+                           cc_installed=cc_installed())
 
 
 def init_app(app):

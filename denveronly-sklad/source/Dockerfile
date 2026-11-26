@@ -10,6 +10,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Chromium для розділу «Банки» (клієнт-банк закритий захистом від ботів — заходимо справжнім браузером)
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
+# Claude Code CLI (офіційний, без змін) — для ШІ через підписку власника (Налаштування → ШІ)
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && curl -fsSL https://claude.ai/install.sh | bash \
+    && install -m 755 "$(readlink -f /root/.local/bin/claude)" /usr/local/bin/claude \
+    && rm -rf /root/.local/share/claude /root/.local/bin/claude /var/lib/apt/lists/* \
+    && claude --version
+ENV DISABLE_AUTOUPDATER=1
 COPY app/ .
 COPY VERSION .
 # Leaflet кладём внутрь образа, чтобы карта работала без интернета

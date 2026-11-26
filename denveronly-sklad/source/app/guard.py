@@ -287,12 +287,12 @@ PROMPT = """На фото — паперовий бланк показників
   "cells": {{"<номер або літера колонки>": "<число як написано>"}}}}], "notes": "<коротко: що не вдалося прочитати, закреслення тощо>"}}"""
 
 
-def call_vision(key, model, images, text):
+def call_vision(model, images, text, user=None):
     import ai
     content = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b}} for b in images]
     content.append({"type": "text", "text": text})
-    resp = ai.call_api(key, model, "Ти уважно розпізнаєш рукописні цифри з фото бланків. Відповідаєш лише JSON.",
-                       [{"role": "user", "content": content}], tools=None)
+    resp = ai.call_model(model, "Ти уважно розпізнаєш рукописні цифри з фото бланків. Відповідаєш лише JSON.",
+                         [{"role": "user", "content": content}], tools=None, user=user)
     out = "".join(c.get("text", "") for c in resp.get("content", []) if c.get("type") == "text")
     m = re.search(r"\{.*\}", out, re.S)
     if not m:
@@ -315,7 +315,7 @@ def run_scan(app, scan_id, images, sheet_row, user_row, site):
                 cols="\n".join(f"{c['n']}: {c['line']} — {c['title']}" + (f" ({c['sub']})" if c.get("sub") else "")
                                for c in cols),
                 rows="\n".join(f"{p} — {short_month(p)} ({calc.period_label(p)})" for p in periods))
-            res = call_vision(s.get("ai_api_key"), s.get("ai_model") or ai.DEFAULT_MODEL, images, text)
+            res = call_vision(s.get("ai_model") or ai.DEFAULT_MODEL, images, text, user=user_row)
             db.execute("UPDATE guard_scans SET status='done', result=? WHERE id=?",
                        (json.dumps(res, ensure_ascii=False), scan_id))
         except Exception as e:  # noqa
@@ -331,9 +331,9 @@ def scan_page():
     db = get_db()
     sheets = db.execute("SELECT id, periods, created_at FROM guard_sheets ORDER BY id DESC LIMIT 10").fetchall()
     if request.method == "POST":
-        s = settings()
-        if not s.get("ai_api_key"):
-            flash(_("Сначала укажите API-ключ Anthropic в настройках"))
+        import ai
+        if not ai.ai_ready():
+            flash(_("Сначала укажите API-ключ Anthropic или токен Claude Code в настройках ИИ"))
             return redirect(url_for("ai_settings_page"))
         sh = db.execute("SELECT * FROM guard_sheets WHERE id=?", (request.form.get("sheet_id", type=int),)).fetchone()
         if not sh:
@@ -357,7 +357,7 @@ def scan_page():
         return redirect(url_for("guard.review", scan_id=scan_id))
     scans = db.execute("SELECT * FROM guard_scans ORDER BY created_at DESC LIMIT 10").fetchall()
     return render_template("guard_scan.html", sheets=[dict(x, plist=json.loads(x["periods"])) for x in sheets],
-                           scans=scans, has_key=bool(settings().get("ai_api_key")))
+                           scans=scans, has_key=__import__("ai").ai_ready())
 
 
 @bp.route("/ai/guard/<scan_id>/status")
