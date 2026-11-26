@@ -1682,4 +1682,5 @@ EN = {
     'в {x} раз больше обычного (~{e})': '{x} times more than usual (~{e})',
     'скачок: {d} при обычном ~{e}': 'jump: {d} vs usual ~{e}',
     'резкое падение: {d} при обычном ~{e}': 'sharp drop: {d} vs usual ~{e}',
+    'На фото бланк № {a} (выбирали № {b}) — распознано по бланку № {a}.': 'The photo shows sheet No. {a} (No. {b} was selected) — recognized using sheet No. {a}.',
 }

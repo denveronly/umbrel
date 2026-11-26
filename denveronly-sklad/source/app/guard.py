@@ -271,6 +271,8 @@ PROMPT = """На фото — паперовий бланк показників
 (номер або літера колонки надрукована великим шрифтом над колонкою, під ним — назва лічильника).
 Перший сірий рядок «останні» — надруковані програмою попередні показники, їх НЕ переписуй.
 Прочерк «—» або «-» у клітинці означає «немає показника» — таку клітинку пропусти.
+Виправлення: якщо число або цифру закреслено/обведено і поруч (зверху, збоку) написано інше — бери ВИПРАВЛЕНЕ, нове значення,
+а в notes коротко вкажи, що було виправлення. Цифру, переписану поверх іншої, читай як нову (верхню) цифру.
 Можливо кілька фото (кілька аркушів) — колонки на них різні, номери колонок наскрізні.
 
 Колонки бланка:
@@ -300,6 +302,16 @@ def call_vision(model, images, text, user=None):
     return json.loads(m.group(0))
 
 
+def _prompt(sheet_row):
+    cols = json.loads(sheet_row["cols"])
+    return PROMPT.format(
+        sheet_id=sheet_row["id"],
+        cols="\n".join(f"{c['n']}: {c['line']} — {c['title']}" + (f" ({c['sub']})" if c.get("sub") else "")
+                       + (" — КІЛЬКІСТЬ за місяць, дробове число з комою — норма" if c.get("qty") else "")
+                       for c in cols),
+        rows="\n".join(f"{p} — {short_month(p)} ({calc.period_label(p)})" for p in json.loads(sheet_row["periods"])))
+
+
 def run_scan(app, scan_id, images, sheet_row, user_row, site):
     with app.app_context():
         g.user = user_row
@@ -308,14 +320,19 @@ def run_scan(app, scan_id, images, sheet_row, user_row, site):
         try:
             s = settings()
             import ai
-            periods = json.loads(sheet_row["periods"])
-            cols = json.loads(sheet_row["cols"])
-            text = PROMPT.format(
-                sheet_id=sheet_row["id"],
-                cols="\n".join(f"{c['n']}: {c['line']} — {c['title']}" + (f" ({c['sub']})" if c.get("sub") else "")
-                               for c in cols),
-                rows="\n".join(f"{p} — {short_month(p)} ({calc.period_label(p)})" for p in periods))
-            res = call_vision(s.get("ai_model") or ai.DEFAULT_MODEL, images, text, user=user_row)
+            model = s.get("ai_model") or ai.DEFAULT_MODEL
+            res = call_vision(model, images, _prompt(sheet_row), user=user_row)
+            # на фото інший бланк, ніж вибрали (напр. «сублінії й вода» замість електрики) — переробляємо з правильним
+            try:
+                no = int(str(res.get("sheet_no") or "").strip().lstrip("№").strip() or 0)
+            except ValueError:
+                no = 0
+            if no and no != sheet_row["id"]:
+                other = db.execute("SELECT * FROM guard_sheets WHERE id=?", (no,)).fetchone()
+                if other:
+                    res = call_vision(model, images, _prompt(other), user=user_row)
+                    res["switched_from"] = sheet_row["id"]
+                    db.execute("UPDATE guard_scans SET sheet_id=? WHERE id=?", (no, scan_id))
             db.execute("UPDATE guard_scans SET status='done', result=? WHERE id=?",
                        (json.dumps(res, ensure_ascii=False), scan_id))
         except Exception as e:  # noqa

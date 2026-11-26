@@ -34,7 +34,8 @@ table.gr { border-collapse: separate; border-spacing: 0; font-size: 12.5px; widt
   <div class="warn">{{ _("Бланк не найден") }}</div>
 {% else %}
   {% if sc.status == 'saved' %}<div class="card" style="border-color:var(--accent)">✓ {{ _("Эти показания уже сохранены. Можно поправить и сохранить ещё раз.") }}</div>{% endif %}
-  {% if res.sheet_no and res.sheet_no != sh.id %}<div class="warn" style="margin-bottom:10px">⚠ {{ _("На фото бланк № {a}, а выбран № {b} — колонки могут не совпасть. Загрузите заново с правильным бланком.").format(a=res.sheet_no, b=sh.id) }}</div>{% endif %}
+  {% if res.switched_from %}<div class="card" style="margin-bottom:10px">ℹ {{ _("На фото бланк № {a} (выбирали № {b}) — распознано по бланку № {a}.").format(a=sh.id, b=res.switched_from) }}</div>{% endif %}
+  {% if res.sheet_no and res.sheet_no|string|replace('№','')|trim != sh.id|string %}<div class="warn" style="margin-bottom:10px">⚠ {{ _("На фото бланк № {a}, а выбран № {b} — колонки могут не совпасть. Загрузите заново с правильным бланком.").format(a=res.sheet_no, b=sh.id) }}</div>{% endif %}
   <div class="card">
     {% set nbad = warns|selectattr('level', 'equalto', 'bad')|list|length %}
     {% if warns %}
